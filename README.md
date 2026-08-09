@@ -35,8 +35,12 @@ Por eso existe éste.
 ## Instalación
 
 ```bash
-pip install oura-mcp
+pip install mcp-oura
 ```
+
+*(El nombre de instalación es `mcp-oura`: `oura-mcp` ya estaba tomado en PyPI por
+un paquete 0.1.0 sin autor ni repositorio. El módulo que se importa sigue siendo
+`oura_mcp`.)*
 
 Necesitas un *Personal Access Token*, que se saca en
 [cloud.ouraring.com/personal-access-tokens](https://cloud.ouraring.com/personal-access-tokens).
@@ -56,6 +60,32 @@ en issues; no tienen por qué arrastrar nada más.
 
 ```bash
 claude mcp add -s user oura --env OURA_PAT=tu-token -- /ruta/a/oura-mcp
+```
+
+Mejor aún, con el token en un archivo aparte y no en la configuración:
+
+```bash
+printf '%s' "tu-token" > ~/.oura_pat && chmod 600 ~/.oura_pat
+claude mcp add -s user oura --env OURA_PAT_FILE=$HOME/.oura_pat -- /ruta/a/oura-mcp
+```
+
+Un servidor MCP se registra en un JSON que se respalda, se sincroniza y se
+comparte al pedir ayuda. Un token ahí queda en claro; en un archivo con permisos
+600 se rota sin tocar la configuración.
+
+### Conectarlo a Claude Desktop
+
+En `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "oura": {
+      "command": "/ruta/a/oura-mcp",
+      "env": { "OURA_PAT_FILE": "/Users/tu-usuario/.oura_pat" }
+    }
+  }
+}
 ```
 
 ## Las herramientas

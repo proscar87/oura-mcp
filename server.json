@@ -1,0 +1,32 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
+  "name": "io.github.proscar87/oura-mcp",
+  "description": "La API v2 de Oura como servidor MCP, con la paginación bien hecha",
+  "repository": {
+    "url": "https://github.com/proscar87/oura-mcp",
+    "source": "github"
+  },
+  "version": "0.1.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "identifier": "mcp-oura",
+      "version": "0.1.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "OURA_PAT",
+          "description": "Personal Access Token de Oura. Se saca en https://cloud.ouraring.com/personal-access-tokens",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "OURA_PAT_FILE",
+          "description": "Ruta a un archivo con el token. Preferible a OURA_PAT: un servidor MCP se registra en un JSON que se respalda y se comparte al pedir ayuda; el archivo aparte se rota sin tocar la configuración.",
+          "isRequired": false,
+          "isSecret": false
+        }
+      ]
+    }
+  ]
+}
