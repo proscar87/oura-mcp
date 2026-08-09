@@ -97,6 +97,88 @@ def test_una_sola_pagina_no_pide_de_mas(monkeypatch):
     assert len(llamadas) == 1
 
 
+# ── El rango de fechas: la segunda cicatriz ─────────────────────────────────
+# Medido contra la API de verdad el 9-ago-2026. `end_date` es INCONSISTENTE
+# entre colecciones —daily_activity, sleep y workout pierden el último día
+# pedido; las demás no— y encima `workout` se filtra por la fecha UTC mientras
+# reporta `day` en hora local, así que con -06:00 un entrenamiento de la tarde
+# se contaba en el día siguiente. Pedir [d..d] devolvía CERO registros sin un
+# solo aviso: la misma familia de falla que no paginar.
+def test_pide_dos_dias_de_mas_de_cada_lado(monkeypatch):
+    """No es margen de cortesía: `workout` es exclusiva Y va desfasada a UTC, y
+    las dos cosas se suman. Un día no alcanzaba."""
+    urls = []
+    _oura_falso([[{}]], monkeypatch, registrar=urls)
+    cliente.obtener("daily_sleep", "2026-08-10", "2026-08-20")
+    assert "start_date=2026-08-08" in urls[-1]
+    assert "end_date=2026-08-22" in urls[-1]
+
+
+def test_el_rango_datetime_no_se_ensancha(monkeypatch):
+    """`heartrate` se pide con hora. Correrle dos días sería pedir mil veces más
+    muestras de las que se necesitan para arreglar un problema que no tiene."""
+    urls = []
+    _oura_falso([[{}]], monkeypatch, registrar=urls)
+    cliente.obtener("heartrate", "2026-08-10T00:00:00Z", "2026-08-10T06:00:00Z")
+    assert "start_datetime=2026-08-10T00%3A00%3A00Z" in urls[-1]
+
+
+def test_recorta_los_dias_de_mas_y_lo_dice(monkeypatch):
+    """El día extra se pidió a propósito; descartarlo en silencio dejaría a quien
+    lee la respuesta sin poder distinguir «no hay dato» de «lo quitamos»."""
+    pagina = [{"day": d} for d in ("2026-08-08", "2026-08-09", "2026-08-10",
+                                   "2026-08-11", "2026-08-12")]
+    _oura_falso([pagina], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-09", "2026-08-11")
+    assert [x["day"] for x in r["datos"]] == ["2026-08-09", "2026-08-10", "2026-08-11"]
+    assert r["n"] == 3
+    assert r["descartados_fuera_de_rango"] == 2
+
+
+def test_un_solo_dia_devuelve_ese_dia(monkeypatch):
+    """El caso que estaba roto: pedir [d..d] devolvía cero en daily_activity,
+    sleep y workout."""
+    pagina = [{"day": "2026-08-09"}, {"day": "2026-08-10"}, {"day": "2026-08-11"}]
+    _oura_falso([pagina], monkeypatch)
+    r = cliente.obtener("workout", "2026-08-10", "2026-08-10")
+    assert r["n"] == 1 and r["datos"][0]["day"] == "2026-08-10"
+
+
+def test_el_dia_sale_de_start_day_cuando_no_hay_day(monkeypatch):
+    """`rest_mode_period` y `enhanced_tag` no traen `day`: traen `start_day`."""
+    pagina = [{"start_day": "2026-08-09"}, {"start_day": "2026-08-30"}]
+    _oura_falso([pagina], monkeypatch)
+    r = cliente.obtener("enhanced_tag", "2026-08-09", "2026-08-09")
+    assert r["n"] == 1
+
+
+def test_lo_que_no_se_puede_fechar_se_conserva(monkeypatch):
+    """Descartar lo que no se entiende es la forma más rápida de entregar de
+    menos, que es exactamente lo que este paquete existe para no hacer."""
+    pagina = [{"day": "2026-08-09"}, {"sin_fecha": True}, {"day": "2026-09-30"}]
+    _oura_falso([pagina], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-09", "2026-08-09")
+    assert r["n"] == 2
+    assert {"sin_fecha": True} in r["datos"]
+
+
+def test_dia_de_reconoce_las_claves_con_hora():
+    assert cliente.dia_de({"timestamp": "2026-08-09T12:00:00-06:00"}) == "2026-08-09"
+    assert cliente.dia_de({"bedtime_start": "2026-08-09T23:10:00-06:00"}) == "2026-08-09"
+    assert cliente.dia_de({"nada": 1}) is None
+    assert cliente.dia_de("no es un dict") is None
+
+
+def test_al_truncar_deja_el_cursor_para_continuar(monkeypatch):
+    """`truncado` avisaba pero no dejaba continuar: quien lo recibía sólo podía
+    reintentar a ciegas."""
+    paginas = [[{"i": n}] for n in range(20)]
+    _oura_falso(paginas, monkeypatch)
+    r = cliente.obtener("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z",
+                        limite_paginas=3)
+    assert r["continuar_desde"] == "3"
+
+
 # ── Parámetros ──────────────────────────────────────────────────────────────
 def test_las_de_fecha_exigen_rango(monkeypatch):
     monkeypatch.setenv("OURA_PAT", "x")
