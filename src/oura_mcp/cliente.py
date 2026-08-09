@@ -462,6 +462,8 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
         salida["campos_ignorados"] = ignorados
     if (aviso := _aviso_de_tamano(datos, campos)):
         salida["respuesta_grande"] = aviso
+    if not datos:
+        salida["vacio"] = _porque_vacio(coleccion, inicio, fin)
     if sobrantes:
         # Se pidió un día de más para cubrir los endpoints exclusivos; éste es el
         # que se descartó. Se dice, en vez de callarlo: quien lea la respuesta
@@ -509,6 +511,57 @@ def _celda(v) -> str:
     if isinstance(v, (dict, list)):
         return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
     return str(v)
+
+
+def _porque_vacio(coleccion: str, inicio: str | None, fin: str | None) -> dict:
+    """Qué se sabe cuando la consulta vuelve sin nada.
+
+    `n: 0` es la respuesta más común a las preguntas más comunes —«¿cómo dormí
+    ayer?», «¿estoy recuperado?»— y no distingue entre cuatro cosas que llevan a
+    conclusiones opuestas:
+
+        no llevabas el anillo        ·  el anillo no ha sincronizado todavía
+        pediste una fecha futura     ·  tu token no tiene ese permiso
+
+    Un modelo que reciba `{"n": 0}` va a contestar «no dormiste» con toda
+    confianza, y puede estar equivocado. Esto NO adivina cuál es: enumera lo que
+    se puede comprobar sin salir a la red, y lo que no se sabe lo deja abierto.
+    """
+    from .colecciones import ALCANCE_DE
+
+    hoy = datetime.date.today().isoformat()
+    razones = []
+
+    if inicio and fin:
+        if inicio[:10] > hoy:
+            razones.append("el rango pedido está en el futuro")
+        elif fin[:10] >= hoy:
+            razones.append(
+                "el rango llega hasta hoy, y los datos de Oura sólo aparecen "
+                "cuando el anillo sincroniza con la app; los del día en curso "
+                "suelen faltar o estar incompletos")
+
+    alcance = ALCANCE_DE.get(coleccion)
+    if alcance and not (en_sandbox() or os.environ.get("OURA_PAT")
+                        or os.environ.get("OURA_PAT_FILE")):
+        try:
+            from .credenciales import cargar
+            cred = cargar()
+        except ErrorOura:
+            cred = None
+        if cred and alcance not in cred.alcances:
+            razones.append(
+                f"esta colección necesita el alcance `{alcance}` y tus "
+                f"credenciales no lo tienen: vuelve a correr `oura-mcp "
+                f"--autorizar` y concédelo")
+
+    return {
+        "sin_datos": "la consulta salió bien; Oura no tiene registros en ese rango",
+        "lo_que_se_sabe": razones or ["nada más que reportar sin salir a la red"],
+        "no_confundir": ("«no hay dato» no es lo mismo que «no dormiste» ni que "
+                         "«no te recuperaste». Para saber si el anillo tiene "
+                         "datos cerca, pide un rango más amplio."),
+    }
 
 
 def _aviso_de_tamano(datos: list, campos: list[str] | None) -> dict | None:

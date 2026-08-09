@@ -48,6 +48,24 @@ COLECCIONES: dict[str, tuple[str, str]] = {
 
 CON_FECHA = {"rango_fecha", "rango_datetime"}
 
+# Qué alcance de OAuth necesita cada colección. Sirve para una sola cosa, y es
+# importante: cuando una consulta vuelve VACÍA, distinguir «no hay dato» de «no
+# diste ese permiso». Las dos se ven idénticas —n=0— y llevan a conclusiones
+# opuestas.
+ALCANCE_DE = {
+    "daily_sleep": "daily", "daily_readiness": "daily", "daily_activity": "daily",
+    "daily_stress": "daily", "daily_resilience": "daily",
+    "daily_cardiovascular_age": "daily", "vO2_max": "daily",
+    "sleep": "daily", "sleep_time": "daily", "rest_mode_period": "daily",
+    "ring_battery_level": "daily", "ring_configuration": "daily",
+    "daily_spo2": "spo2",
+    "heartrate": "heartrate",
+    "workout": "workout",
+    "session": "session",
+    "tag": "tag", "enhanced_tag": "tag",
+    "personal_info": "personal",
+}
+
 # Las únicas dos que respetan `latest=true`. Medido contra la API el 9-ago-2026:
 # en las demás Oura NO devuelve un error, devuelve la colección entera. Pedir el
 # último registro y recibir diez, sin aviso, es la misma familia de falla que no

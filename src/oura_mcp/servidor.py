@@ -58,12 +58,33 @@ def _version() -> str:
 servidor = MCPServer(
     name="oura",
     version=_version(),
+    # LO QUE UN MODELO NO PUEDE ADIVINAR. Se comprobó simulando las preguntas
+    # que un usuario hace de verdad («¿cómo dormí ayer?», «¿estoy recuperado?»,
+    # «¿cómo estuvo mi pulso en el ejercicio de ayer?») y viendo qué le faltaba
+    # saber para contestarlas sin inventar. Estas instrucciones viajan en cada
+    # sesión, así que sólo va lo que cambia una respuesta.
     instructions=(
-        "Datos crudos del anillo Oura, vía su API v2. Las respuestas traen `n` "
-        "(cuántos registros) y `paginas`. Si aparece la clave `truncado`, FALTAN "
-        "datos y hay que acortar el rango — no la ignores.\n\n"
-        "Este servidor no calcula promedios ni tendencias a propósito: entrega el "
-        "dato para que el análisis se haga donde se pueda citar el método."
+        "Datos crudos del anillo Oura, vía su API v2.\n\n"
+        "CUATRO COSAS QUE CAMBIAN LA RESPUESTA:\n\n"
+        "1. `n: 0` NO significa que la persona no durmiera, no se moviera ni no "
+        "se recuperara. Significa que Oura no tiene registros en ese rango, y la "
+        "causa más común es que el anillo aún no sincroniza — los datos del día "
+        "en curso casi siempre faltan. Cuando pasa, la respuesta trae `vacio` "
+        "con lo que se sabe. Léelo antes de concluir nada, y di que no hay dato, "
+        "no que no ocurrió.\n\n"
+        "2. Si aparece `truncado`, FALTAN datos: sigue desde `continuar_desde`. "
+        "Si aparece `ciclo_de_paginacion`, Oura se repitió y lo que hay puede "
+        "estar incompleto. Ninguna de las dos se ignora.\n\n"
+        "3. El rango es inclusivo en los dos extremos, y `dia` es el atajo para "
+        "uno solo. Para juntar un ejercicio con el pulso de ese rato: pide "
+        "`workout`, toma `start_datetime` y `end_datetime` del que te interese, "
+        "y úsalos tal cual como `inicio` y `fin` de `heartrate`.\n\n"
+        "4. Hay colecciones enormes: 30 días de `daily_activity` son 250,000 "
+        "caracteres, y el 92% es un solo campo. Si la respuesta trae "
+        "`respuesta_grande`, vuelve a pedir con `campos` limitado a lo que "
+        "necesites.\n\n"
+        "Este servidor no calcula promedios ni tendencias a propósito: entrega "
+        "el dato para que el análisis se haga donde se pueda citar el método."
     ),
 )
 

@@ -782,6 +782,43 @@ deja de gastar el contexto de quien pregunta en silencio.
 
 ---
 
+## Las cinco preguntas de verdad, simuladas
+
+El código estaba muy revisado y las respuestas eran correctas. Faltaba
+preguntarse si **un modelo puede contestar con ellas sin adivinar**. Se
+simularon las cinco que un usuario hace de verdad, por stdio.
+
+Cuatro salieron bien. La quinta reveló el agujero más grande que quedaba, y es
+la tesis del repositorio vuelta contra nosotros:
+
+> «¿cómo dormí ayer?» → `{"coleccion": "daily_sleep", "n": 0, "paginas": 1}`
+
+Eso no distingue entre **cuatro cosas que llevan a conclusiones opuestas**: no
+llevabas el anillo, el anillo no ha sincronizado, pediste una fecha futura, o tu
+token no tiene ese permiso. Un modelo que reciba `n: 0` contestará «no dormiste»
+con toda confianza — y `n: 0` es la respuesta más común a la pregunta más común.
+
+Entregar un vacío sin explicarlo es exactamente «entregar de menos sin avisar»,
+cometido por nosotros en la interacción principal.
+
+Ahora la respuesta trae `vacio`, que **no adivina** cuál de las cuatro es:
+enumera lo que se puede comprobar sin salir a la red —si el rango está en el
+futuro, si llega hasta hoy y por tanto puede no haber sincronizado, si a las
+credenciales les falta el alcance que esa colección necesita— y deja dicho que
+«no hay dato» no es «no ocurrió».
+
+Para lo del alcance hizo falta una tabla nueva, `ALCANCE_DE`: qué permiso de
+OAuth necesita cada colección. Sin ella, un `n: 0` por falta de permiso es
+indistinguible de uno por falta de datos.
+
+**Y la unión de dos pasos funciona.** «¿Cómo estuvo mi pulso durante el
+ejercicio de ayer?» exige pedir `workout`, sacar `start_datetime`/`end_datetime`
+y usarlos en `heartrate`. Los formatos encajan sin conversión — comprobado— pero
+nada se lo decía al modelo. Ahora está en las instrucciones del servidor, junto
+con las otras tres cosas que no puede adivinar.
+
+---
+
 ## Orden de ejecución
 
 1. **v0.2** — `end_date` primero (bug confirmado, en silencio, en la ruta más
