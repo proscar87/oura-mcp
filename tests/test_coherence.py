@@ -4,12 +4,12 @@ NO TOCAN LA RED. Sólo leen archivos del repositorio.
 
 La versión está declarada en SEIS lugares —pyproject, server.json dos veces,
 plugin.json, marketplace.json, y el `serverInfo` del handshake MCP— y se
-desincronizan en silencio. Ya pasó: el servidor se anunciaba como 0.1.0 con
+desincronizan en silencio. Ya pasó: el server se anunciaba como 0.1.0 con
 `pyproject.toml` en 0.2.0, y lo detectó una prueba de humo por stdio, no las 88
-de función. El número que ve el cliente sale del handshake, que ninguna prueba
+de función. El número que ve el client sale del handshake, que ninguna prueba
 de función mira.
 
-Un servidor que miente sobre su versión hace imposible diagnosticar la pregunta
+Un server que miente sobre su versión hace imposible diagnosticar la pregunta
 más común de un reporte de fallo: «¿tienes la que trae el arreglo?».
 """
 
@@ -28,9 +28,9 @@ def _version_declarada() -> str:
     """La versión de `pyproject.toml`, leída con una expresión regular.
 
     `tomllib` es de Python 3.11 y este paquete declara 3.10 como mínimo. Usarlo
-    aquí habría hecho que la prueba de coherencia rompiera el CI justo en la
+    aquí habría hecho que la prueba de coherence rompiera el CI justo en la
     versión más vieja que decimos soportar — que es exactamente el tipo de
-    incoherencia que este archivo existe para atrapar.
+    incoherencia que este file existe para atrapar.
     """
     texto = (RAIZ / "pyproject.toml").read_text(encoding="utf-8")
     m = re.search(r'^version\s*=\s*"([^"]+)"', texto, re.MULTILINE)
@@ -56,13 +56,13 @@ def test_el_plugin_coincide_con_pyproject():
 
 
 def test_el_handshake_anuncia_la_version_instalada():
-    from oura_mcp.servidor import _version
+    from oura_mcp.server import _version
     assert _version() != "desconocida"
 
 
 # ── Lo que el registro exige y es fácil borrar sin querer ──────────────────
 def test_el_readme_conserva_la_prueba_de_propiedad():
-    """El registro de MCP comprueba que quien publica el servidor controla el
+    """El registro de MCP comprueba que quien publica el server controla el
     paquete buscando esta línea en el README publicado en PyPI. Sin ella,
     `mcp-publisher publish` devuelve un 400."""
     readme = (RAIZ / "README.md").read_text(encoding="utf-8")
@@ -89,12 +89,12 @@ def _docs() -> dict[str, str]:
     """Los documentos, con lo entrecomillado quitado.
 
     AFIRMAR NO ES CITAR. Estos archivos documentan afirmaciones que caducaron
-    —«cuatro herramientas», «el más completo no pagina»— precisamente para que
+    —«cuatro tools», «el más completo no pagina»— precisamente para que
     nadie las repita, y una prueba que no distinga las dos cosas se dispara con
     la explicación de su propia regla. Pasó a la primera corrida.
 
     Las comillas angulares son la convención de este repositorio para citar, así
-    que lo que va entre ellas se descarta antes de revisar.
+    que lo que va entre ellas se descarta antes de check.
     """
     docs = {}
     for n in ("README.md", "AGENTS.md", "ROADMAP.md", "CHANGELOG.md", "llms.txt"):
@@ -105,7 +105,7 @@ def _docs() -> dict[str, str]:
 
 def test_el_codigo_fuente_tampoco_repite_la_frase():
     """La prueba de abajo sólo miraba los documentos, y la frase también vivía en
-    el docstring de `cliente.py`. Los comentarios envejecen igual que el README y
+    el docstring de `client.py`. Los comentarios envejecen igual que el README y
     engañan igual — con la diferencia de que nadie los relee."""
     for f in (RAIZ / "src" / "oura_mcp").glob("*.py"):
         texto = re.sub(r"«[^»]*»", "«…»", f.read_text(encoding="utf-8"))
@@ -125,25 +125,25 @@ def test_ningun_documento_repite_la_frase_que_dejo_de_ser_cierta():
 def test_ningun_documento_promete_cuatro_herramientas():
     """Son tres, y lo han sido siempre."""
     for nombre, texto in _docs().items():
-        assert "cuatro herramientas" not in texto.lower(), nombre
+        assert "cuatro tools" not in texto.lower(), nombre
 
 
 def test_el_numero_de_colecciones_es_el_mismo_en_todos_lados():
-    from oura_mcp.colecciones import COLECCIONES
-    assert len(COLECCIONES) == 19
+    from oura_mcp.collections import COLLECTIONS
+    assert len(COLLECTIONS) == 19
     for nombre, texto in _docs().items():
-        for equivocado in ("18 colecciones", "20 colecciones", "las 18 ", "las 20 "):
+        for equivocado in ("18 collections", "20 collections", "las 18 ", "las 20 "):
             assert equivocado not in texto, f"{nombre}: {equivocado}"
 
 
 def test_las_mediciones_se_citan_igual_en_todos_lados():
     """1,231 muestras en 2 páginas. Es un número medido; si se copia mal a otro
-    archivo, la próxima persona no sabe cuál creer. El README está en inglés, así
+    file, la próxima persona no sabe cuál creer. El README está en inglés, así
     que ahí la unidad se llama «pages»."""
     for nombre, texto in _docs().items():
         if "1,231" in texto or "1231" in texto:
-            assert ("2 páginas" in texto or "2 pages" in texto), \
-                f"{nombre} cita las muestras sin las páginas"
+            assert any(x in texto for x in ("2 pages", "two-page", "2 páginas")), \
+                f"{nombre} cites the samples without the page count"
         # Ningún documento debe traer la estimación vieja como si fuera medida.
         assert "1,250 muestras en 2 páginas" not in texto, nombre
 
@@ -156,7 +156,7 @@ def test_lo_de_cara_al_mundo_esta_en_ingles():
     llms = (RAIZ / "llms.txt").read_text(encoding="utf-8")
     for texto, nombre in ((readme, "README.md"), (llms, "llms.txt")):
         # Encabezados en español que se hayan quedado a medio traducir.
-        for resto in ("## Instalación", "## Las herramientas", "## Licencia",
+        for resto in ("## Instalación", "## Las tools", "## Licencia",
                       "## El problema"):
             assert resto not in texto, f"{nombre} conserva {resto}"
     assert "## License" in readme
@@ -175,11 +175,11 @@ def test_ningun_documento_manda_a_crear_un_token_personal():
 
 
 def test_la_descripcion_cabe_en_el_registro():
-    """El registro de MCP topa `description` en 100 caracteres. La v0.2.0 se
-    publicó en PyPI y falló en el registro por seis caracteres de más — con PyPI
+    """El registro de MCP topa `description` en 100 characters. La v0.2.0 se
+    publicó en PyPI y falló en el registro por seis characters de más — con PyPI
     ya subido, que es la mitad irreversible."""
     d = _leer_json("server.json")["description"]
-    assert len(d) <= 100, f"{len(d)} caracteres: {d}"
+    assert len(d) <= 100, f"{len(d)} characters: {d}"
 
 
 def test_el_nombre_del_servidor_cabe():

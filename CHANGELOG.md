@@ -1,93 +1,106 @@
-# Cambios
+# Changelog
 
-## 0.2.0 — sin publicar
+## 0.3.0 — unreleased
 
-La 0.1.x paginaba. Ésta corrige otras tres formas en que Oura entrega de menos
-sin avisar, y abre la puerta que Oura cerró en diciembre de 2025.
+Everything in English: docs, comments, and the tool parameters. The parameter
+rename is a **breaking change** against 0.2.0 — `dia` → `day`, `inicio` →
+`start`, `fin` → `end`, `campos` → `fields`, `ultimo` → `latest`, `formato` →
+`format`, `coleccion` → `collection`. They now match Oura's own API names,
+which is one less translation layer for anyone reading both.
 
-Todo lo que sigue está medido contra la API real, no supuesto.
+TypeScript port, with parity verified against the Python implementation on the
+real API: the same 1,231 records in the same order for the two-page `heartrate`
+case that justifies the project. Node ships with Claude Desktop, which removes
+the binary, the code signing and the per-platform CI that the `.mcpb` would
+otherwise need.
 
-### El rango de fechas estaba mal
+## 0.2.0 — 9 August 2026
 
-Pedir un solo día devolvía **cero registros** en `daily_activity`, `sleep` y
-`workout`. Sin error, sin `truncado`, con `paginas: 1` afirmando que la página
-venía completa. Son dos fallas que se suman:
+0.1.x paginated. This one fixes three more ways Oura under-delivers without
+saying so, and opens the door Oura closed in December 2025.
 
-- **`end_date` es inconsistente entre colecciones.** Tres la excluyen; siete la
-  incluyen.
-- **`workout` se filtra por la fecha UTC pero reporta `day` en hora local.** Con
-  `-06:00`, pedir del 16 al 18 de julio devolvía los días 15 y 16.
+Everything below was measured against the real API, not assumed.
 
-Ahora el rango es inclusivo en los dos extremos, siempre: se piden dos días de
-más de cada lado y se recortan. Es correcto sea cual sea el comportamiento de
-cada colección, y lo sigue siendo cuando Oura lo cambie.
+### The date range was wrong
 
-Nuevo parámetro `dia` para la consulta más común.
+Asking for a single day returned **zero records** in `daily_activity`, `sleep`
+and `workout`. No error, no `truncado`, and `paginas: 1` asserting the page was
+complete. Two failures that stack:
 
-### Dos parámetros de Oura que no usábamos, y sus trampas
+- **`end_date` is inconsistent across collections.** Three exclude the last day;
+  seven include it.
+- **`workout` filters by UTC date but reports `day` in local time.** At `-06:00`,
+  asking for July 16–18 returned the 15th and 16th.
 
-- **`campos`** → `fields`. Recorta del lado de Oura, así que baja menos.
-- **`ultimo`** → `latest`. El registro más reciente sin bajar la ventana entera.
+The range is now inclusive on both ends, always: two extra days are requested on
+each side and trimmed. That's correct whichever way a collection behaves, and
+stays correct when Oura changes it.
 
-Los dos fallan en silencio si se usan mal: `fields=inventado` devuelve el
-registro completo sin proyectar, y `latest=true` en una colección que no lo
-soporta devuelve la colección entera. Por eso `ultimo` se rechaza aquí para las
-17 que no lo respetan, y los campos que no se aplicaron se reportan en
+New `day` parameter for the most common query.
+
+### Two Oura parameters we weren't using, and their traps
+
+- **`fields`** — trims on Oura's side, so less comes down.
+- **`latest`** — the most recent record without pulling the whole window.
+
+Both fail silently when misused: `fields=made_up` returns the complete record
+without projecting, and `latest=true` on a collection that doesn't support it
+returns the entire collection. So `latest` is rejected here for the 17 that
+don't honor it, and fields that were never applied are reported under
 `campos_ignorados`.
 
-### Modo sandbox
+### Sandbox mode
 
-`OURA_SANDBOX=1` usa las rutas espejo oficiales de Oura, que sirven datos
-sintéticos sin pedir credenciales. Sirven 18 de las 19 colecciones —
-`personal_info` no, que es la que devuelve correo, edad, peso y estatura.
+`OURA_SANDBOX=1` uses Oura's official mirror routes, which serve synthetic data
+without credentials. 18 of the 19 collections work — not `personal_info`, the
+one returning email, age, weight and height.
 
 ### OAuth2
 
-Oura dejó de emitir Personal Access Tokens en diciembre de 2025. `oura-mcp
---autorizar` hace el flujo completo, con `--manual` para máquinas sin navegador
-y `--olvidar` para borrar las credenciales.
+Oura stopped issuing Personal Access Tokens in December 2025. `oura-mcp
+--autorizar` runs the full flow, with `--manual` for headless machines and
+`--olvidar` to erase credentials.
 
-El refresh token de Oura es de un solo uso: se guarda antes de devolverlo, de
-forma atómica, y si dos procesos refrescan a la vez el que pierde relee lo
-guardado en vez de dar la sesión por perdida. El `state` del callback se
-verifica con `compare_digest`.
+Oura's refresh token is single-use: it's saved before being returned, atomically,
+and if two processes refresh at once the loser re-reads what's on disk instead of
+declaring the session lost. The callback's `state` is verified with a
+constant-time comparison.
 
-Los tokens viven en `~/.config/oura-mcp/credenciales.json` con permisos 600 —o
-en el llavero del sistema si tienes `keyring`, que no es dependencia de este
-paquete. El PAT sigue funcionando y gana si está puesto.
+Tokens live in `~/.config/oura-mcp/credenciales.json` with mode 600 — or in the
+system keychain if you have `keyring`, which is not a dependency. Personal tokens
+still work and win when present.
 
-### Volumen y avisos
+### Volume and warnings
 
-- **`formato="csv"`** — 56% menos caracteres sobre un día real de `heartrate`.
-  El encabezado sale de la unión de todas las claves, no del primer registro.
-- **`truncado` ahora deja `continuar_desde`** para reanudar en vez de obligar a
-  reintentar a ciegas.
-- **429 con reintento acotado**, honrando `Retry-After` en sus dos formas. Oura
-  no manda cabeceras de límite de tasa, así que reaccionar bien es lo único que
-  queda.
+- **`format="csv"`** — savings vary by collection: 55% on `heartrate`, 10% on
+  `daily_sleep`. The header comes from the union of all keys, not the first
+  record.
+- **`truncado` now carries `continuar_desde`** so you can resume instead of
+  retrying blind.
+- **429 with bounded retry**, honoring `Retry-After` in both its forms. Oura
+  sends no rate-limit headers, so reacting well is all that's left.
 
-### Errores que se leen
+### Errors you can read
 
-El `detail` de Oura llega en dos formas y ninguna se lee en crudo. Ahora se
-traduce: `start_date: Input should be a valid datetime or date (recibido:
-'ayer')` en vez de un JSON cortado a media palabra. Y un rango invertido se
-atrapa aquí, citando las fechas que escribiste y no las que mandamos con el
-margen.
+Oura's `detail` arrives in two shapes and neither reads well raw. Now it's
+translated: `start_date: Input should be a valid datetime or date (received:
+'ayer')` instead of JSON cut off mid-word. And an inverted range is caught here,
+citing the dates you wrote rather than the ones we sent with the margin.
 
-### Lo demás
+### Everything else
 
-- Las tres herramientas declaran `title` y `readOnlyHint`. Una prueba lee el
-  código fuente para que siga siendo verdad.
-- El token va envuelto en `Secreto`: su `repr` no lo imprime.
-- Plugin de Claude Code, `smithery.yaml`, `glama.json`, `llms.txt`.
-- `herramientas/revisar_deriva.py` y un job semanal que comprueba que las 19
-  colecciones sigan existiendo, sin credenciales.
-- 88 pruebas, ninguna toca la red.
+- All three tools declare `title` and `readOnlyHint`. A test reads the source to
+  keep that true.
+- The token is wrapped in a type that won't print in a stack trace.
+- Claude Code plugin, `smithery.yaml`, `glama.json`, `llms.txt`.
+- `herramientas/revisar_deriva.py` and a weekly job checking that all 19
+  collections still exist, without credentials.
+- 124 tests, none of which touch the network.
 
-## 0.1.1 — 9 de agosto de 2026
+## 0.1.1 — 9 August 2026
 
-Prueba de propiedad para el registro de MCP.
+Ownership proof for the MCP registry.
 
-## 0.1.0 — 9 de agosto de 2026
+## 0.1.0 — 9 August 2026
 
-Primera versión. Las 19 colecciones, tres herramientas, paginación completa.
+First release. All 19 collections, three tools, complete pagination.

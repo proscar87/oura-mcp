@@ -45,7 +45,7 @@ Parameter names are in Spanish because the codebase is.
 - `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET` — for `oura-mcp --autorizar` (OAuth2).
 - `OURA_PAT`, `OURA_PAT_FILE` — personal token, if you already had one. Oura
   stopped issuing them in December 2025.
-- `OURA_CREDENCIALES` — where the 0600 OAuth file lives.
+- `OURA_CREDENTIALS` — where the 0600 OAuth file lives.
 - `OURA_API_BASE_URL` — point at another origin (testing).
 
 ## What it does NOT do
