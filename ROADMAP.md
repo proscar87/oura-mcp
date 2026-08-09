@@ -235,7 +235,7 @@ Hay además una prueba que **lee el código fuente** buscando `POST`, `PUT`,
 `DELETE` y `PATCH`. La anotación de sólo lectura es verdad hoy; esa prueba es la
 que se entera el día que deje de serlo.
 
-*(De paso: el README dice «cuatro herramientas» y hay tres. Sigue pendiente.)*
+*(El README decía que había cuatro; son tres. Corregido, y ahora hay una prueba de coherencia que no deja que vuelva.)*
 
 ### 7. El token, fuera de cualquier `repr` — **hecho**
 
@@ -665,6 +665,32 @@ nada.
 
 No es trabajo de v0.2. Pero si algún día se agrupan, el argumento ya está
 escrito.
+
+---
+
+## Lo que la auditoría de punta a punta encontró
+
+Las 98 pruebas ejercitan funciones. Ninguna arrancaba **el proceso**. Y el modo
+en que un servidor MCP falla más feo no es devolviendo un dato equivocado: es no
+completar el *handshake*, o escribir en stdout algo que no sea JSON-RPC. Las dos
+se ven igual desde el cliente —un servidor que «no aparece»— y ninguna prueba de
+función las atrapa.
+
+`herramientas/humo_stdio.py` lo arranca de verdad y le habla por stdio. A la
+primera corrida encontró que **el servidor se anunciaba como `oura 0.1.0`** con
+`pyproject.toml` en 0.2.0: el número estaba escrito a mano en dos lugares. Ahora
+sale de `importlib.metadata`, y una prueba ata las seis declaraciones de versión
+que hay en el repo.
+
+De paso, `tests/test_coherencia.py` fija lo que la documentación no puede
+contradecir: la línea `mcp-name:` que exige el registro, la política de
+privacidad que exige el directorio, y las afirmaciones que ya caducaron una vez
+—«cuatro herramientas», «el más completo no pagina»— para que no vuelvan.
+
+Y una que se atrapó a sí misma: la primera versión de esa prueba usaba
+`tomllib`, que es de Python 3.11, mientras `pyproject.toml` declara 3.10 como
+mínimo. Habría roto el CI justo en la versión más vieja que decimos soportar.
+Ahora todo el árbol se verifica contra la gramática de 3.10.
 
 ---
 
