@@ -20,6 +20,7 @@ name: Publicar
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:        # para volver a intentar el registro sin inventar una versión
 
 jobs:
   pruebas:
@@ -57,7 +58,12 @@ jobs:
 
   registro:
     name: Registro de MCP
-    needs: pypi
+    # Depende de las PRUEBAS, no de PyPI. El registro sólo comprueba que el
+    # paquete exista en PyPI y declare este repositorio — no le importa quién lo
+    # subió. Encadenarlo a `pypi` hacía que un fallo de publicación (por ejemplo,
+    # el publicador confiable aún sin configurar) se llevara por delante un paso
+    # que no tenía por qué fallar.
+    needs: pruebas
     runs-on: ubuntu-latest
     permissions:
       id-token: write
