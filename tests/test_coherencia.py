@@ -81,9 +81,21 @@ def test_el_readme_trae_la_politica_de_privacidad():
 
 # ── Que la documentación no se contradiga a sí misma ───────────────────────
 def _docs() -> dict[str, str]:
-    return {n: (RAIZ / n).read_text(encoding="utf-8")
-            for n in ("README.md", "AGENTS.md", "ROADMAP.md", "CHANGELOG.md",
-                      "llms.txt")}
+    """Los documentos, con lo entrecomillado quitado.
+
+    AFIRMAR NO ES CITAR. Estos archivos documentan afirmaciones que caducaron
+    —«cuatro herramientas», «el más completo no pagina»— precisamente para que
+    nadie las repita, y una prueba que no distinga las dos cosas se dispara con
+    la explicación de su propia regla. Pasó a la primera corrida.
+
+    Las comillas angulares son la convención de este repositorio para citar, así
+    que lo que va entre ellas se descarta antes de revisar.
+    """
+    docs = {}
+    for n in ("README.md", "AGENTS.md", "ROADMAP.md", "CHANGELOG.md", "llms.txt"):
+        texto = (RAIZ / n).read_text(encoding="utf-8")
+        docs[n] = re.sub(r"«[^»]*»", "«…»", texto)
+    return docs
 
 
 def test_ningun_documento_repite_la_frase_que_dejo_de_ser_cierta():
