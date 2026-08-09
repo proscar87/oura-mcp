@@ -42,6 +42,11 @@ LIMITE_PAGINAS = 50          # ~50k registros; más que eso es un error de uso
 REINTENTOS_429 = 2           # acotado: esto corre dentro de una conversación
 ESPERA_MAXIMA = 8.0          # segundos; ni el `Retry-After` de Oura manda más
 
+# A partir de cuántos caracteres la respuesta se comenta a sí misma. 50,000 son
+# unos 12,000 tokens: bastante para que importe, poco para que estorbe. Medido:
+# 30 días de `daily_activity` son 252,000, y el 92% es un solo campo.
+AVISO_TAMANO = 50_000
+
 # Días de más que se piden de cada lado antes de recortar. DOS, no uno:
 # `workout` es exclusiva en el extremo Y va desfasada a UTC, y las dos cosas se
 # suman. El desfase horario máximo del mundo es de ±14 h —un día— y la
@@ -455,6 +460,8 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
             )
     if (ignorados := _campos_ignorados(campos, datos)):
         salida["campos_ignorados"] = ignorados
+    if (aviso := _aviso_de_tamano(datos, campos)):
+        salida["respuesta_grande"] = aviso
     if sobrantes:
         # Se pidió un día de más para cubrir los endpoints exclusivos; éste es el
         # que se descartó. Se dice, en vez de callarlo: quien lea la respuesta
@@ -502,6 +509,41 @@ def _celda(v) -> str:
     if isinstance(v, (dict, list)):
         return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
     return str(v)
+
+
+def _aviso_de_tamano(datos: list, campos: list[str] | None) -> dict | None:
+    """Si la respuesta es enorme, decirlo y señalar al campo que la infla.
+
+    Medido el 9-ago-2026: 30 días de `daily_activity` son **252,000
+    caracteres**, y el 92% de cada registro es `met` —una serie de MET por
+    minuto—. Pedir tres columnas baja eso a 5,000: 99% menos.
+
+    Un servidor que entrega un cuarto de millón de caracteres sin comentarlo
+    está gastando el contexto de quien pregunta en datos que probablemente no
+    quería. No se recorta nada por cuenta propia —eso sería entregar de menos,
+    justo lo que este paquete existe para no hacer—: se entrega todo y se dice
+    qué pesa y cómo pedir menos.
+    """
+    if campos or len(datos) < 2:
+        return None                     # ya eligió columnas, o no hay volumen
+    total = sum(len(json.dumps(r, ensure_ascii=False)) for r in datos
+                if isinstance(r, dict))
+    if total < AVISO_TAMANO:
+        return None
+    pesos: dict[str, int] = {}
+    for r in datos:
+        if isinstance(r, dict):
+            for k, v in r.items():
+                pesos[k] = pesos.get(k, 0) + len(json.dumps(v, ensure_ascii=False))
+    gordo, peso = max(pesos.items(), key=lambda kv: kv[1], default=("", 0))
+    return {
+        "caracteres": total,
+        "campo_mas_pesado": gordo,
+        "porcentaje": round(peso * 100 / total) if total else 0,
+        "sugerencia": (f"`{gordo}` ocupa el {round(peso * 100 / total)}% de esta "
+                       f"respuesta. Si no lo necesitas, pide sólo las columnas "
+                       f"que uses con `campos`, o acorta el rango."),
+    }
 
 
 def _campos_ignorados(campos: list[str] | None, datos: list) -> list[str]:

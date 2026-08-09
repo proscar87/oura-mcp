@@ -679,3 +679,41 @@ def test_una_respuesta_vacia_son_cero_registros_no_uno(monkeypatch):
     monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
     monkeypatch.setenv("OURA_PAT", "x")
     assert cliente.obtener("personal_info")["n"] == 0
+
+
+# ── El tamaño de la respuesta, que nadie estaba mirando ────────────────────
+def test_una_respuesta_enorme_se_comenta_a_si_misma(monkeypatch):
+    """Medido: 30 días de `daily_activity` son 252,000 caracteres, y el 87% es un
+    solo campo (`met`, una serie de MET por minuto). Un servidor que entrega un
+    cuarto de millón de caracteres sin comentarlo gasta el contexto de quien
+    pregunta en datos que probablemente no quería."""
+    gordo = {"day": "2026-08-01", "score": 80, "met": list(range(6000))}
+    _oura_falso([[dict(gordo, day=f"2026-08-{d:02d}") for d in range(1, 6)]], monkeypatch)
+    r = cliente.obtener("daily_activity", "2026-08-01", "2026-08-05")
+    aviso = r["respuesta_grande"]
+    assert aviso["campo_mas_pesado"] == "met"
+    assert aviso["porcentaje"] > 90
+    assert "campos" in aviso["sugerencia"]
+
+
+def test_no_se_recorta_nada_por_cuenta_propia(monkeypatch):
+    """El aviso NO viene con una poda. Recortar sin que lo pidan sería entregar
+    de menos, que es justo lo que este paquete existe para no hacer."""
+    gordo = {"day": "2026-08-01", "met": list(range(6000))}
+    _oura_falso([[dict(gordo, day=f"2026-08-{d:02d}") for d in range(1, 6)]], monkeypatch)
+    r = cliente.obtener("daily_activity", "2026-08-01", "2026-08-05")
+    assert r["n"] == 5
+    assert all(len(x["met"]) == 6000 for x in r["datos"])
+
+
+def test_si_ya_eligio_columnas_no_se_le_insiste(monkeypatch):
+    gordo = {"day": "2026-08-01", "met": list(range(6000))}
+    _oura_falso([[dict(gordo, day=f"2026-08-{d:02d}") for d in range(1, 6)]], monkeypatch)
+    r = cliente.obtener("daily_activity", "2026-08-01", "2026-08-05", campos=["met"])
+    assert "respuesta_grande" not in r
+
+
+def test_una_respuesta_normal_no_lleva_aviso(monkeypatch):
+    _oura_falso([[{"day": "2026-08-01", "score": 80}]], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-01", "2026-08-01")
+    assert "respuesta_grande" not in r

@@ -184,11 +184,18 @@ que siga siendo cierto.
 | `inicio`, `fin` | El rango, **inclusivo en los dos extremos** |
 | `campos` | Sólo estos. Oura recorta del lado suyo, así que baja menos |
 | `ultimo` | El registro más reciente. Sólo `heartrate` y `ring_battery_level` |
-| `formato` | `json` o `csv`. Sobre un día real de `heartrate`, el CSV ocupa **56% menos** |
+| `formato` | `json` o `csv`. Cuánto ahorra depende de la colección: 55% en `heartrate`, 10% en `daily_sleep` |
 
 Y lo que la respuesta te dice cuando algo no salió redondo: `truncado` con
-`continuar_desde` para reanudar, `campos_ignorados`,
-`descartados_fuera_de_rango`, `columnas_desiguales`.
+`continuar_desde` para reanudar, `ciclo_de_paginacion` si Oura repite el mismo
+token, `campos_ignorados`, `descartados_fuera_de_rango`, `columnas_desiguales`,
+y `respuesta_grande` cuando lo que devuelve pesa lo suficiente para importar.
+
+Ese último sale de medir: **30 días de `daily_activity` son 252,000
+caracteres**, y el 87% de eso es un solo campo, `met`, que es una serie de MET
+por minuto. Pidiendo tres columnas con `campos`, los mismos 30 días son 5,000
+caracteres — **99% menos**. El servidor no recorta por su cuenta —eso sería
+entregar de menos— pero sí dice qué pesa y cómo pedir menos.
 
 ## Lo que este servidor NO hace
 

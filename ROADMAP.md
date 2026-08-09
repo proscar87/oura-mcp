@@ -750,6 +750,38 @@ inventar una interpretación.
 
 ---
 
+## Lo que nadie estaba midiendo: el tamaño de las respuestas
+
+Toda la noche se optimizó la corrección de los datos y nunca su volumen. Medido
+contra la API real, lo que un modelo recibe de verdad:
+
+| Consulta | JSON | CSV | Ahorro |
+|---|---|---|---|
+| Catálogo (`oura_colecciones`) | 1,764 | — | — |
+| `daily_sleep`, 30 días | 7,296 | 6,608 | 10% |
+| `sleep` detallado, 30 días | 120,571 | 100,852 | 17% |
+| **`daily_activity`, 30 días** | **251,814** | 195,643 | 23% |
+| `heartrate`, 1 día | 139,720 | 63,841 | 55% |
+
+Dos correcciones salen de aquí.
+
+**El «56% menos» del README era el mejor caso, no el típico.** El ahorro del CSV
+va del 10% al 55% según cuánto anidamiento traiga la colección. Citar sólo el
+mejor número es la clase de cosa que este repositorio le reprocha a los demás.
+Corregido: se da el rango.
+
+**Y 30 días de `daily_activity` son un cuarto de millón de caracteres** —unos
+60,000 tokens— sin que nada lo advirtiera. El 92% de cada registro es un solo
+campo, `met`, que es una serie de MET por minuto. Pidiendo tres columnas con
+`campos`, los mismos 30 días bajan a 5,016 caracteres: **99% menos**.
+
+La respuesta ahora lleva `respuesta_grande` cuando pasa de 50,000 caracteres,
+diciendo qué campo pesa y qué porcentaje. **No recorta nada por su cuenta** —eso
+sería entregar de menos, justo lo que este paquete existe para no hacer— pero
+deja de gastar el contexto de quien pregunta en silencio.
+
+---
+
 ## Orden de ejecución
 
 1. **v0.2** — `end_date` primero (bug confirmado, en silencio, en la ruta más
