@@ -73,9 +73,10 @@ revocarlo. Con el publicador confiable no hace falta ninguno.
 
 - **Listas de la comunidad**: `awesome-mcp-servers`, mcp.so, Smithery. Sale
   gratis y es de donde viene la mayor parte del tráfico.
-- **Composición segmental de nada de esto** — ver el README: el servidor no
-  analiza a propósito.
-- Si Oura agrega colecciones, se tocan en `colecciones.py` y nada más.
+- Si Oura agrega colecciones, se tocan en `colecciones.py` y nada más. Toda la
+  complejidad de hablarle a Oura vive en esa tabla; el resto es presentación.
+- **Nada de herramientas de análisis**, por más que las pidan. Ver la sección de
+  decisiones abajo — es la que más tentación da de revertir.
 
 ## Decisiones que NO hay que revertir
 
