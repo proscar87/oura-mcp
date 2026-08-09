@@ -612,3 +612,70 @@ def test_un_archivo_vacio_no_pasa_por_token(monkeypatch, tmp_path):
     monkeypatch.setenv("OURA_PAT_FILE", str(f))
     with pytest.raises(cliente.ErrorOura, match="vacío"):
         cliente._token()
+
+
+# ── El tercer final del bucle: un `next_token` que se repite ───────────────
+def test_un_next_token_repetido_se_detecta_como_ciclo(monkeypatch):
+    """Sería irónico tenerlo aquí. Sin detectarlo se hacían 50 peticiones
+    idénticas, se devolvían 50 copias del mismo registro, y el aviso decía
+    «acorta el rango» — consejo inútil, porque acortar no arregla que la API se
+    repita. Y encima quemaba 49 peticiones contra un límite de tasa que Oura no
+    anuncia por ninguna cabecera."""
+    llamadas = []
+
+    def urlopen(req, timeout=None):
+        llamadas.append(req.full_url)
+        return _RespuestaFalsa(json.dumps(
+            {"data": [{"day": "2026-08-01"}], "next_token": "SIEMPRE-EL-MISMO"}
+        ).encode())
+
+    monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x")
+    r = cliente.obtener("daily_sleep", "2026-08-01", "2026-08-01")
+    assert len(llamadas) == 2, f"hizo {len(llamadas)} peticiones"
+    assert "ciclo_de_paginacion" in r
+    assert "truncado" not in r, "no es truncamiento: es la API portándose mal"
+
+
+def test_el_ciclo_no_estorba_a_la_paginacion_normal(monkeypatch):
+    """Tokens distintos en cada página siguen su curso hasta el final."""
+    paginas = [[{"i": n}] for n in range(6)]
+    _oura_falso(paginas, monkeypatch)
+    r = cliente.obtener("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z")
+    assert r["n"] == 6 and r["paginas"] == 6
+    assert "ciclo_de_paginacion" not in r
+
+
+# ── Formas de respuesta que Oura no debería mandar, pero por si acaso ──────
+def test_data_que_no_es_lista_se_denuncia(monkeypatch):
+    """Envolver el sobre entero convertiría eso en «un registro» con forma
+    `{"data": …}` que se ve legítimo. Callarlo sería la falla de siempre,
+    cometida por nosotros."""
+    def urlopen(req, timeout=None):
+        return _RespuestaFalsa(json.dumps({"data": {"day": "2026-08-01"}}).encode())
+
+    monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x")
+    with pytest.raises(cliente.ErrorOura, match="no se inventa una interpretación"):
+        cliente.obtener("daily_sleep", "2026-08-01", "2026-08-01")
+
+
+def test_las_colecciones_sin_sobre_siguen_funcionando(monkeypatch):
+    """`personal_info` y `ring_configuration` no vienen envueltas en `data`: el
+    cuerpo entero es el registro. Se distingue por la AUSENCIA de la clave."""
+    def urlopen(req, timeout=None):
+        return _RespuestaFalsa(json.dumps({"email": "x", "age": 1}).encode())
+
+    monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x")
+    r = cliente.obtener("personal_info")
+    assert r["n"] == 1 and r["datos"][0]["age"] == 1
+
+
+def test_una_respuesta_vacia_son_cero_registros_no_uno(monkeypatch):
+    def urlopen(req, timeout=None):
+        return _RespuestaFalsa(b"{}")
+
+    monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x")
+    assert cliente.obtener("personal_info")["n"] == 0

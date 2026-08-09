@@ -7,14 +7,19 @@ lo sigues, recibes la primera página y **nada te avisa**: la respuesta es un JS
 válido, con datos reales, que se ve completo. Para `heartrate`, que muestrea cada
 cinco minutos, un mes son ~8,600 puntos y la primera página trae una fracción.
 
-No es hipotético. Revisamos siete servidores MCP de Oura publicados y **el más
-completo de todos no pagina**: en su cliente, `next_token` aparece una sola vez,
-en la definición del tipo. Es el mismo error que PostgREST castiga con su tope de
-1,000 filas y que ya costó caro en este proyecto, tres veces.
+No es hipotético: medido el 9-ago-2026, un día local de `heartrate` son **1,231
+muestras en 2 páginas**. Quien no pagina recibe 1,000 de 1,231 —el 81%— con
+aspecto de estar completo. Es el mismo error que PostgREST castiga con su tope
+de 1,000 filas y que ya costó caro en este proyecto, tres veces.
 
 Por eso aquí la paginación no es una opción del llamador: es el único camino.
 `obtener()` no devuelve hasta que `next_token` viene vacío, o hasta toparse con
-`limite_paginas` — y en ese caso lo DICE en la respuesta, en vez de callarse.
+`limite_paginas` — y en ese caso lo DICE, en vez de callarse.
+
+Y hay un tercer final, que es el que casi se nos escapa: si Oura repite el mismo
+`next_token`, eso es un ciclo. Sin detectarlo se hacían 50 peticiones idénticas
+y se devolvían 50 copias del mismo registro, con un aviso que aconsejaba acortar
+el rango — consejo inútil, porque acortar no arregla que la API se repita.
 """
 
 from __future__ import annotations
@@ -374,7 +379,8 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
 
     raiz = base()
     datos, paginas, siguiente = [], 0, None
-    truncado, cursor = None, None
+    truncado, cursor, ciclo = None, None, None
+    vistos: set[str] = set()
     while True:
         q = dict(params)
         if siguiente:
@@ -382,12 +388,42 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
         url = f"{raiz}/{coleccion}" + (f"?{urllib.parse.urlencode(q)}" if q else "")
         cuerpo = _pedir(url, token)
         paginas += 1
-        # `personal_info` y `ring_configuration` no vienen envueltos en `data`.
-        trozo = cuerpo.get("data") if isinstance(cuerpo.get("data"), list) else [cuerpo]
+        # `personal_info` y `ring_configuration` no vienen envueltos en `data`:
+        # el cuerpo ENTERO es el registro. Se distingue por la AUSENCIA de la
+        # clave, no por que no sea lista. La diferencia importa: si `data` viene
+        # y no es una lista, algo cambió en la API, y envolver el sobre entero
+        # convertiría eso en «un registro» con forma `{"data": …}` que se ve
+        # legítimo. Callarlo sería la falla de siempre, cometida por nosotros.
+        if "data" in cuerpo:
+            crudo = cuerpo["data"]
+            if isinstance(crudo, list):
+                trozo = crudo
+            else:
+                raise ErrorOura(
+                    f"Oura devolvió `data` como {type(crudo).__name__} y no como "
+                    f"lista en {coleccion}. La forma de la respuesta cambió; no "
+                    f"se inventa una interpretación."
+                )
+        else:
+            trozo = [cuerpo] if cuerpo else []
         datos.extend(trozo)
         siguiente = cuerpo.get("next_token")
         if not siguiente:
             break
+        if siguiente in vistos:
+            # UN `next_token` QUE SE REPITE ES UN CICLO. Sin esto se hacían 50
+            # peticiones idénticas, se devolvían 50 copias del mismo registro, y
+            # el aviso decía «acorta el rango» — consejo inútil, porque acortar
+            # no arregla que la API se repita. Y encima quema 49 peticiones
+            # contra un límite de tasa que Oura no anuncia por ninguna cabecera.
+            #
+            # No es truncamiento y no debe llamarse así: es la API portándose
+            # mal. Se dice tal cual, con lo que se alcanzó a traer.
+            ciclo = ("Oura repitió el mismo `next_token`: eso es un ciclo, y se "
+                     "paró para no pedir lo mismo sin fin. Lo que sigue llega "
+                     "hasta donde se pudo avanzar y puede estar incompleto.")
+            break
+        vistos.add(siguiente)
         if paginas >= limite_paginas:
             # UNA SOLA SALIDA. Con dos, la truncada se iba sin pasar por el
             # formato ni por los avisos — y es justo la respuesta que más
@@ -402,6 +438,8 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
     if truncado:
         salida["truncado"] = truncado
         salida["continuar_desde"] = cursor
+    if ciclo:
+        salida["ciclo_de_paginacion"] = ciclo
     if formato == "csv":
         texto, columnas, heterogeneos = a_csv(datos)
         salida["datos"] = texto
