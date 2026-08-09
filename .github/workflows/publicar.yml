@@ -80,9 +80,22 @@ jobs:
         run: |
           ./mcp-publisher login github-oidc
           # PyPI tarda un poco en servir una versión recién subida por su índice,
-          # y el registro la consulta de inmediato. Se reintenta en vez de fallar.
+          # y el registro la consulta de inmediato. Eso SÍ se reintenta.
+          #
+          # Lo que NO se reintenta es un error de validación. La v0.2.0 falló
+          # cinco veces seguidas por una descripción de 106 caracteres contra un
+          # tope de 100, y cada intento imprimía «PyPI puede seguir propagando»:
+          # el mensaje mandaba a esperar algo que no iba a cambiar nunca, y
+          # escondía la causa real cinco veces. Un reintento que no distingue
+          # entre «todavía no» y «así nunca» convierte un error claro en un
+          # misterio.
           for i in 1 2 3 4 5; do
-            ./mcp-publisher publish && exit 0
+            salida=$(./mcp-publisher publish 2>&1) && { echo "$salida"; exit 0; }
+            echo "$salida"
+            if echo "$salida" | grep -q '"status":422'; then
+              echo "::error::el registro rechazó los datos de server.json; esperar no lo arregla"
+              exit 1
+            fi
             echo "intento $i sin éxito; PyPI puede seguir propagando"
             sleep 20
           done
