@@ -61,6 +61,10 @@ def oura_consultar(
     ultimo: Annotated[bool, Field(
         description="Sólo el registro más reciente. Únicamente en heartrate y "
                     "ring_battery_level; no necesita rango.")] = False,
+    formato: Annotated[str, Field(
+        description="`json` (por omisión) o `csv`. CSV para volúmenes grandes: "
+                    "un mes de heartrate son ~37,000 registros y en JSON las "
+                    "claves se repiten 37,000 veces.")] = "json",
 ) -> dict:
     """Trae una colección de Oura COMPLETA en el rango pedido.
 
@@ -83,7 +87,10 @@ def oura_consultar(
         return {"error": f"{coleccion} necesita `inicio` y `fin`",
                 "formato": "AAAA-MM-DD" if forma(coleccion) == "rango_fecha" else "ISO 8601 con hora"}
     try:
-        return obtener(coleccion, inicio, fin, campos=campos, ultimo=ultimo)
+        if formato not in ("json", "csv"):
+            return {"error": f"formato «{formato}» no existe; hay `json` y `csv`"}
+        return obtener(coleccion, inicio, fin, campos=campos, ultimo=ultimo,
+                       formato=formato)
     except ErrorOura as e:
         # Se devuelve como dato, no se lanza: una excepción corta la conversación
         # entera por lo que casi siempre es una fecha mal escrita o un token vencido.

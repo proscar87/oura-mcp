@@ -19,9 +19,13 @@ Por eso aquí la paginación no es una opción del llamador: es el único camino
 
 from __future__ import annotations
 
+import csv
 import datetime
+import email.utils
+import io
 import json
 import os
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -30,6 +34,8 @@ from .colecciones import BASE, CON_FECHA, CON_ULTIMO, forma
 
 TIEMPO_LIMITE = 30
 LIMITE_PAGINAS = 50          # ~50k registros; más que eso es un error de uso
+REINTENTOS_429 = 2           # acotado: esto corre dentro de una conversación
+ESPERA_MAXIMA = 8.0          # segundos; ni el `Retry-After` de Oura manda más
 
 # Días de más que se piden de cada lado antes de recortar. DOS, no uno:
 # `workout` es exclusiva en el extremo Y va desfasada a UTC, y las dos cosas se
@@ -107,29 +113,74 @@ def _token() -> str:
     return t
 
 
-def _pedir(url: str, token: str) -> dict:
+def _espera_pedida(e: urllib.error.HTTPError, intento: int) -> float:
+    """Cuánto esperar tras un 429: lo que diga `Retry-After`, o backoff.
+
+    `Retry-After` admite dos formas —segundos, o una fecha HTTP— y Oura no
+    documenta cuál manda. Se aceptan las dos, y si no viene ninguna se usa
+    backoff exponencial, que es lo único razonable cuando el servidor no dice
+    nada. Se acota a `ESPERA_MAXIMA`: una cabecera que pida media hora no puede
+    dejar colgada una conversación.
+    """
+    cabecera = (e.headers.get("Retry-After") or "").strip() if e.headers else ""
+    if cabecera:
+        try:
+            return min(float(cabecera), ESPERA_MAXIMA)
+        except ValueError:
+            pass
+        try:
+            cuando = email.utils.parsedate_to_datetime(cabecera)
+            faltan = (cuando - datetime.datetime.now(cuando.tzinfo)).total_seconds()
+            return min(max(faltan, 0.0), ESPERA_MAXIMA)
+        except (TypeError, ValueError):
+            pass
+    return min(2.0 ** intento, ESPERA_MAXIMA)
+
+
+def _pedir(url: str, token: str, reintentos: int = REINTENTOS_429) -> dict:
+    """Una petición a Oura, con reintento acotado sólo para el 429.
+
+    SÓLO el 429 se reintenta. Un 401 no mejora esperando y un 400 tampoco: lo
+    único que consigue reintentarlos es tardar tres veces más en dar la misma
+    mala noticia.
+
+    Oura NO manda cabeceras de límite de tasa en las respuestas buenas
+    —verificado el 9-ago-2026: ni `X-RateLimit-Remaining` ni equivalente— así
+    que un cliente no puede saber qué tan cerca está del tope. Sólo se entera
+    cuando ya se lo negaron. Para una consulta que puede encadenar 50 páginas,
+    rendirse al primer 429 tira a la basura todo lo ya traído.
+    """
     req = urllib.request.Request(
         url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}
     )
-    try:
-        with urllib.request.urlopen(req, timeout=TIEMPO_LIMITE) as r:
-            return json.load(r)
-    except urllib.error.HTTPError as e:
-        # El cuerpo del error de Oura explica la causa (rango inválido, permiso
-        # faltante). Se pasa recortado a 200 caracteres: un mensaje de error es
-        # lo que más se copia y se pega, y no tiene por qué arrastrar más.
-        detalle = ""
+    for intento in range(reintentos + 1):
         try:
-            detalle = ": " + e.read().decode("utf-8", "replace")[:200]
-        except Exception:
-            pass
-        if e.code == 401:
-            raise ErrorOura("Oura rechazó el token (401). ¿Expiró el PAT?") from None
-        if e.code == 429:
-            raise ErrorOura("Oura está limitando la tasa (429). Espera y reintenta.") from None
-        raise ErrorOura(f"Oura respondió {e.code}{detalle}") from None
-    except urllib.error.URLError as e:
-        raise ErrorOura(f"no se pudo alcanzar Oura: {e.reason}") from None
+            with urllib.request.urlopen(req, timeout=TIEMPO_LIMITE) as r:
+                return json.load(r)
+        except urllib.error.HTTPError as e:
+            if e.code == 429 and intento < reintentos:
+                time.sleep(_espera_pedida(e, intento))
+                continue
+            # El cuerpo del error de Oura explica la causa (rango inválido,
+            # permiso faltante). Se pasa recortado a 200 caracteres: un mensaje
+            # de error es lo que más se copia y se pega, y no tiene por qué
+            # arrastrar más.
+            detalle = ""
+            try:
+                detalle = ": " + e.read().decode("utf-8", "replace")[:200]
+            except Exception:
+                pass
+            if e.code == 401:
+                raise ErrorOura("Oura rechazó el token (401). ¿Expiró el PAT?") from None
+            if e.code == 429:
+                raise ErrorOura(
+                    f"Oura está limitando la tasa (429) y siguió limitándola tras "
+                    f"{reintentos} reintentos. Espera un poco y acorta el rango."
+                ) from None
+            raise ErrorOura(f"Oura respondió {e.code}{detalle}") from None
+        except urllib.error.URLError as e:
+            raise ErrorOura(f"no se pudo alcanzar Oura: {e.reason}") from None
+    raise ErrorOura("Oura no respondió")   # inalcanzable; el bucle siempre sale
 
 
 def dia_de(registro: dict) -> str | None:
@@ -167,7 +218,7 @@ def _correr_dias(fecha: str, dias: int) -> str:
 
 def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
             campos: list[str] | None = None, ultimo: bool = False,
-            limite_paginas: int = LIMITE_PAGINAS) -> dict:
+            formato: str = "json", limite_paginas: int = LIMITE_PAGINAS) -> dict:
     """Trae una colección COMPLETA, siguiendo `next_token` hasta el final.
 
     Devuelve `{"coleccion", "n", "paginas", "datos", ["truncado"]}`.
@@ -227,6 +278,7 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
 
     raiz = base()
     datos, paginas, siguiente = [], 0, None
+    truncado, cursor = None, None
     while True:
         q = dict(params)
         if siguiente:
@@ -241,14 +293,32 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
         if not siguiente:
             break
         if paginas >= limite_paginas:
-            datos, sobrantes = _recortar(datos, inicio, fin, f)
-            return {"coleccion": coleccion, "n": len(datos), "paginas": paginas,
-                    "truncado": (f"se detuvo en {limite_paginas} páginas y Oura ofrecía más; "
-                                 f"acorta el rango de fechas"),
-                    "continuar_desde": siguiente,
-                    "datos": datos}
+            # UNA SOLA SALIDA. Con dos, la truncada se iba sin pasar por el
+            # formato ni por los avisos — y es justo la respuesta que más
+            # necesita que se le crea todo lo que dice.
+            truncado, cursor = (
+                f"se detuvo en {limite_paginas} páginas y Oura ofrecía más; "
+                f"acorta el rango o sigue desde `continuar_desde`"), siguiente
+            break
+
     datos, sobrantes = _recortar(datos, inicio, fin, f)
     salida = {"coleccion": coleccion, "n": len(datos), "paginas": paginas, "datos": datos}
+    if truncado:
+        salida["truncado"] = truncado
+        salida["continuar_desde"] = cursor
+    if formato == "csv":
+        texto, columnas, heterogeneos = a_csv(datos)
+        salida["datos"] = texto
+        salida["formato"] = "csv"
+        salida["columnas"] = columnas
+        if heterogeneos:
+            # Una celda vacía puede ser «no vino el campo» o «vino en nulo». Con
+            # registros de distinta forma la diferencia importa, y callarla sería
+            # entregar una tabla que aparenta más regularidad de la que hay.
+            salida["columnas_desiguales"] = (
+                "no todos los registros traen las mismas claves; una celda vacía "
+                "puede ser campo ausente o valor nulo"
+            )
     if (ignorados := _campos_ignorados(campos, datos)):
         salida["campos_ignorados"] = ignorados
     if sobrantes:
@@ -257,6 +327,47 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
         # tiene que poder distinguir «no hay dato» de «lo quitamos nosotros».
         salida["descartados_fuera_de_rango"] = sobrantes
     return salida
+
+
+def a_csv(datos: list) -> tuple[str, list[str], bool]:
+    """Los registros como CSV. Devuelve (texto, columnas, si_son_heterogeneos).
+
+    Un mes de `heartrate` son ~37,000 registros; en JSON eso repite las mismas
+    cuatro claves 37,000 veces. El CSV las escribe una vez.
+
+    EL ENCABEZADO SALE DE LA UNIÓN DE TODAS LAS CLAVES, no del primer registro.
+    Sacarlo del primero es la forma más fácil de perder datos aquí: basta un
+    registro con un campo extra para que ese campo desaparezca sin dejar rastro,
+    que es exactamente el tipo de falla que este paquete existe para no cometer.
+
+    Los valores anidados —`contributors` y compañía— se escriben como JSON en su
+    celda. Aplanarlos inventaría columnas que Oura no tiene; omitirlos sería
+    perder datos.
+    """
+    filas = [r for r in datos if isinstance(r, dict)]
+    claves = set()
+    for r in filas:
+        claves |= set(r)
+    # La fecha primero: es la columna con la que un modelo cruza contra otra
+    # fuente, y buscarla a mitad de la tabla es fricción sin motivo.
+    delante = [k for k in ("day", "timestamp", "start_day", "id") if k in claves]
+    columnas = delante + sorted(claves - set(delante))
+    heterogeneos = any(set(r) != claves for r in filas)
+
+    buf = io.StringIO()
+    escritor = csv.writer(buf, lineterminator="\n")
+    escritor.writerow(columnas)
+    for r in filas:
+        escritor.writerow([_celda(r.get(c)) for c in columnas])
+    return buf.getvalue(), columnas, heterogeneos
+
+
+def _celda(v) -> str:
+    if v is None:
+        return ""
+    if isinstance(v, (dict, list)):
+        return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+    return str(v)
 
 
 def _campos_ignorados(campos: list[str] | None, datos: list) -> list[str]:
