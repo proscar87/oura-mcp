@@ -124,18 +124,19 @@ aplicaba en más lugares de los que decía.
 
 ### 1. `end_date` inclusivo, y una prueba por colección — **hecho**
 
-El arreglo tiene dos mitades y la segunda es la que importa:
+Dos días de más de cada lado, y recorte por `day` del lado del cliente. Dos y
+no uno porque las dos fallas se suman: la exclusividad cuesta un día y el
+desfase a UTC otro. Correcto tanto si el endpoint es inclusivo como si es
+exclusivo, y tanto si el desfase va hacia adelante como hacia atrás — que es lo
+que lo mantiene correcto cuando Oura lo cambie.
 
-1. Sumar un día a `end_date` antes de la petición, y filtrar del lado del
-   cliente los registros cuyo `day` se pase de `fin`. El filtro no es
-   redundante: cubre el caso de que algún endpoint sí sea inclusivo, que es lo
-   que `crcatala` reporta como «inconsistente por endpoint».
-2. **Una prueba por colección contra el sandbox.** Arreglarlo en `daily_sleep`
-   no lo arregla en `workout`.
+Verificado colección por colección contra la API **real**, no contra el sandbox:
+arreglarlo en `daily_sleep` no lo arreglaba en `workout`, y el sandbox miente
+sobre esto.
 
 Y un parámetro de conveniencia, robado a `spxrogers`: **`dia`**, para una sola
-fecha. La trampa no vuelve a existir si la ruta común no obliga a escribir un
-rango.
+fecha. La trampa no vuelve a existir si la ruta común —«¿cómo dormí ayer?»— no
+obliga a escribir un rango.
 
 ### 2. Modo sandbox — **hecho**
 
