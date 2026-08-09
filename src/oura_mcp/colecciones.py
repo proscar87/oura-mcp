@@ -48,6 +48,13 @@ COLECCIONES: dict[str, tuple[str, str]] = {
 
 CON_FECHA = {"rango_fecha", "rango_datetime"}
 
+# Las que el sandbox de Oura NO sirve. Es una sola, y tiene sentido: es la única
+# que devuelve correo, edad, peso y estatura. Vive aquí y no en el script de
+# deriva porque el cliente también la necesita — sin esto, pedir el perfil en
+# modo sandbox devolvía un `404: Not Found` crudo, y quien acabara de instalar
+# concluiría que el servidor está roto.
+SIN_SANDBOX = {"personal_info"}
+
 # Qué alcance de OAuth necesita cada colección. Sirve para una sola cosa, y es
 # importante: cuando una consulta vuelve VACÍA, distinguir «no hay dato» de «no
 # diste ese permiso». Las dos se ven idénticas —n=0— y llevan a conclusiones

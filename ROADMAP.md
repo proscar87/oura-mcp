@@ -819,6 +819,37 @@ con las otras tres cosas que no puede adivinar.
 
 ---
 
+## Estado al cerrar la noche
+
+**Hecho:** v0.2 (ocho correcciones), v0.3 (OAuth2 completo), v0.4 (plugin de
+Claude Code, archivos de descubrimiento, binario medido). 121 pruebas, ninguna
+toca la red. Diecinueve commits.
+
+**Nueve bugs reales**, todos encontrados releyendo código que ya se había dado
+por bueno, y todos de la misma familia — *parece que funcionó*:
+
+| | |
+|---|---|
+| `end_date` inconsistente + desfase UTC en `workout` | pedir un día devolvía cero |
+| `latest` y `fields` ignorados en silencio por Oura | pedías uno, recibías todo |
+| Un favicon mataba el flujo de autorización | «no llegó ningún callback» |
+| Un código de OAuth con `=` se rechazaba | a quien pegó lo que se le pidió |
+| `OURA_CREDENCIALES` relativo tronaba | `FileNotFoundError: ''` |
+| `next_token` repetido: 50 peticiones idénticas | y el consejo equivocado |
+| El servidor mentía sobre su versión | 0.1.0 con pyproject en 0.2.0 |
+| Una bandera con un dedazo arrancaba el servidor | parecía colgado |
+| `personal_info` en sandbox devolvía un 404 crudo | parecía que todo estaba roto |
+
+**Lo que no se hizo, y por qué:** las dos cosas que quedan son decisiones de
+Oscar —publicar, y el alcance del `.mcpb`—, no trabajo pendiente.
+
+**Lo que se decidió NO construir:** herramientas de análisis (sigue siendo la
+postura), webhooks (rompen el modelo local), caché (sólo si nunca sirve un dato
+viejo en silencio), y una tabla por colección para el `end_date` (una tabla que
+Oura cambie vuelve a fallar callada).
+
+---
+
 ## Orden de ejecución
 
 1. **v0.2** — `end_date` primero (bug confirmado, en silencio, en la ruta más

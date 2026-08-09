@@ -769,3 +769,31 @@ def test_las_instrucciones_traen_lo_que_no_se_puede_adivinar():
     for imprescindible in ("n: 0", "truncado", "continuar_desde", "start_datetime",
                            "respuesta_grande", "campos"):
         assert imprescindible in ins, imprescindible
+
+
+# ── El sandbox como primera experiencia de alguien que acaba de instalar ───
+def test_el_perfil_en_sandbox_explica_en_vez_de_devolver_404(monkeypatch):
+    """El sandbox contesta 404 a secas para `personal_info`. Un «404: Not Found»
+    a quien acaba de instalar le dice que el servidor está roto, cuando lo que
+    pasa es que Oura no pone datos falsos de la única colección con correo,
+    edad, peso y estatura."""
+    monkeypatch.setenv("OURA_SANDBOX", "1")
+    with pytest.raises(cliente.ErrorOura) as exc:
+        cliente.obtener("personal_info")
+    m = str(exc.value)
+    assert "no existe en el sandbox" in m
+    assert "Todo lo demás sí funciona" in m       # que no parezca que todo falló
+    assert "--autorizar" in m                     # y a dónde ir después
+
+
+def test_fuera_del_sandbox_el_perfil_se_pide_normal(monkeypatch):
+    monkeypatch.delenv("OURA_SANDBOX", raising=False)
+    _oura_falso([[{"email": "x"}]], monkeypatch)
+    assert cliente.obtener("personal_info")["n"] == 1
+
+
+def test_solo_personal_info_falta_del_sandbox():
+    """Si Oura agrega o quita alguna, el job semanal de deriva lo dice."""
+    from oura_mcp.colecciones import COLECCIONES, SIN_SANDBOX
+    assert SIN_SANDBOX == {"personal_info"}
+    assert SIN_SANDBOX <= set(COLECCIONES)
