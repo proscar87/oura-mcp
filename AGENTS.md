@@ -1,82 +1,116 @@
 # Para el siguiente agente
 
-Estado al **9 de agosto de 2026**. Lee esto antes de tocar nada.
+Estado al **9 de agosto de 2026, de madrugada**. Lee esto antes de tocar nada.
 
 ## Qué es esto
 
-Un servidor MCP sobre la API v2 de Oura. **Su única razón de existir es que
-pagina.** De los siete servidores MCP de Oura publicados en GitHub, el más
-completo no lo hace: en su cliente `next_token` aparece una sola vez, en la
-definición del tipo. Los dos más estrellados están muertos — creados y
-abandonados el mismo día, con 28 y 31 minutos de vida.
+Un servidor MCP sobre la API v2 de Oura. **Su razón de existir es que Oura
+entrega de menos sin avisar, y aquí se corrige.**
 
-Si alguna vez alguien propone "simplificar" el bucle de paginación de
-`cliente.obtener()`, la respuesta es no. Ese bucle es el producto.
+Ojo con cómo se cuenta eso, porque cambió. La versión anterior de este archivo
+decía que el diferenciador era paginar, y que «de los siete servidores MCP de
+Oura, el más completo no pagina». **Eso ya no es cierto**:
+`benngermin/oura-mcp` pagina bien, y con cursor reanudable. La paginación es hoy
+la línea de base, no la ventaja. No repitas esa frase.
 
-## Dónde está publicado — los tres, hechos
+Lo que sí sostiene el proyecto son **cuatro fallas silenciosas de la misma
+familia**, medidas contra la API real y corregidas aquí:
+
+| | La falla | Dónde vive el arreglo |
+|---|---|---|
+| 1 | `next_token` sin seguir → recibes una fracción. Un día de `heartrate` son 1,231 muestras en 2 páginas | el bucle de `cliente.obtener()` |
+| 2 | `end_date` es inconsistente **entre colecciones**, y `workout` se filtra por fecha UTC reportando `day` local | `MARGEN_DIAS` y `_recortar()` |
+| 3 | `latest=true` donde no aplica → Oura devuelve la colección **entera** | `CON_ULTIMO`, se rechaza antes de la red |
+| 4 | `fields=inventado` → devuelve el registro completo, sin proyectar | `_campos_ignorados()` |
+
+Si alguien propone «simplificar» cualquiera de esas cuatro, la respuesta es no.
+Son el producto.
+
+## Dónde está publicado
 
 | | |
 |---|---|
 | GitHub | https://github.com/proscar87/oura-mcp — público, MIT, CI verde |
-| PyPI | https://pypi.org/project/mcp-oura/ — **0.1.0 y 0.1.1** |
-| Registro de MCP | `io.github.proscar87/oura-mcp` **v0.1.1**, listado y buscable |
+| PyPI | https://pypi.org/project/mcp-oura/ — 0.1.0 y 0.1.1 |
+| Registro de MCP | `io.github.proscar87/oura-mcp` v0.1.1, `active`, buscable |
 
 El nombre de instalación es `mcp-oura` porque `oura-mcp` ya estaba tomado en
 PyPI por un paquete 0.1.0 sin autor ni repositorio. El módulo que se importa
 sigue siendo `oura_mcp`.
 
+**Nada de lo hecho esta madrugada está publicado todavía.** El repo va muy por
+delante de la 0.1.1 que vive en PyPI.
+
 ## Cómo se publica una versión nueva
 
 ```
 # subir el número en pyproject.toml Y en server.json — tienen que coincidir
-git tag v0.1.2 && git push origin v0.1.2
+git tag v0.2.0 && git push origin v0.2.0
 ```
 
 Eso corre las pruebas, publica en PyPI y luego en el registro. **No hay ningún
 secreto configurado y no debe haberlo**: las dos publicaciones van por OIDC, con
 una credencial de un solo uso que GitHub genera en el momento. El publicador
-confiable de PyPI ya está dado de alta con estos datos:
+confiable de PyPI ya está dado de alta con `proscar87` / `oura-mcp` /
+`publicar.yml` / environment `pypi`.
 
-```
-dueño        proscar87
-repositorio  oura-mcp
-workflow     publicar.yml
-environment  pypi
-```
+Tres cosas que costaron y no hay que repetir: el paso del registro **tiene que
+esperar a PyPI** (valida que la versión exacta exista) y reintenta mientras el
+índice propaga; el registro exige la línea `mcp-name: io.github.proscar87/oura-mcp`
+en el README **del paquete publicado**, y borrarla devuelve un 400. Y no uses
+`~/.pypirc`: un archivo mal formado hizo que el parser volcara un token completo
+a un transcript.
 
-Si alguna vez alguien propone meter un token de PyPI en `secrets`, es un paso
-atrás: sería una llave permanente con permiso de publicar en TODOS los proyectos
-de la cuenta, viviendo en un lugar más.
+## Lo que ya está hecho (v0.2 y v0.3)
 
-## Tres cosas que costaron y no hay que repetir
+Ocho puntos de corrección y OAuth2 completo. **83 pruebas, ninguna toca la red.**
+El detalle largo, con lo medido, está en `ROADMAP.md`. Lo que hay que saber para
+no romperlo:
 
-**1. El registro tiene que esperar a PyPI.** Valida que la VERSIÓN exacta exista
-en PyPI antes de aceptarla. Hubo un rato en que `registro` dependía de `pruebas`
-en vez de `pypi` —un parche mientras faltaba el publicador confiable— y eso creó
-una carrera: el registro terminaba en 5 segundos, buscaba la 0.1.1 y todavía no
-existía. Un paso que valida contra otro no puede correr en paralelo con él.
+- **`OURA_SANDBOX=1`** apunta a las rutas espejo de Oura, que son oficiales y
+  aceptan cualquier cadena como `Authorization`. Sirve para instalar y ver el
+  servidor andar sin credenciales. **No sirve para medir el comportamiento de la
+  API**: es un *generador*, no un filtro — devuelve `n-1` registros para
+  cualquier ventana y cero para una de una hora que contiene una muestra. Medir
+  ahí la semántica de las fechas da respuestas equivocadas. Ya pasó una vez, en
+  la primera versión del ROADMAP.
+- **OAuth2** en `credenciales.py` y `autorizar.py`. El refresh token de Oura es
+  **de un solo uso**: `refrescar()` guarda antes de devolver, de forma atómica.
+  No muevas esa línea. Si dos procesos refrescan a la vez —dos herramientas MCP
+  en paralelo— el que pierde la carrera relee lo guardado en vez de dar la
+  sesión por perdida.
+- **El `state` del callback se verifica** con `compare_digest`. Sin eso,
+  cualquier página abierta en el navegador del usuario puede mandarle un código
+  de autorización de otra cuenta.
+- **`Secreto`** envuelve el token: su `repr` dice `<secreto de N caracteres>` y
+  sacar el valor exige `.revelar()`.
+- **El flujo de OAuth vive en la terminal**, nunca dentro del servidor MCP. Uno
+  que habla por stdin/stdout no puede abrir un navegador ni pedirle nada a
+  nadie.
 
-**2. PyPI tarda en propagar** aunque el orden esté bien. Por eso el paso del
-registro reintenta cinco veces con espera en vez de fallar a la primera.
+## Lo que falta, en orden
 
-**3. El registro exige una prueba de propiedad** en el README **del paquete
-publicado en PyPI**: la línea `mcp-name: io.github.proscar87/oura-mcp`, que está
-al final del README. Si se borra, la siguiente publicación al registro devuelve
-un 400. No es decorativa.
+### v0.4 — Instalación de un clic
+- `uvx --from mcp-oura oura-mcp` ya está en el README. Falta publicar una
+  versión que lo respalde.
+- Plugin de Claude Code: un `.claude-plugin/marketplace.json`.
+- **El `.mcpb`**, y ahí está la decisión difícil. Anthropic empaqueta Node con
+  Claude Desktop; Python no. Las opciones y su costo están en `ROADMAP.md`,
+  §v0.4. La recomendación es binario con PyInstaller —conserva el trabajo hecho—
+  pero conviene decir en voz alta que **si el listado en Claude es la meta real,
+  TypeScript es el camino que el propio Anthropic recomienda**.
 
-**Y una que no es del proyecto pero costó un token:** NO uses `~/.pypirc`. El
-9-ago un archivo mal formado —el token sin el encabezado `[pypi]`— hizo que el
-parser de Python volcara el token completo a un transcript, y hubo que
-revocarlo. Con el publicador confiable no hace falta ninguno.
+### v0.5 — Directorio de conectores de Claude
+La puerta viable es la **extensión de escritorio (MCPB)**: formulario aparte, sin
+requisito de organización Team. Falta política de privacidad en el README, ícono
+512×512, y el `.mcpb`. Las anotaciones de herramienta que exige ya están.
 
-## Lo que queda por hacer
+La otra puerta —conector remoto— **exige organización Team o Enterprise** y
+hospedar datos de salud de terceros. Es una decisión, no un pendiente.
 
-- **Listas de la comunidad**: `awesome-mcp-servers`, mcp.so, Smithery. Sale
-  gratis y es de donde viene la mayor parte del tráfico.
-- Si Oura agrega colecciones, se tocan en `colecciones.py` y nada más. Toda la
-  complejidad de hablarle a Oura vive en esa tabla; el resto es presentación.
-- **Nada de herramientas de análisis**, por más que las pidan. Ver la sección de
-  decisiones abajo — es la que más tentación da de revertir.
+### Gratis y para ayer
+`smithery.yaml`, `glama.json`, `llms.txt`, y PRs a `awesome-mcp-servers` y
+mcp.so. Es de donde viene la mayor parte del tráfico.
 
 ## Decisiones que NO hay que revertir
 
@@ -91,35 +125,52 @@ subió 12%» sin decir cuánto oscila sola esa métrica no es informar: es fabri
 una señal. El análisis va donde se pueda citar el método — ver
 [cotejo](https://github.com/proscar87/cotejo).
 
-**El token puede vivir en un archivo** (`OURA_PAT_FILE`, permisos 600) y no en
-la configuración del cliente MCP. Un servidor MCP se registra en un JSON que se
+**Cero dependencias fuera del SDK de MCP.** No es estética: es lo que hace
+viable empaquetar esto como binario para Claude Desktop, que es el hito v0.4.
+Por eso `keyring` se importa con `try` y nunca se declara — aquí está instalado,
+pero viene de `twine`, no de `mcp`, y un usuario no lo tendría.
+
+**El secreto no vive en la configuración del cliente MCP.** `OURA_PAT_FILE`, o
+el archivo 0600 de OAuth. Un servidor MCP se registra en un JSON que se
 respalda, se sincroniza y se comparte al pedir ayuda.
 
-**`.garita.yml` se queda.** [Garita](https://github.com/proscar87/garita) es la
-herramienta de Oscar que bloquea commits con datos personales o credenciales, y
-corre en el CI. Aquí no hay tokens que proteger —el PAT vive en el entorno— pero
-sí hay un riesgo real y específico: que alguien pegue una respuesta **de verdad**
-de Oura como ejemplo en el README o en una prueba. `personal_info` devuelve
-correo, edad, peso y estatura. Ése es el escenario que Garita atrapa.
-La clave `exenciones` va **omitida**, no escrita como lista vacía: `exenciones:
-[]` tropieza con el parser de Garita v0, que la lee como la cadena `"[]"`.
+**`.garita.yml` se queda.** [Garita](https://github.com/proscar87/garita) bloquea
+commits con datos personales o credenciales, y corre en el CI. Aquí el riesgo
+real y específico es que alguien pegue una respuesta **de verdad** de Oura como
+ejemplo en el README o en una prueba: `personal_info` devuelve correo, edad,
+peso y estatura. La clave `exenciones` va **omitida**, no escrita como lista
+vacía: `exenciones: []` tropieza con el parser de Garita v0, que la lee como la
+cadena `"[]"`.
 
 ## Cómo se prueba
 
 ```
-python -m pytest -q          # 14 pruebas, ninguna toca la red
+python -m pytest -q          # 83 pruebas, ninguna toca la red
 ```
 
-Las pruebas sustituyen la API por una falsa que sirve páginas, lo que permite
-probar la paginación contra un caso que en la vida real requeriría un mes de
-datos. **Un CI que necesita el token de alguien para pasar no es un CI: es una
-dependencia de esa persona.** No agregues pruebas que salgan a internet.
+**Un CI que necesita el token de alguien para pasar no es un CI: es una
+dependencia de esa persona.** No agregues pruebas que salgan a internet al CI
+obligatorio.
+
+Lo que sí sale a internet vive aparte y nunca bloquea un PR:
+
+```
+python herramientas/revisar_deriva.py   # ¿siguen existiendo las 19? (sandbox, sin credenciales)
+```
+
+Corre semanal por `.github/workflows/deriva.yml`. Atrapa una colección
+renombrada o retirada; **no** atrapa una nueva — el sandbox no se puede
+enumerar, y el script lo dice en voz alta. Un chequeo que aparenta cubrir lo que
+no cubre es peor que no tenerlo.
 
 Para probar contra Oura de verdad, con el token de Oscar en `~/.oura_pat`:
 
 ```
 OURA_PAT_FILE=~/.oura_pat python -m oura_mcp --revisar
 ```
+
+**Al medir contra la API real, imprime sólo cuentas y nombres de campo, nunca
+valores.** No es ceremonia: los transcripts se pegan en otros lados.
 
 ## Contexto que no se ve en el código
 
@@ -128,6 +179,7 @@ donde el mismo modo de falla —datos truncados que se ven completos— apareci�
 tres veces: PostgREST ignorando `limit` y cortando en 1,000 filas, y el
 parámetro `meastypes` de Withings devolviendo 13 de 30 tipos pedidos sin error
 ni aviso. Ese último se diagnosticó mal durante horas como «suscripción
-vencida». Por eso este paquete prefiere gritar antes que entregar de menos en
-silencio: si se topa con el tope de páginas, la respuesta trae `truncado`
-diciéndolo.
+vencida».
+
+Resulta que Oura hace lo mismo en cuatro lugares distintos. La tesis aplicaba en
+más sitios de los que decía.

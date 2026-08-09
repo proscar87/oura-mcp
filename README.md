@@ -1,72 +1,139 @@
 # oura-mcp
 
 La API v2 de [Oura](https://ouraring.com) como servidor [MCP](https://modelcontextprotocol.io).
-Las 19 colecciones, cuatro herramientas, cero dependencias fuera del SDK de MCP.
+Las 19 colecciones, tres herramientas, cero dependencias fuera del SDK de MCP.
 
-**Lo que lo distingue: pagina.** Suena a poco y es todo el punto — ver abajo.
+**Lo que lo distingue: Oura entrega de menos sin avisar, de cuatro maneras
+distintas, y este servidor las corrige todas.** Suena a poco y es todo el punto
+— ver abajo.
 
 ---
 
-## El problema
+## El problema, medido
 
-Oura entrega sus respuestas así:
+Oura no devuelve errores cuando le pides algo que no puede darte. Devuelve algo
+distinto, con forma de respuesta correcta. Las cuatro que encontramos midiendo
+contra la API real, el 9 de agosto de 2026:
+
+### 1. Si no sigues la paginación, recibes una fracción
 
 ```json
 { "data": [ ... ], "next_token": "eyJ0eXAiOi..." }
 ```
 
-Si `next_token` viene y no lo sigues, recibes la primera página y **nada te
-avisa**. La respuesta es un JSON válido, con datos reales, que se ve completo.
+Si `next_token` viene y no lo persigues, recibes la primera página y **nada te
+avisa**. Un día de `heartrate` —una persona, un anillo, 24 horas— son **1,231
+muestras repartidas en 2 páginas**. Quien no pagina recibe 1,000 de 1,231: el
+81%, con aspecto de estar completo. Un mes son ~37,000.
 
-En un día cualquiera, `heartrate` —que muestrea cada cinco minutos— devuelve
-**1,246 muestras repartidas en 2 páginas**. Un cliente que no pagina te entrega
-la primera y tú te quedas creyendo que ésa es la frecuencia cardiaca de tu día.
-Un mes son ~37,000 muestras: ahí la fracción que ves es minúscula, y sigue sin
-avisar.
+### 2. Pedir un solo día devolvía cero registros
 
-Revisamos los siete servidores MCP de Oura publicados en GitHub en agosto de
-2026. **El más completo de todos no pagina**: en su cliente, `next_token`
-aparece una sola vez, en la definición del tipo. Los dos más estrellados están
-literalmente muertos — creados y abandonados el mismo día, con 28 y 31 minutos
-entre el primer commit y el último.
+`end_date` **no se comporta igual en todas las colecciones**:
 
-Por eso existe éste.
+| Excluyen el último día pedido | Lo incluyen |
+|---|---|
+| `daily_activity`, `sleep`, `workout` | `daily_sleep`, `daily_readiness`, `daily_stress`, `daily_spo2`, `daily_resilience`, `daily_cardiovascular_age`, `sleep_time` |
+
+Y encima **`workout` se filtra por la fecha UTC pero reporta `day` en hora
+local**: con `-06:00`, pedir del 16 al 18 de julio devolvía registros de los
+días 15 y 16 — anteriores al inicio pedido.
+
+Aquí el rango es inclusivo en los dos extremos, siempre. Se piden dos días de
+más de cada lado y se recortan, lo que es correcto sea cual sea el
+comportamiento de cada colección — y lo sigue siendo cuando Oura lo cambie.
+
+### 3. `latest=true` lo ignora donde no aplica
+
+Sólo lo respetan `heartrate` y `ring_battery_level`. En las otras diecisiete
+Oura no da error: **devuelve la colección entera**. Pides el último registro,
+recibes diez, y crees que es uno. Aquí se rechaza antes de salir a la red.
+
+### 4. Un campo que no existe se ignora en silencio
+
+`fields=no_existe` devuelve el registro **completo** —la proyección no ocurre— y
+`fields=score,no_existe` aplica el bueno y tira el malo sin decir nada. Aquí, los
+campos que no aparecieron se reportan en `campos_ignorados`.
+
+**El patrón es siempre el mismo:** pides una cosa, recibes otra, nada te avisa.
+Por eso este paquete prefiere gritar antes que entregar de menos en silencio.
 
 ## Instalación
 
+### Pruébalo sin credenciales
+
 ```bash
 pip install mcp-oura
+OURA_SANDBOX=1 oura-mcp --revisar
 ```
 
-*(El nombre de instalación es `mcp-oura`: `oura-mcp` ya estaba tomado en PyPI por
-un paquete 0.1.0 sin autor ni repositorio. El módulo que se importa sigue siendo
-`oura_mcp`.)*
+El sandbox es oficial —está en el OpenAPI de Oura, con 34 rutas espejo— y sirve
+datos sintéticos sin pedir autenticación. Sirven 18 de las 19 colecciones:
+`personal_info` no, y tiene sentido, es la que devuelve correo, edad, peso y
+estatura.
 
-Necesitas un *Personal Access Token*, que se saca en
-[cloud.ouraring.com/personal-access-tokens](https://cloud.ouraring.com/personal-access-tokens).
-No hay OAuth, no hay callback, no hay aplicación que registrar: es un token y ya.
+Es el orden correcto: primero ves el servidor andar y entiendes la forma de los
+datos; después consigues credenciales.
+
+### Con tus propios datos
+
+**Oura dejó de emitir Personal Access Tokens en diciembre de 2025.** Los que ya
+existían siguen funcionando; nuevos no se pueden crear. Así que hay dos caminos:
+
+**a) OAuth2 — el que funciona hoy.** Registra una aplicación en
+[cloud.ouraring.com/oauth/applications](https://cloud.ouraring.com/oauth/applications)
+con el redirect `http://localhost:9876/callback/` — **la diagonal final es
+obligatoria**, el portal rechaza la otra forma con `invalid_redirect_uri`.
+
+```bash
+export OURA_CLIENT_ID="…"
+export OURA_CLIENT_SECRET="…"
+oura-mcp --autorizar             # abre el navegador y espera el callback
+oura-mcp --autorizar --manual    # máquinas sin navegador: pegas la URL de vuelta
+```
+
+El token se guarda en `~/.config/oura-mcp/credenciales.json` con permisos 600
+—o en el llavero del sistema si tienes `keyring` instalado, que no es una
+dependencia de este paquete— y se renueva solo. `oura-mcp --olvidar` lo borra.
+
+**b) Un token personal, si ya tenías uno.**
 
 ```bash
 export OURA_PAT="tu-token"
 oura-mcp --revisar
 ```
 
-`--revisar` es el autodiagnóstico: dice si el token está puesto y si Oura
-responde, **sin devolver el token ni un solo dato de salud**. Reporta la longitud
-del token, nunca el token. Los mensajes de error se copian y se pegan en chats y
-en issues; no tienen por qué arrastrar nada más.
+`--revisar` es el autodiagnóstico: dice con qué te estás autenticando, qué
+alcances te concedieron y cuánto le queda al acceso, **sin devolver el token ni
+un solo dato de salud**. Reporta la longitud del token, nunca el token. Los
+mensajes de error se copian y se pegan en chats y en issues; no tienen por qué
+arrastrar nada más.
 
 ### Conectarlo a Claude Code
 
+Con el paquete ya instalado (`pip install mcp-oura`):
+
 ```bash
-claude mcp add -s user oura --env OURA_PAT=tu-token -- /ruta/a/oura-mcp
+claude mcp add -s user oura --env OURA_SANDBOX=1 -- oura-mcp
 ```
 
-Mejor aún, con el token en un archivo aparte y no en la configuración:
+Quita `OURA_SANDBOX` cuando hayas corrido `oura-mcp --autorizar`.
+
+**Si usas [uv](https://docs.astral.sh/uv/)**, no hace falta instalar nada de
+forma permanente:
+
+```bash
+claude mcp add -s user oura --env OURA_SANDBOX=1 -- uvx --from mcp-oura oura-mcp
+```
+
+El `--from` es necesario porque la distribución se llama `mcp-oura` y el
+ejecutable `oura-mcp`. *(Esto requiere tener `uv`; si no lo tienes, el comando de
+arriba falla con «command not found» y la ruta buena es `pip install`.)*
+
+Si usas un token personal, mejor en un archivo aparte que en la configuración:
 
 ```bash
 printf '%s' "tu-token" > ~/.oura_pat && chmod 600 ~/.oura_pat
-claude mcp add -s user oura --env OURA_PAT_FILE=$HOME/.oura_pat -- /ruta/a/oura-mcp
+claude mcp add -s user oura --env OURA_PAT_FILE=$HOME/.oura_pat -- uvx --from mcp-oura oura-mcp
 ```
 
 Un servidor MCP se registra en un JSON que se respalda, se sincroniza y se
@@ -81,18 +148,23 @@ En `~/Library/Application Support/Claude/claude_desktop_config.json`:
 {
   "mcpServers": {
     "oura": {
-      "command": "/ruta/a/oura-mcp",
-      "env": { "OURA_PAT_FILE": "/Users/tu-usuario/.oura_pat" }
+      "command": "/ruta/completa/a/oura-mcp",
+      "env": { "OURA_SANDBOX": "1" }
     }
   }
 }
 ```
 
+La ruta completa la da `which oura-mcp`. Claude Desktop no hereda el `PATH` de
+tu terminal, así que un nombre pelado ahí falla en silencio — es de los errores
+más comunes al configurar un servidor MCP. Quita `OURA_SANDBOX` cuando hayas
+corrido `oura-mcp --autorizar`.
+
 ## Las herramientas
 
 | | |
 |---|---|
-| `oura_colecciones` | Las 19 con qué trae cada una y qué parámetros pide |
+| `oura_colecciones` | Las 19, con qué trae cada una y qué parámetros pide |
 | `oura_consultar` | Trae una colección completa en un rango, paginando hasta el final |
 | `oura_revisar` | Autodiagnóstico sin exponer nada |
 
@@ -100,9 +172,23 @@ En `~/Library/Application Support/Claude/claude_desktop_config.json`:
 modelo a elegir entre 19 nombres parecidos antes de saber qué contienen. Aquí la
 colección es un parámetro y el catálogo se consulta cuando hace falta.
 
-Si el rango pedido excede el tope de páginas, la respuesta trae una clave
-`truncado` que lo dice con todas sus letras. **Un resultado incompleto que no se
-declara incompleto es peor que un error**: se ve igual que uno completo.
+Las tres se declaran de sólo lectura, y no es una promesa: no hay un `POST`, un
+`PUT` ni un `DELETE` en todo el paquete, y una prueba lee el código fuente para
+que siga siendo cierto.
+
+### Parámetros de `oura_consultar`
+
+| | |
+|---|---|
+| `dia` | Un solo día. Atajo de `inicio=fin=dia` |
+| `inicio`, `fin` | El rango, **inclusivo en los dos extremos** |
+| `campos` | Sólo estos. Oura recorta del lado suyo, así que baja menos |
+| `ultimo` | El registro más reciente. Sólo `heartrate` y `ring_battery_level` |
+| `formato` | `json` o `csv`. Sobre un día real de `heartrate`, el CSV ocupa **56% menos** |
+
+Y lo que la respuesta te dice cuando algo no salió redondo: `truncado` con
+`continuar_desde` para reanudar, `campos_ignorados`,
+`descartados_fuera_de_rango`, `columnas_desiguales`.
 
 ## Lo que este servidor NO hace
 
@@ -135,6 +221,20 @@ latencia), `sleep_time`, `workout`, `session`, `rest_mode_period`, `tag`,
 
 Las de rango de fecha usan `AAAA-MM-DD`. `heartrate` y `ring_battery_level` usan
 ISO 8601 con hora.
+
+## Otros servidores MCP de Oura
+
+En agosto de 2026 hay varios, y conviene ser exacto sobre en qué se diferencian.
+[`benngermin/oura-mcp`](https://github.com/benngermin/oura-mcp) **pagina bien**,
+con cursor reanudable. [`daveremy/oura-mcp`](https://github.com/daveremy/oura-mcp)
+publicó el arreglo de `end_date` la misma semana que nosotros.
+[`davidmosiah/oura-mcp`](https://github.com/davidmosiah/oura-mcp) tiene la
+superficie MCP más completa. La paginación ya no distingue a nadie.
+
+Lo que sí, hasta donde pudimos verificar: **el desfase a UTC de `workout` no
+está documentado en ningún otro**, ni el rechazo de `latest` donde Oura lo
+ignora, ni el aviso de campos que no se aplicaron. Y ninguno declara no analizar
+como una postura.
 
 ## Licencia
 

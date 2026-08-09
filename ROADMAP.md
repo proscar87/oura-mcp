@@ -354,18 +354,22 @@ lo guardado.
 
 La escalera, del escalón más barato al más caro.
 
-### 1. `uvx` como forma documentada por defecto — hoy mismo
+### 1. `uvx` documentado — **hecho, con una corrección**
 
-Todos los competidores son TypeScript y se instalan con `npx -y`. El
-equivalente en Python existe y no está en el README:
+Todos los competidores son TypeScript y se instalan con `npx -y`. El equivalente
+en Python es `uvx --from mcp-oura oura-mcp`, y ya está en el README.
 
-```bash
-claude mcp add -s user oura --env OURA_PAT_FILE=$HOME/.oura_pat \
-  -- uvx --from mcp-oura oura-mcp
-```
+**Pero no como ruta por defecto, y ese fue el error de la primera redacción.**
+`uvx` requiere tener `uv` instalado. En esta máquina no lo está, que es cómo se
+descubrió: un README que abre con «nada que instalar» y da un comando que
+responde `command not found` es exactamente lo contrario del objetivo. `pip
+install mcp-oura` es la ruta sin prerrequisitos; `uvx` es la mejora para quien
+ya tiene `uv`.
 
-Nada que instalar, nada que mantener actualizado. El `--from` es obligatorio
-porque la distribución se llama `mcp-oura` y el ejecutable `oura-mcp`.
+De paso, otra que faltaba: **Claude Desktop no hereda el `PATH` de la
+terminal**, así que en su JSON hay que poner la ruta completa que da `which
+oura-mcp`. Un nombre pelado ahí falla en silencio, y es de los errores más
+comunes al configurar un servidor MCP.
 
 ### 2. Plugin de Claude Code
 
