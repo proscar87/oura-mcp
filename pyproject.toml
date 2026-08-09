@@ -7,7 +7,7 @@ build-backend = "hatchling.build"
 # PyPI por un paquete 0.1.0 sin autor ni repositorio. El paquete que se importa
 # sigue siendo `oura_mcp`: sólo cambia el nombre con el que se instala.
 name = "mcp-oura"
-version = "0.1.0"
+version = "0.1.1"
 description = "La API v2 de Oura como servidor MCP, con la paginación bien hecha"
 readme = "README.md"
 requires-python = ">=3.10"
