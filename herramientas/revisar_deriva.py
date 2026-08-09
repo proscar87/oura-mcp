@@ -31,12 +31,11 @@ os.environ["OURA_SANDBOX"] = "1"
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 from oura_mcp.cliente import ErrorOura, base, obtener          # noqa: E402
-from oura_mcp.colecciones import COLECCIONES, forma            # noqa: E402
+from oura_mcp.colecciones import COLECCIONES, SIN_SANDBOX, forma   # noqa: E402
 
-# El sandbox sirve 18 de las 19. `personal_info` es la que falta, y tiene
-# sentido: es la única que devuelve correo, edad, peso y estatura. Que falte no
-# es deriva, así que se espera explícitamente en vez de tolerarse en silencio.
-SIN_SANDBOX = {"personal_info"}
+# El sandbox sirve 18 de las 19; la que falta se declara en `colecciones.py`,
+# que es de donde también la lee el cliente. Que falte no es deriva, así que se
+# espera explícitamente en vez de tolerarse en silencio.
 
 VENTANA = ("2026-01-01", "2026-01-05")
 VENTANA_HORA = ("2026-01-01T00:00:00", "2026-01-02T00:00:00")
@@ -45,14 +44,26 @@ VENTANA_HORA = ("2026-01-01T00:00:00", "2026-01-02T00:00:00")
 def revisar_una(nombre: str) -> tuple[bool, str]:
     f = forma(nombre)
     args = VENTANA if f == "rango_fecha" else VENTANA_HORA if f == "rango_datetime" else ()
+
+    if nombre in SIN_SANDBOX:
+        # SE PREGUNTA A OURA DIRECTAMENTE, saltándose la guarda del cliente. Si
+        # se usara `obtener()`, esta comprobación estaría verificando nuestro
+        # propio mensaje de error en vez de la API — y el día que Oura agregue
+        # esta colección al sandbox, nadie se enteraría. Un chequeo que se
+        # comprueba a sí mismo no comprueba nada.
+        from oura_mcp.cliente import _pedir, _token
+        try:
+            _pedir(f"{base()}/{nombre}", _token())
+        except ErrorOura as e:
+            if "404" in str(e):
+                return True, "ausente del sandbox, como se espera"
+            return False, str(e)[:90]
+        return False, "AHORA SÍ está en el sandbox: actualiza SIN_SANDBOX"
+
     try:
         r = obtener(nombre, *args)
     except ErrorOura as e:
-        if nombre in SIN_SANDBOX and "404" in str(e):
-            return True, "ausente del sandbox, como se espera"
         return False, str(e)[:90]
-    if nombre in SIN_SANDBOX:
-        return False, "AHORA SÍ está en el sandbox: actualiza SIN_SANDBOX"
     return True, f"responde, n={r['n']}"
 
 

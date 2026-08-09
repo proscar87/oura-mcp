@@ -35,7 +35,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .colecciones import BASE, CON_FECHA, CON_ULTIMO, forma
+from .colecciones import BASE, CON_FECHA, CON_ULTIMO, SIN_SANDBOX, forma
 
 TIEMPO_LIMITE = 30
 LIMITE_PAGINAS = 50          # ~50k registros; más que eso es un error de uso
@@ -328,6 +328,18 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
     f = forma(coleccion)
     token = _token()
     params: dict[str, str] = {}
+
+    if en_sandbox() and coleccion in SIN_SANDBOX:
+        # Se atrapa ANTES de la petición. El sandbox contesta 404 a secas, y un
+        # «404: Not Found» a quien acaba de instalar le dice que el servidor
+        # está roto — cuando lo que pasa es que Oura no pone datos falsos de la
+        # única colección con correo, edad, peso y estatura.
+        raise ErrorOura(
+            f"`{coleccion}` no existe en el sandbox de Oura: es la única de las "
+            f"19 que no sirve, porque es la que devuelve datos personales. "
+            f"Todo lo demás sí funciona aquí. Para ver la tuya de verdad, quita "
+            f"OURA_SANDBOX y corre `oura-mcp --autorizar`."
+        )
 
     if ultimo:
         # Oura NO se queja si se le manda `latest` a una colección que no lo

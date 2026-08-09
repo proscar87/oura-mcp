@@ -1,6 +1,6 @@
 # Para el siguiente agente
 
-Estado al **9 de agosto de 2026, de madrugada**. Lee esto antes de tocar nada.
+Estado al **9 de agosto de 2026, ~06:00**. Lee esto antes de tocar nada.
 
 ## Qué es esto
 
@@ -61,9 +61,22 @@ en el README **del paquete publicado**, y borrarla devuelve un 400. Y no uses
 `~/.pypirc`: un archivo mal formado hizo que el parser volcara un token completo
 a un transcript.
 
+## Lo que bloquea, y es tuyo
+
+Dos decisiones que un agente no debe tomar solo:
+
+1. **Publicar la v0.2.0.** Está todo listo: las seis declaraciones de versión
+   coinciden, el CHANGELOG está escrito, el wheel se construye. Falta
+   `git tag v0.2.0 && git push origin v0.2.0`, que dispara PyPI y el registro.
+2. **El `.mcpb`.** Medido: el binario de PyInstaller sirve con `--onedir`
+   (0.41 s tras la primera vez) pero pide notarización de Apple, CI en dos
+   plataformas y 45 MB por plataforma. TypeScript sale más barato *si el
+   objetivo es Claude Desktop*. Y el plugin de Claude Code ya da instalación de
+   un comando sin nada de eso. **La pregunta es de alcance, no técnica.**
+
 ## Lo que ya está hecho (v0.2 y v0.3)
 
-Ocho puntos de corrección y OAuth2 completo. **83 pruebas, ninguna toca la red.**
+Ocho puntos de corrección y OAuth2 completo. **121 pruebas, ninguna toca la red.**
 El detalle largo, con lo medido, está en `ROADMAP.md`. Lo que hay que saber para
 no romperlo:
 
@@ -145,7 +158,7 @@ cadena `"[]"`.
 ## Cómo se prueba
 
 ```
-python -m pytest -q          # 83 pruebas, ninguna toca la red
+python -m pytest -q          # 121 pruebas, ninguna toca la red
 ```
 
 **Un CI que necesita el token de alguien para pasar no es un CI: es una
