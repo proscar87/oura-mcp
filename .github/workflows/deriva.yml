@@ -25,10 +25,10 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install -e .
-      - run: python herramientas/check_drift.py
+      - run: python tools/check_drift.py
       # El servidor arrancado de verdad, no sus funciones. El modo en que un
       # servidor MCP falla más feo no es devolviendo un dato equivocado: es no
       # completando el handshake, o escribiendo en stdout algo que no sea
       # JSON-RPC. Las dos se ven igual desde el cliente —un servidor que «no
       # aparece»— y ninguna prueba de función las atrapa.
-      - run: python herramientas/smoke_stdio.py
+      - run: python tools/smoke_stdio.py
