@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""¿Sigue existiendo cada una de las 19 colecciones que declara `colecciones.py`?
+"""¿Sigue existiendo cada una de las 19 collections que declara `collections.py`?
 
 CORRE CONTRA EL SANDBOX DE OURA, QUE NO PIDE CREDENCIALES. Por eso puede vivir
 en CI sin depender del token de nadie — que es la regla de este repositorio: un
@@ -18,7 +18,7 @@ URL estable. Se probaron cinco rutas plausibles el 9-ago-2026 y las cinco dan
 de un tercero (`spxrogers/oura-toolkit`), y colgar nuestro CI del repositorio de
 alguien más es cambiar una dependencia por otra peor.
 
-    $ python herramientas/revisar_deriva.py
+    $ python tools/check_drift.py
 """
 
 from __future__ import annotations
@@ -30,11 +30,11 @@ os.environ["OURA_SANDBOX"] = "1"
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from oura_mcp.cliente import ErrorOura, base, obtener          # noqa: E402
-from oura_mcp.colecciones import COLECCIONES, SIN_SANDBOX, forma   # noqa: E402
+from oura_mcp.client import OuraError, base, fetch          # noqa: E402
+from oura_mcp.collections import COLLECTIONS, WITHOUT_SANDBOX, shape   # noqa: E402
 
-# El sandbox sirve 18 de las 19; la que falta se declara en `colecciones.py`,
-# que es de donde también la lee el cliente. Que falte no es deriva, así que se
+# El sandbox sirve 18 de las 19; la que falta se declara en `collections.py`,
+# que es de donde también la lee el client. Que falte no es deriva, así que se
 # espera explícitamente en vez de tolerarse en silencio.
 
 VENTANA = ("2026-01-01", "2026-01-05")
@@ -42,35 +42,35 @@ VENTANA_HORA = ("2026-01-01T00:00:00", "2026-01-02T00:00:00")
 
 
 def revisar_una(nombre: str) -> tuple[bool, str]:
-    f = forma(nombre)
-    args = VENTANA if f == "rango_fecha" else VENTANA_HORA if f == "rango_datetime" else ()
+    f = shape(nombre)
+    args = VENTANA if f == "date_range" else VENTANA_HORA if f == "datetime_range" else ()
 
-    if nombre in SIN_SANDBOX:
-        # SE PREGUNTA A OURA DIRECTAMENTE, saltándose la guarda del cliente. Si
-        # se usara `obtener()`, esta comprobación estaría verificando nuestro
+    if nombre in WITHOUT_SANDBOX:
+        # SE PREGUNTA A OURA DIRECTAMENTE, saltándose la guarda del client. Si
+        # se usara `fetch()`, esta comprobación estaría verificando nuestro
         # propio mensaje de error en vez de la API — y el día que Oura agregue
         # esta colección al sandbox, nadie se enteraría. Un chequeo que se
         # comprueba a sí mismo no comprueba nada.
-        from oura_mcp.cliente import _pedir, _token
+        from oura_mcp.client import _request, _token
         try:
-            _pedir(f"{base()}/{nombre}", _token())
-        except ErrorOura as e:
+            _request(f"{base()}/{nombre}", _token())
+        except OuraError as e:
             if "404" in str(e):
                 return True, "ausente del sandbox, como se espera"
             return False, str(e)[:90]
-        return False, "AHORA SÍ está en el sandbox: actualiza SIN_SANDBOX"
+        return False, "AHORA SÍ está en el sandbox: actualiza WITHOUT_SANDBOX"
 
     try:
-        r = obtener(nombre, *args)
-    except ErrorOura as e:
+        r = fetch(nombre, *args)
+    except OuraError as e:
         return False, str(e)[:90]
     return True, f"responde, n={r['n']}"
 
 
 def main() -> int:
-    print(f"deriva de colecciones contra {base()}\n")
+    print(f"deriva de collections contra {base()}\n")
     fallas = []
-    for nombre in COLECCIONES:
+    for nombre in COLLECTIONS:
         ok, detalle = revisar_una(nombre)
         print(f"  {'ok ' if ok else 'MAL'}  {nombre:<26} {detalle}")
         if not ok:
@@ -78,10 +78,10 @@ def main() -> int:
     print()
     if fallas:
         print(f"{len(fallas)} colección(es) derivaron: {', '.join(fallas)}")
-        print("Revisa colecciones.py contra las notas de versión de Oura.")
+        print("Revisa collections.py contra las notas de versión de Oura.")
         return 1
-    print(f"Las {len(COLECCIONES)} colecciones siguen donde dice colecciones.py.")
-    print("Recuerda: esto NO detecta colecciones nuevas.")
+    print(f"Las {len(COLLECTIONS)} collections siguen donde dice collections.py.")
+    print("Recuerda: esto NO detecta collections nuevas.")
     return 0
 
 

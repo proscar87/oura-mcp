@@ -1,198 +1,208 @@
-# Para el siguiente agente
+# For the next agent
 
-Estado al **9 de agosto de 2026, ~06:00**. Lee esto antes de tocar nada.
+State as of **9 August 2026**. Read this before touching anything.
 
-## Qué es esto
+## What this is
 
-Un servidor MCP sobre la API v2 de Oura. **Su razón de existir es que Oura
-entrega de menos sin avisar, y aquí se corrige.**
+An MCP server over the Oura v2 API. **Its reason to exist is that Oura
+under-delivers without saying so, and that's corrected here.**
 
-Ojo con cómo se cuenta eso, porque cambió. La versión anterior de este archivo
-decía que el diferenciador era paginar, y que «de los siete servidores MCP de
-Oura, el más completo no pagina». **Eso ya no es cierto**:
-`benngermin/oura-mcp` pagina bien, y con cursor reanudable. La paginación es hoy
-la línea de base, no la ventaja. No repitas esa frase.
+Be careful how you tell that story, because it changed. An earlier version of
+this file said the differentiator was pagination, and that "of the seven Oura
+MCP servers, the most complete one doesn't paginate." **That is no longer
+true**: `benngermin/oura-mcp` paginates properly, with a resumable cursor.
+Pagination is table stakes now, not the edge. Don't repeat that line.
 
-Lo que sí sostiene el proyecto son **cuatro fallas silenciosas de la misma
-familia**, medidas contra la API real y corregidas aquí:
+What does hold the project up are **four silent failures of the same family**,
+measured against the real API and corrected here:
 
-| | La falla | Dónde vive el arreglo |
+| | The failure | Where the fix lives |
 |---|---|---|
-| 1 | `next_token` sin seguir → recibes una fracción. Un día de `heartrate` son 1,231 muestras en 2 páginas | el bucle de `cliente.obtener()` |
-| 2 | `end_date` es inconsistente **entre colecciones**, y `workout` se filtra por fecha UTC reportando `day` local | `MARGEN_DIAS` y `_recortar()` |
-| 3 | `latest=true` donde no aplica → Oura devuelve la colección **entera** | `CON_ULTIMO`, se rechaza antes de la red |
-| 4 | `fields=inventado` → devuelve el registro completo, sin proyectar | `_campos_ignorados()` |
+| 1 | Not following `next_token` returns a fraction. One local day of `heartrate` is 1,231 samples across 2 pages | the pagination loop in the client |
+| 2 | `end_date` is inconsistent **across collections**, and `workout` filters by UTC date while reporting `day` in local time | `MARGEN_DIAS` and the trim step |
+| 3 | `latest=true` where it doesn't apply → Oura returns the **whole** collection | `CON_ULTIMO`, rejected before the network |
+| 4 | `fields=made_up` → returns the complete record, no projection | the ignored-fields check |
 
-Si alguien propone «simplificar» cualquiera de esas cuatro, la respuesta es no.
-Son el producto.
+If anyone proposes "simplifying" any of those four, the answer is no. They are
+the product.
 
-## Dónde está publicado
+## Where it's published
 
 | | |
 |---|---|
-| GitHub | https://github.com/proscar87/oura-mcp — público, MIT, CI verde |
-| PyPI | https://pypi.org/project/mcp-oura/ — 0.1.0 y 0.1.1 |
-| Registro de MCP | `io.github.proscar87/oura-mcp` v0.1.1, `active`, buscable |
+| GitHub | https://github.com/proscar87/oura-mcp — public, MIT, CI green |
+| PyPI | https://pypi.org/project/mcp-oura/ — 0.1.0, 0.1.1, **0.2.0** |
+| MCP registry | `io.github.proscar87/oura-mcp` **v0.2.0**, active, latest |
 
-El nombre de instalación es `mcp-oura` porque `oura-mcp` ya estaba tomado en
-PyPI por un paquete 0.1.0 sin autor ni repositorio. El módulo que se importa
-sigue siendo `oura_mcp`.
+The install name is `mcp-oura` because `oura-mcp` was already taken on PyPI by a
+0.1.0 package with no author and no repository. The imported module is still
+`oura_mcp`.
 
-**Nada de lo hecho esta madrugada está publicado todavía.** El repo va muy por
-delante de la 0.1.1 que vive en PyPI.
-
-## Cómo se publica una versión nueva
+## How to publish a new version
 
 ```
-# subir el número en pyproject.toml Y en server.json — tienen que coincidir
-git tag v0.2.0 && git push origin v0.2.0
+# bump the number in pyproject.toml AND server.json — they must match
+git tag v0.2.1 && git push origin v0.2.1
 ```
 
-Eso corre las pruebas, publica en PyPI y luego en el registro. **No hay ningún
-secreto configurado y no debe haberlo**: las dos publicaciones van por OIDC, con
-una credencial de un solo uso que GitHub genera en el momento. El publicador
-confiable de PyPI ya está dado de alta con `proscar87` / `oura-mcp` /
-`publicar.yml` / environment `pypi`.
+That runs the tests, publishes to PyPI and then to the registry. **There is no
+secret configured and there must not be**: both publications go through OIDC,
+with a single-use credential GitHub mints on the spot. PyPI's trusted publisher
+is already registered as `proscar87` / `oura-mcp` / `publicar.yml` / environment
+`pypi`.
 
-Tres cosas que costaron y no hay que repetir: el paso del registro **tiene que
-esperar a PyPI** (valida que la versión exacta exista) y reintenta mientras el
-índice propaga; el registro exige la línea `mcp-name: io.github.proscar87/oura-mcp`
-en el README **del paquete publicado**, y borrarla devuelve un 400. Y no uses
-`~/.pypirc`: un archivo mal formado hizo que el parser volcara un token completo
-a un transcript.
+Four things that cost time and shouldn't be repeated:
 
-## Lo que bloquea, y es tuyo
+1. **The registry step must wait for PyPI.** It validates that the exact version
+   exists there, and retries while the index propagates.
+2. **The registry requires the line `mcp-name: io.github.proscar87/oura-mcp`** in
+   the README of the *published* package. Deleting it returns a 400.
+3. **`description` in `server.json` caps at 100 characters.** v0.2.0 shipped to
+   PyPI and then failed the registry over six characters too many — and the retry
+   loop blamed PyPI propagation five times in a row, hiding the real cause. Both
+   are fixed; there's a test for the length now.
+4. **Don't use `~/.pypirc`.** A malformed file made the parser dump a full token
+   into a transcript.
 
-Dos decisiones que un agente no debe tomar solo:
+## What's blocking, and it's yours
 
-1. **Publicar la v0.2.0.** Está todo listo: las seis declaraciones de versión
-   coinciden, el CHANGELOG está escrito, el wheel se construye. Falta
-   `git tag v0.2.0 && git push origin v0.2.0`, que dispara PyPI y el registro.
-2. **El `.mcpb`.** Medido: el binario de PyInstaller sirve con `--onedir`
-   (0.41 s tras la primera vez) pero pide notarización de Apple, CI en dos
-   plataformas y 45 MB por plataforma. TypeScript sale más barato *si el
-   objetivo es Claude Desktop*. Y el plugin de Claude Code ya da instalación de
-   un comando sin nada de eso. **La pregunta es de alcance, no técnica.**
+Two decisions an agent shouldn't make alone:
 
-## Lo que ya está hecho (v0.2 y v0.3)
+1. **The `.mcpb`.** Measured: the PyInstaller binary works with `--onedir`
+   (0.41 s after the first run) but needs Apple notarization, CI on two
+   platforms, and 45 MB per platform. TypeScript is cheaper *if the goal is
+   Claude Desktop*. The Claude Code plugin already gives one-command install
+   without any of it. **The question is scope, not technique.**
+2. **What happens to the Python implementation** now that TypeScript exists.
+   `mcp-oura` 0.2.0 is published and works; the port targets
+   `@proscar87/oura-mcp`.
 
-Ocho puntos de corrección y OAuth2 completo. **121 pruebas, ninguna toca la red.**
-El detalle largo, con lo medido, está en `ROADMAP.md`. Lo que hay que saber para
-no romperlo:
+## What's already done
 
-- **`OURA_SANDBOX=1`** apunta a las rutas espejo de Oura, que son oficiales y
-  aceptan cualquier cadena como `Authorization`. Sirve para instalar y ver el
-  servidor andar sin credenciales. **No sirve para medir el comportamiento de la
-  API**: es un *generador*, no un filtro — devuelve `n-1` registros para
-  cualquier ventana y cero para una de una hora que contiene una muestra. Medir
-  ahí la semántica de las fechas da respuestas equivocadas. Ya pasó una vez, en
-  la primera versión del ROADMAP.
-- **OAuth2** en `credenciales.py` y `autorizar.py`. El refresh token de Oura es
-  **de un solo uso**: `refrescar()` guarda antes de devolver, de forma atómica.
-  No muevas esa línea. Si dos procesos refrescan a la vez —dos herramientas MCP
-  en paralelo— el que pierde la carrera relee lo guardado en vez de dar la
-  sesión por perdida.
-- **El `state` del callback se verifica** con `compare_digest`. Sin eso,
-  cualquier página abierta en el navegador del usuario puede mandarle un código
-  de autorización de otra cuenta.
-- **`Secreto`** envuelve el token: su `repr` dice `<secreto de N caracteres>` y
-  sacar el valor exige `.revelar()`.
-- **El flujo de OAuth vive en la terminal**, nunca dentro del servidor MCP. Uno
-  que habla por stdin/stdout no puede abrir un navegador ni pedirle nada a
-  nadie.
+Eight correctness fixes and full OAuth2. **124 tests, none touch the network.**
+The long version, with the measurements, is in `ROADMAP.md`. What you need to
+know to avoid breaking it:
 
-## Lo que falta, en orden
+- **`OURA_SANDBOX=1`** points at Oura's mirror routes, which are official and
+  accept any string as `Authorization`. Good for installing and watching the
+  server work without credentials. **Useless for measuring API behavior**: it's a
+  *generator*, not a filter — it returns n-1 records for any window, and zero for
+  a one-hour window containing a sample. Measuring date semantics there gives
+  wrong answers. That already happened once, in the first draft of the ROADMAP.
+- **OAuth2** lives in the credentials module. Oura's refresh token is
+  **single-use**: it is saved before being returned, atomically. Don't move that
+  line. If two processes refresh at once — two MCP tools in parallel — the loser
+  re-reads what's on disk instead of declaring the session lost.
+- **The callback's `state` is verified** with a constant-time comparison. Without
+  it, any page open in the user's browser can hand them an authorization code
+  from another account.
+- **The secret is wrapped in a type that won't print**, and getting the value
+  requires an explicit call that greps cleanly.
+- **The OAuth flow lives in the terminal**, never inside the MCP server. A server
+  speaking over stdin/stdout can't open a browser or ask anyone anything.
 
-### v0.4 — Instalación de un clic · casi toda hecha
-- **Hecho:** plugin de Claude Code (`.claude-plugin/`, los dos manifiestos pasan
-  `claude plugin validate --strict`), `smithery.yaml`, `glama.json`, `llms.txt`,
-  y `uvx` documentado — con la advertencia de que **`uvx` requiere tener `uv`**,
-  así que `pip install` es la ruta sin prerrequisitos.
-- **Falta:** publicar una versión que respalde todo eso, y el `.mcpb`. Las dos
-  están arriba, en «Lo que bloquea».
+## What's left
 
-### v0.5 — Directorio de conectores de Claude
-La puerta viable es la **extensión de escritorio (MCPB)**: formulario aparte, sin
-requisito de organización Team. Las anotaciones de herramienta y la política de
-privacidad que exige **ya están**. Falta el ícono 512×512 y el `.mcpb` — que
-depende de la decisión de arriba.
+### Installation
+- Done: Claude Code plugin (both manifests pass `claude plugin validate
+  --strict`), `smithery.yaml`, `glama.json`, `llms.txt`, and `uvx` documented —
+  with the caveat that **`uvx` requires `uv`**, so `pip install` is the
+  no-prerequisites path.
+- Left: the `.mcpb`, which depends on the decision above.
 
-La otra puerta —conector remoto— **exige organización Team o Enterprise** y
-hospedar datos de salud de terceros. Es una decisión, no un pendiente.
+### Claude connectors directory
+The viable door is the **desktop extension (MCPB)**: separate form, no Team
+organization required. The tool annotations and the privacy policy it demands are
+**already in place**. Missing: a 512×512 icon and the `.mcpb` itself.
 
-### Gratis y para ayer
-Los tres archivos de descubrimiento ya están. Faltan los PRs a
-`awesome-mcp-servers` y a mcp.so, que es de donde viene la mayor parte del
-tráfico.
+The other door — remote connector — **requires a Team or Enterprise
+organization** and hosting third-party health data. That's a decision, not a
+to-do.
 
-## Decisiones que NO hay que revertir
+### Free and overdue
+The three discovery files are in. Still missing: PRs to `awesome-mcp-servers`
+and mcp.so, which is where most traffic comes from.
 
-**Tres herramientas, no diecinueve.** Una por colección obliga al modelo a
-elegir entre 19 nombres parecidos antes de saber qué contienen.
+## Decisions NOT to revert
 
-**No analiza.** Ni correlaciones, ni anomalías, ni comparación de periodos — que
-es donde otros servidores ponen su valor. Un promedio calculado adentro llega al
-modelo como un número sin su método, y sobre nueve años de datos reales tres de
-cada cuatro cambios entre mediciones consecutivas son ruido. Entregar «tu HRV
-subió 12%» sin decir cuánto oscila sola esa métrica no es informar: es fabricar
-una señal. El análisis va donde se pueda citar el método — ver
-[cotejo](https://github.com/proscar87/cotejo).
+**Three tools, not nineteen.** One per collection forces the model to choose
+among 19 similar names before knowing what any of them contain.
 
-**Cero dependencias fuera del SDK de MCP.** No es estética: es lo que hace
-viable empaquetar esto como binario para Claude Desktop, que es el hito v0.4.
-Por eso `keyring` se importa con `try` y nunca se declara — aquí está instalado,
-pero viene de `twine`, no de `mcp`, y un usuario no lo tendría.
+**It doesn't analyze.** No correlations, no anomalies, no period comparison —
+which is where other servers place their value. An average computed inside
+reaches the model as a number without its method, and across nine years of real
+data three out of four changes between consecutive measurements are noise.
+Handing over "your HRV is up 12%" without saying how much that metric swings on
+its own isn't informing: it's manufacturing a signal. Analysis belongs where the
+method can be cited — see [cotejo](https://github.com/proscar87/cotejo).
 
-**El secreto no vive en la configuración del cliente MCP.** `OURA_PAT_FILE`, o
-el archivo 0600 de OAuth. Un servidor MCP se registra en un JSON que se
-respalda, se sincroniza y se comparte al pedir ayuda.
+**Zero dependencies beyond the MCP SDK.** Not aesthetics: it's what makes
+packaging as a binary viable. That's why `keyring` is imported inside a `try` and
+never declared — it's installed here, but it comes from `twine`, not `mcp`, and a
+user wouldn't have it.
 
-**`.garita.yml` se queda.** [Garita](https://github.com/proscar87/garita) bloquea
-commits con datos personales o credenciales, y corre en el CI. Aquí el riesgo
-real y específico es que alguien pegue una respuesta **de verdad** de Oura como
-ejemplo en el README o en una prueba: `personal_info` devuelve correo, edad,
-peso y estatura. La clave `exenciones` va **omitida**, no escrita como lista
-vacía: `exenciones: []` tropieza con el parser de Garita v0, que la lee como la
-cadena `"[]"`.
+**The secret does not live in the MCP client's config.** `OURA_PAT_FILE`, or the
+0600 OAuth file. An MCP server is registered in a JSON that gets backed up,
+synced, and shared when asking for help.
 
-## Cómo se prueba
+**`.garita.yml` stays.** [Garita](https://github.com/proscar87/garita) blocks
+commits containing personal data or credentials, and runs in CI. The specific
+risk here is someone pasting a **real** Oura response as an example into the
+README or a test: `personal_info` returns email, age, weight and height. The
+`exenciones` key must be **omitted**, not written as an empty list — `exenciones:
+[]` trips Garita v0's parser, which reads it as the string `"[]"`.
 
-```
-python -m pytest -q          # 121 pruebas, ninguna toca la red
-```
-
-**Un CI que necesita el token de alguien para pasar no es un CI: es una
-dependencia de esa persona.** No agregues pruebas que salgan a internet al CI
-obligatorio.
-
-Lo que sí sale a internet vive aparte y nunca bloquea un PR:
+## How it's tested
 
 ```
-python herramientas/revisar_deriva.py   # ¿siguen existiendo las 19? (sandbox, sin credenciales)
+python -m pytest -q          # 124 tests, none touch the network
+cd ts && npx vitest run      # the port's tests
 ```
 
-Corre semanal por `.github/workflows/deriva.yml`. Atrapa una colección
-renombrada o retirada; **no** atrapa una nueva — el sandbox no se puede
-enumerar, y el script lo dice en voz alta. Un chequeo que aparenta cubrir lo que
-no cubre es peor que no tenerlo.
+**A CI that needs someone's token to pass isn't a CI: it's a dependency on that
+person.** Don't add network tests to the mandatory CI.
 
-Para probar contra Oura de verdad, con el token de Oscar en `~/.oura_pat`:
+What does go out to the network lives apart and never blocks a PR:
+
+```
+python herramientas/check_drift.py   # do the 19 still exist? (sandbox, no credentials)
+python herramientas/smoke_stdio.py       # does the server actually start and speak stdio?
+```
+
+Both run weekly via `.github/workflows/deriva.yml`. The drift check catches a
+renamed or retired collection; it does **not** catch a new one — the sandbox
+can't be enumerated, and the script says so out loud. A check that pretends to
+cover what it doesn't is worse than none.
+
+The stdio smoke test exists because the 124 unit tests exercise functions, not
+the process. The ugliest way an MCP server fails isn't returning wrong data: it's
+failing the handshake, or writing something that isn't JSON-RPC to stdout. Both
+look identical from the client — a server that "doesn't show up" — and no
+function test catches either. It found the server announcing the wrong version on
+its first run.
+
+To test against the real Oura, with Oscar's token in `~/.oura_pat`:
 
 ```
 OURA_PAT_FILE=~/.oura_pat python -m oura_mcp --revisar
 ```
 
-**Al medir contra la API real, imprime sólo cuentas y nombres de campo, nunca
-valores.** No es ceremonia: los transcripts se pegan en otros lados.
+**When measuring against the real API, print only counts and field names, never
+values.** Not ceremony: transcripts get pasted elsewhere.
 
-## Contexto que no se ve en el código
+## Context you can't see in the code
 
-Esto salió de auditar el panel de salud de Oscar (`~/Developer/panel-salud`),
-donde el mismo modo de falla —datos truncados que se ven completos— apareció
-tres veces: PostgREST ignorando `limit` y cortando en 1,000 filas, y el
-parámetro `meastypes` de Withings devolviendo 13 de 30 tipos pedidos sin error
-ni aviso. Ese último se diagnosticó mal durante horas como «suscripción
-vencida».
+This came out of auditing Oscar's health dashboard (`~/Developer/panel-salud`),
+where the same failure mode — truncated data that looks complete — showed up
+three times: PostgREST ignoring `limit` and cutting at 1,000 rows, and Withings'
+`meastypes` returning 13 of 30 requested types with no error and no warning. That
+last one was misdiagnosed for hours as an expired subscription.
 
-Resulta que Oura hace lo mismo en cuatro lugares distintos. La tesis aplicaba en
-más sitios de los que decía.
+Turns out Oura does the same thing in four different places. The thesis applied
+in more spots than it claimed.
+
+## A note on language
+
+The repository is in English. It was written in Spanish through 0.2.0; the
+translation and the tool-parameter rename land in 0.3.0, and the rename is a
+breaking change recorded in the CHANGELOG.

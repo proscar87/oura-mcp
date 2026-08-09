@@ -35,7 +35,7 @@
           "isSecret": true
         },
         {
-          "name": "OURA_CREDENCIALES",
+          "name": "OURA_CREDENTIALS",
           "description": "Dónde vive el archivo de credenciales de OAuth2. Por omisión ~/.config/oura-mcp/credenciales.json, con permisos 600.",
           "isRequired": false,
           "isSecret": false
