@@ -13,31 +13,29 @@ abandonados el mismo día, con 28 y 31 minutos de vida.
 Si alguna vez alguien propone "simplificar" el bucle de paginación de
 `cliente.obtener()`, la respuesta es no. Ese bucle es el producto.
 
-## Dónde está publicado
+## Dónde está publicado — los tres, hechos
 
 | | |
 |---|---|
-| GitHub | https://github.com/proscar87/oura-mcp — público, MIT |
-| PyPI | https://pypi.org/project/mcp-oura/ — **v0.1.0 publicada** |
-| Registro de MCP | **PENDIENTE**, ver abajo |
+| GitHub | https://github.com/proscar87/oura-mcp — público, MIT, CI verde |
+| PyPI | https://pypi.org/project/mcp-oura/ — **0.1.0 y 0.1.1** |
+| Registro de MCP | `io.github.proscar87/oura-mcp` **v0.1.1**, listado y buscable |
 
 El nombre de instalación es `mcp-oura` porque `oura-mcp` ya estaba tomado en
 PyPI por un paquete 0.1.0 sin autor ni repositorio. El módulo que se importa
 sigue siendo `oura_mcp`.
 
-## Lo que falta, en orden
+## Cómo se publica una versión nueva
 
-### 1. Publicar la v0.1.1 en PyPI
+```
+# subir el número en pyproject.toml Y en server.json — tienen que coincidir
+git tag v0.1.2 && git push origin v0.1.2
+```
 
-Está lista en el repo: `pyproject.toml` y `server.json` ya dicen `0.1.1`, y el
-README lleva al final la línea `mcp-name: io.github.proscar87/oura-mcp`, que es
-lo que faltaba (ver punto 2).
-
-**Dos caminos.** El bueno es el primero:
-
-**a) Publicador confiable (sin token).** Falta un formulario de una sola vez en
-pypi.org → *Publishing* → el proyecto `mcp-oura` → *Add a new publisher*. Los
-datos exactos los escupió el propio fallo del flujo:
+Eso corre las pruebas, publica en PyPI y luego en el registro. **No hay ningún
+secreto configurado y no debe haberlo**: las dos publicaciones van por OIDC, con
+una credencial de un solo uso que GitHub genera en el momento. El publicador
+confiable de PyPI ya está dado de alta con estos datos:
 
 ```
 dueño        proscar87
@@ -46,42 +44,38 @@ workflow     publicar.yml
 environment  pypi
 ```
 
-Con eso, publicar es `git tag v0.1.1 && git push origin v0.1.1` y no existe
-ningún secreto que rotar.
+Si alguna vez alguien propone meter un token de PyPI en `secrets`, es un paso
+atrás: sería una llave permanente con permiso de publicar en TODOS los proyectos
+de la cuenta, viviendo en un lugar más.
 
-**b) A mano, con token.** Oscar tiene cuenta. **Que lo corra ÉL en Terminal.app**
-— no en el `!` de Claude Code, que no da terminal interactiva:
+## Tres cosas que costaron y no hay que repetir
 
-```
-cd ~/Developer/oura-mcp && python -m build && python -m twine upload dist/*
-```
+**1. El registro tiene que esperar a PyPI.** Valida que la VERSIÓN exacta exista
+en PyPI antes de aceptarla. Hubo un rato en que `registro` dependía de `pruebas`
+en vez de `pypi` —un parche mientras faltaba el publicador confiable— y eso creó
+una carrera: el registro terminaba en 5 segundos, buscaba la 0.1.1 y todavía no
+existía. Un paso que valida contra otro no puede correr en paralelo con él.
 
-`twine` pregunta usuario (`__token__`) y contraseña (el token). No lo guardes en
-`~/.pypirc`: el 9-ago un archivo mal formado hizo que el parser volcara el token
-completo al transcript de la sesión y hubo que revocarlo.
+**2. PyPI tarda en propagar** aunque el orden esté bien. Por eso el paso del
+registro reintenta cinco veces con espera en vez de fallar a la primera.
 
-### 2. Publicar en el registro de MCP
+**3. El registro exige una prueba de propiedad** en el README **del paquete
+publicado en PyPI**: la línea `mcp-name: io.github.proscar87/oura-mcp`, que está
+al final del README. Si se borra, la siguiente publicación al registro devuelve
+un 400. No es decorativa.
 
-El flujo ya está escrito (`.github/workflows/publicar.yml`, job `registro`) y el
-**login por OIDC ya funciona** — se verificó, devuelve `✓ Successfully logged
-in`. Lo único que faltaba era la prueba de propiedad: el registro exige que el
-README **del paquete publicado en PyPI** contenga la línea
+**Y una que no es del proyecto pero costó un token:** NO uses `~/.pypirc`. El
+9-ago un archivo mal formado —el token sin el encabezado `[pypi]`— hizo que el
+parser de Python volcara el token completo a un transcript, y hubo que
+revocarlo. Con el publicador confiable no hace falta ninguno.
 
-```
-mcp-name: io.github.proscar87/oura-mcp
-```
+## Lo que queda por hacer
 
-Ya está en el README de este repo, pero **la v0.1.0 que está en PyPI no la
-tiene**. Por eso el orden importa: primero sube la v0.1.1, luego dispara el
-registro (`gh workflow run publicar.yml --ref main`).
-
-### 3. Después de eso
-
-- Revocar cualquier token de PyPI que quede: con el publicador confiable ya no
-  hace falta ninguno, y los que Oscar generó tienen alcance de **cuenta
-  completa**.
-- Listas de la comunidad (`awesome-mcp-servers`, mcp.so, Smithery). Sale gratis
-  y es de donde viene la mayor parte del tráfico.
+- **Listas de la comunidad**: `awesome-mcp-servers`, mcp.so, Smithery. Sale
+  gratis y es de donde viene la mayor parte del tráfico.
+- **Composición segmental de nada de esto** — ver el README: el servidor no
+  analiza a propósito.
+- Si Oura agrega colecciones, se tocan en `colecciones.py` y nada más.
 
 ## Decisiones que NO hay que revertir
 
