@@ -694,6 +694,37 @@ Ahora todo el árbol se verifica contra la gramática de 3.10.
 
 ---
 
+## Tres bugs que sólo salieron al releer el código de los secretos
+
+`credenciales.py` y `autorizar.py` se escribieron de corrido y no se habían
+releído. Los tres son de la misma clase: casos que un usuario real produce sin
+proponérselo.
+
+**1. Un favicon mataba el flujo de autorización entero.** `esperar_callback`
+atendía *una* petición. Un navegador de verdad no manda una: pide
+`/favicon.ico` por su cuenta. Ése se llevaba el turno, el servidor se cerraba, y
+el callback bueno recibía *connection refused*. Desde afuera se veía «no llegó
+ningún callback en 300s», sin ninguna pista de por qué. Reproducido y arreglado:
+ahora atiende hasta que llegue algo a `/callback`.
+
+**2. Un código de OAuth con `=` se rechazaba.** Los códigos son base64url y
+traen `-`, `_` y `=` de relleno con toda normalidad. La heurística miraba si el
+texto tenía `=` o `/` para decidir si era una URL, así que `abc=` salía como
+«eso no trae un `code`» — a alguien que pegó exactamente lo que se le pidió.
+Ahora se decide por la forma (`http://` o `?`), no por los caracteres.
+
+**3. `OURA_CREDENCIALES=cred.json` tronaba.** Una ruta relativa pelada dejaba el
+directorio en cadena vacía y reventaba con `FileNotFoundError: ''`. Además
+habría hecho que las credenciales dependieran del directorio desde el que se
+arrancó el servidor, que en un cliente MCP no es el que uno cree. Ahora se
+normaliza a absoluta.
+
+Y una cuarta, menor pero fea: al guardar en el llavero, el archivo viejo se
+quedaba en disco con un refresh token muerto que `cargar()` ya nunca leería. Un
+secreto que nadie usa sigue siendo un secreto que alguien puede leer. Se borra.
+
+---
+
 ## Orden de ejecución
 
 1. **v0.2** — `end_date` primero (bug confirmado, en silencio, en la ruta más
