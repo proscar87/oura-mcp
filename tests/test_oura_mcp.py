@@ -717,3 +717,55 @@ def test_una_respuesta_normal_no_lleva_aviso(monkeypatch):
     _oura_falso([[{"day": "2026-08-01", "score": 80}]], monkeypatch)
     r = cliente.obtener("daily_sleep", "2026-08-01", "2026-08-01")
     assert "respuesta_grande" not in r
+
+
+# ── `n: 0`: la respuesta más común a las preguntas más comunes ─────────────
+def test_una_consulta_vacia_explica_lo_que_se_sabe(monkeypatch):
+    """«¿cómo dormí ayer?» y «¿estoy recuperado?» devuelven n=0 con frecuencia, y
+    eso no distingue entre no llevar el anillo, que no haya sincronizado, pedir
+    una fecha futura, o no tener el permiso. Un modelo que reciba `{"n": 0}` va a
+    contestar «no dormiste» con toda confianza, y puede estar equivocado."""
+    _oura_falso([[]], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-01-01", "2026-01-02")
+    assert "vacio" in r
+    assert "no dormiste" in r["vacio"]["no_confundir"]
+
+
+def test_un_rango_futuro_se_dice(monkeypatch):
+    import datetime
+    manana = (datetime.date.today() + datetime.timedelta(days=30)).isoformat()
+    _oura_falso([[]], monkeypatch)
+    r = cliente.obtener("daily_sleep", manana, manana)
+    assert any("futuro" in x for x in r["vacio"]["lo_que_se_sabe"])
+
+
+def test_pedir_hasta_hoy_avisa_de_la_sincronizacion(monkeypatch):
+    """La causa número uno de un vacío legítimo: el anillo no ha sincronizado."""
+    import datetime
+    hoy = datetime.date.today().isoformat()
+    _oura_falso([[]], monkeypatch)
+    r = cliente.obtener("daily_sleep", hoy, hoy)
+    assert any("sincroniza" in x for x in r["vacio"]["lo_que_se_sabe"])
+
+
+def test_si_hay_datos_no_se_explica_nada(monkeypatch):
+    _oura_falso([[{"day": "2026-01-01"}]], monkeypatch)
+    assert "vacio" not in cliente.obtener("daily_sleep", "2026-01-01", "2026-01-01")
+
+
+def test_toda_coleccion_declara_su_alcance():
+    """Sirve para distinguir «no hay dato» de «no diste ese permiso»: las dos se
+    ven idénticas (n=0) y llevan a conclusiones opuestas."""
+    from oura_mcp.colecciones import ALCANCE_DE, COLECCIONES
+    assert set(ALCANCE_DE) == set(COLECCIONES)
+    from oura_mcp.credenciales import ALCANCES
+    assert set(ALCANCE_DE.values()) <= set(ALCANCES)
+
+
+def test_las_instrucciones_traen_lo_que_no_se_puede_adivinar():
+    """Viajan en cada sesión: sólo va lo que cambia una respuesta."""
+    from oura_mcp.servidor import servidor
+    ins = servidor.instructions
+    for imprescindible in ("n: 0", "truncado", "continuar_desde", "start_datetime",
+                           "respuesta_grande", "campos"):
+        assert imprescindible in ins, imprescindible
