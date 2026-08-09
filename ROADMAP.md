@@ -176,20 +176,32 @@ aparecieron en ninguna respuesta se reportan en `campos_ignorados`.
 Un hallazgo que ayudó: **`fields` siempre devuelve `day` e `id`**, así que el
 recorte por fecha del punto 1 no se rompe cuando alguien proyecta columnas.
 
-Y una que la API no da y hay que hacer: **`formato: "csv"`**, la misma tabla sin
-repetir las claves 37,000 veces. `echocharlie` ya entrega todo en CSV «con las
-unidades en el nombre de la columna», y es la decisión correcta para un
-servidor que le habla a un modelo.
+Y una que la API no da y ya está hecha: **`formato: "csv"`**, la misma tabla sin
+repetir las claves 37,000 veces. Medido sobre un día real de `heartrate`:
+**56% menos caracteres**. El encabezado sale de la unión de todas las claves, no
+del primer registro —sacarlo del primero pierde un campo entero en silencio— y
+si los registros no traen las mismas claves la respuesta lo dice, porque una
+celda vacía puede ser «campo ausente» o «valor nulo».
+
+*(De la misma medición salió el número que le faltaba al README: un día local de
+`heartrate` son **1,231 muestras en 2 páginas**. Quien no pagina recibe 1,000 de
+1,231 —el 81%— sin un solo aviso.)*
 
 La línea sigue clara: **elegir columnas no es promediar.** Un `resumen=true`
 que devuelva medias sigue prohibido.
 
-### 4. Un 429 no se reintenta
+### 4. Un 429 no se reintenta — **hecho**
 
-`_pedir()` traduce el 429 a un mensaje amable y se rinde. En una consulta de un
-mes de `heartrate` —hasta 50 peticiones seguidas— rendirse a la mitad tira a la
-basura las 30 páginas ya traídas. Falta backoff honrando `Retry-After`, con un
-reintento acotado y un error tipado. `spxrogers` ya lo tiene resuelto así.
+Se rendía al primero. En una consulta que encadena hasta 50 peticiones, eso tira
+a la basura todo lo ya traído. Ahora reintenta dos veces, honrando `Retry-After`
+en sus dos formas (segundos y fecha HTTP), con backoff exponencial cuando no
+viene, y un tope de 8 s para que una cabecera generosa no cuelgue la
+conversación. **Sólo el 429**: un 401 no mejora esperando.
+
+Y una medición que conviene tener escrita: **Oura no manda ninguna cabecera de
+límite de tasa** en las respuestas buenas — ni `X-RateLimit-Remaining` ni
+equivalente. Un cliente no puede saber qué tan cerca está del tope; sólo se
+entera cuando ya se lo negaron. Por eso reaccionar bien es lo único que queda.
 
 ### 5. `truncado` avisa, pero no deja continuar
 

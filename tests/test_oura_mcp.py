@@ -8,8 +8,10 @@ Un CI que necesita el token de alguien para pasar no es un CI: es una dependenci
 de esa persona.
 """
 
-import json
+import email.message
 import io
+import json
+import urllib.error
 
 import pytest
 
@@ -177,6 +179,126 @@ def test_al_truncar_deja_el_cursor_para_continuar(monkeypatch):
     r = cliente.obtener("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z",
                         limite_paginas=3)
     assert r["continuar_desde"] == "3"
+
+
+# ── CSV: el mismo dato sin repetir las claves 37,000 veces ──────────────────
+def test_el_encabezado_sale_de_la_union_no_del_primero(monkeypatch):
+    """Sacar el encabezado del primer registro es la forma más fácil de perder
+    datos aquí: basta un registro con un campo extra para que ese campo
+    desaparezca sin dejar rastro."""
+    _oura_falso([[{"day": "2026-08-10", "score": 1},
+                  {"day": "2026-08-11", "score": 2, "extra": 9}]], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-10", "2026-08-11", formato="csv")
+    assert "extra" in r["columnas"]
+    assert "9" in r["datos"]
+
+
+def test_avisa_cuando_los_registros_no_traen_las_mismas_claves(monkeypatch):
+    """Una celda vacía puede ser «campo ausente» o «valor nulo». Con registros de
+    distinta forma la diferencia importa y callarla aparenta regularidad."""
+    _oura_falso([[{"day": "2026-08-10"}, {"day": "2026-08-11", "extra": 1}]], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-10", "2026-08-11", formato="csv")
+    assert "columnas_desiguales" in r
+    _oura_falso([[{"day": "2026-08-10"}, {"day": "2026-08-11"}]], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-10", "2026-08-11", formato="csv")
+    assert "columnas_desiguales" not in r
+
+
+def test_lo_anidado_va_como_json_en_su_celda(monkeypatch):
+    """Aplanar inventaría columnas que Oura no tiene; omitir sería perder datos."""
+    _oura_falso([[{"day": "2026-08-10", "contributors": {"deep": 91}}]], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-10", "2026-08-10", formato="csv")
+    assert '{""deep"":91}' in r["datos"]
+
+
+def test_la_fecha_es_la_primera_columna(monkeypatch):
+    """Es la columna con la que se cruza contra otra fuente."""
+    _oura_falso([[{"score": 1, "day": "2026-08-10", "aaa": 2}]], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-10", "2026-08-10", formato="csv")
+    assert r["columnas"][0] == "day"
+
+
+def test_el_csv_tambien_llega_cuando_se_trunca(monkeypatch):
+    """Con dos salidas, la truncada se iba sin formato ni avisos — y es la que
+    más necesita que se le crea todo lo que dice."""
+    paginas = [[{"day": "2026-08-10", "i": n}] for n in range(20)]
+    _oura_falso(paginas, monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-10", "2026-08-10",
+                        formato="csv", limite_paginas=3)
+    assert r["formato"] == "csv" and "truncado" in r and r["continuar_desde"] == "3"
+
+
+# ── El 429: reintento acotado ───────────────────────────────────────────────
+# Oura NO manda cabeceras de límite de tasa en las respuestas buenas —verificado
+# el 9-ago-2026— así que un cliente no puede saber qué tan cerca está del tope.
+# Sólo se entera cuando ya se lo negaron, y para entonces puede llevar 30
+# páginas traídas que se tirarían a la basura.
+def _falla_n_veces(monkeypatch, veces, cabeceras=None, dormidas=None):
+    if dormidas is None:
+        dormidas = []
+    estado = {"n": 0}
+
+    def urlopen(req, timeout=None):
+        if estado["n"] < veces:
+            estado["n"] += 1
+            raise urllib.error.HTTPError(
+                req.full_url, 429, "Too Many Requests",
+                email.message.Message() if cabeceras is None else cabeceras, None)
+        return _RespuestaFalsa(json.dumps({"data": [{"ok": 1}]}).encode())
+
+    monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(cliente.time, "sleep", dormidas.append)
+    monkeypatch.setenv("OURA_PAT", "x")
+    return estado
+
+
+def test_reintenta_el_429_y_sale_adelante(monkeypatch):
+    dormidas = []
+    _falla_n_veces(monkeypatch, 2, dormidas=dormidas)
+    assert cliente.obtener("personal_info")["n"] == 1
+    assert dormidas == [1.0, 2.0]          # backoff exponencial
+
+
+def test_el_429_persistente_se_rinde_con_todo_dicho(monkeypatch):
+    _falla_n_veces(monkeypatch, 99)
+    with pytest.raises(cliente.ErrorOura, match="2 reintentos"):
+        cliente.obtener("personal_info")
+
+
+def test_honra_retry_after_en_segundos(monkeypatch):
+    cab = email.message.Message()
+    cab["Retry-After"] = "3"
+    dormidas = []
+    _falla_n_veces(monkeypatch, 1, cabeceras=cab, dormidas=dormidas)
+    cliente.obtener("personal_info")
+    assert dormidas == [3.0]
+
+
+def test_el_retry_after_no_puede_colgar_la_conversacion(monkeypatch):
+    """Una cabecera que pida media hora no puede dejar esperando a nadie."""
+    cab = email.message.Message()
+    cab["Retry-After"] = "1800"
+    dormidas = []
+    _falla_n_veces(monkeypatch, 1, cabeceras=cab, dormidas=dormidas)
+    cliente.obtener("personal_info")
+    assert dormidas == [cliente.ESPERA_MAXIMA]
+
+
+def test_solo_el_429_se_reintenta(monkeypatch):
+    """Un 401 no mejora esperando: reintentarlo sólo tarda tres veces más en dar
+    la misma mala noticia."""
+    intentos = {"n": 0}
+
+    def urlopen(req, timeout=None):
+        intentos["n"] += 1
+        raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized",
+                                     email.message.Message(), None)
+
+    monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x")
+    with pytest.raises(cliente.ErrorOura, match="401"):
+        cliente.obtener("personal_info")
+    assert intentos["n"] == 1
 
 
 # ── `fields` y `latest`: los dos que Oura ignora en silencio ────────────────
