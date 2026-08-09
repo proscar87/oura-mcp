@@ -200,3 +200,21 @@ def test_el_redirect_por_defecto_lleva_diagonal_final():
     """No es estilo: el portal de Oura rechaza `…/callback` con
     `invalid_redirect_uri` y acepta `…/callback/`."""
     assert cr.REDIRECT_POR_DEFECTO.endswith("/callback/")
+
+
+# ── Rutas que alguien de verdad escribiría ──────────────────────────────────
+def test_una_ruta_relativa_pelada_no_truena(tmp_path, monkeypatch):
+    """`OURA_CREDENCIALES=cred.json` dejaba el directorio en cadena vacía y
+    hacía tronar el guardado con `FileNotFoundError: ''`, que no explica nada.
+    Y habría hecho que las credenciales dependieran del directorio desde el que
+    se arrancó el servidor — que en un cliente MCP no es el que uno cree."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("OURA_CREDENCIALES", "cred.json")
+    ruta = cr.guardar(_cred())
+    assert os.path.isabs(ruta)
+    assert cr.cargar().refresco.revelar() == "R1"
+
+
+def test_la_ruta_siempre_es_absoluta(monkeypatch):
+    monkeypatch.setenv("OURA_CREDENCIALES", "~/x/cred.json")
+    assert os.path.isabs(cr.ruta_credenciales())

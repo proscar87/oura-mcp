@@ -21,6 +21,7 @@ import os
 import secrets
 import sys
 import threading
+import time
 import urllib.parse
 import webbrowser
 
@@ -73,11 +74,17 @@ def extraer_codigo(url_o_codigo: str, estado_esperado: str | None = None) -> str
     direcciones sin pensar. Si le dan sólo el código, también sirve.
     """
     texto = url_o_codigo.strip()
+    # ¿Es una URL o un código pelado? Se decide por la forma, no por los
+    # caracteres: los códigos de OAuth son base64url y traen `-`, `_` y `=` de
+    # relleno con toda normalidad. La heurística anterior rechazaba `abc=` como
+    # «eso no trae un code», que es de las cosas más desconcertantes que le
+    # pueden pasar a alguien que pegó exactamente lo que se le pidió.
+    parece_url = texto.startswith(("http://", "https://")) or "?" in texto
+    if not parece_url:
+        return texto
     partes = urllib.parse.urlparse(texto)
     if not partes.query:
-        if "=" in texto or "/" in texto:
-            raise ErrorOura("eso no trae un `code`; pega la URL completa del callback")
-        return texto
+        raise ErrorOura("esa URL no trae parámetros; pega la del callback completa")
     q = urllib.parse.parse_qs(partes.query)
     if "error" in q:
         desc = (q.get("error_description") or q["error"])[0]
@@ -126,7 +133,17 @@ class _Recolector(http.server.BaseHTTPRequestHandler):
 
 
 def esperar_callback(puerto: int, estado: str, espera: int = ESPERA_CALLBACK) -> str:
-    """Levanta el servidor local, espera UNA petición, devuelve el código."""
+    """Levanta el servidor local y espera EL CALLBACK, no la primera petición.
+
+    La diferencia costó el flujo entero. Un navegador de verdad no manda una
+    sola petición: pide `/favicon.ico` por su cuenta, y algunos hacen otras.
+    Atendiendo sólo una, el favicon se llevaba el turno, el servidor se cerraba,
+    y el callback bueno recibía *connection refused*. Desde afuera se veía «no
+    llegó ningún callback», sin ninguna pista de por qué.
+
+    Por eso se atiende hasta que llegue algo a `/callback` —o hasta que se acabe
+    el tiempo—, no hasta la primera petición que sea.
+    """
     _Recolector.resultado = {"estado": estado}
     try:
         servidor = http.server.HTTPServer(("127.0.0.1", puerto), _Recolector)
@@ -135,10 +152,17 @@ def esperar_callback(puerto: int, estado: str, espera: int = ESPERA_CALLBACK) ->
             f"no se pudo escuchar en el puerto {puerto} ({e.strerror}). "
             f"¿Hay otra autorización corriendo? Prueba con --manual"
         ) from None
-    servidor.timeout = espera
-    hilo = threading.Thread(target=servidor.handle_request, daemon=True)
+
+    hilo = threading.Thread(target=servidor.serve_forever, kwargs={"poll_interval": 0.2},
+                            daemon=True)
     hilo.start()
-    hilo.join(espera + 1)
+    limite = time.monotonic() + espera
+    while time.monotonic() < limite:
+        if _Recolector.resultado.get("codigo") or _Recolector.resultado.get("error"):
+            break
+        time.sleep(0.1)
+    servidor.shutdown()
+    hilo.join(5)
     servidor.server_close()
 
     if _Recolector.resultado.get("error"):

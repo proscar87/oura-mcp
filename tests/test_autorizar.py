@@ -90,9 +90,47 @@ def test_una_url_sin_code_lo_dice():
         az.extraer_codigo("http://localhost:9876/callback/?otra_cosa=1")
 
 
-def test_pegar_algo_que_no_es_ni_url_ni_codigo():
-    with pytest.raises(ErrorOura, match="pega la URL completa"):
+def test_una_url_sin_parametros_lo_dice():
+    with pytest.raises(ErrorOura, match="no trae parámetros"):
         az.extraer_codigo("http://localhost:9876/callback/")
+
+
+def test_un_codigo_base64url_pelado_se_acepta():
+    """Los códigos de OAuth son base64url: traen `-`, `_` y `=` de relleno con
+    toda normalidad. La heurística vieja miraba si el texto tenía `=` o `/` y
+    rechazaba `abc=` como «eso no trae un code» — de las cosas más
+    desconcertantes que le pueden pasar a quien pegó justo lo que se le pidió."""
+    for codigo in ("abc-123_XYZ", "abc=", "AQABAAIAAAA=", "a/b"):
+        assert az.extraer_codigo(codigo) == codigo
+
+
+def test_el_callback_sobrevive_a_las_otras_peticiones_del_navegador():
+    """UN FAVICON MATABA EL FLUJO ENTERO. Un navegador de verdad no manda una
+    sola petición: pide /favicon.ico por su cuenta. Atendiendo sólo la primera,
+    el favicon se llevaba el turno, el servidor se cerraba, y el callback bueno
+    recibía connection refused. Desde afuera se veía «no llegó ningún callback»,
+    sin ninguna pista."""
+    import threading, time, urllib.request, urllib.error
+
+    resultado = {}
+
+    def esperar():
+        try:
+            resultado["codigo"] = az.esperar_callback(9877, "ESTADO", espera=8)
+        except ErrorOura as e:
+            resultado["error"] = str(e)
+
+    hilo = threading.Thread(target=esperar)
+    hilo.start()
+    time.sleep(0.5)
+    try:
+        urllib.request.urlopen("http://127.0.0.1:9877/favicon.ico", timeout=3)
+    except urllib.error.HTTPError:
+        pass                    # el 404 es lo esperado; lo que importa es seguir vivo
+    urllib.request.urlopen(
+        "http://127.0.0.1:9877/callback/?code=EL-BUENO&state=ESTADO", timeout=3)
+    hilo.join(12)
+    assert resultado.get("codigo") == "EL-BUENO", resultado
 
 
 # ── El puerto ───────────────────────────────────────────────────────────────

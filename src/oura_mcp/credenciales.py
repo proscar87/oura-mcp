@@ -59,10 +59,18 @@ _CUENTA_LLAVERO = "credenciales"
 
 
 def ruta_credenciales() -> str:
-    """Dónde vive el archivo. `OURA_CREDENCIALES` lo mueve."""
+    """Dónde vive el archivo. `OURA_CREDENCIALES` lo mueve.
+
+    Siempre absoluta. Una ruta relativa pelada —`OURA_CREDENCIALES=cred.json`,
+    que es exactamente lo que alguien escribiría— dejaba el directorio en cadena
+    vacía y hacía tronar el guardado con un `FileNotFoundError: ''` que no
+    explica nada. Y además habría hecho que las credenciales dependieran del
+    directorio desde el que se arrancó el servidor, que en un cliente MCP no es
+    el que uno cree.
+    """
     explicita = (os.environ.get("OURA_CREDENCIALES") or "").strip()
     if explicita:
-        return os.path.expanduser(explicita)
+        return os.path.abspath(os.path.expanduser(explicita))
     base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
     return os.path.join(base, "oura-mcp", "credenciales.json")
 
@@ -132,6 +140,14 @@ def guardar(cred: Credenciales) -> str:
     if kr is not None:
         try:
             kr.set_password(_SERVICIO_LLAVERO, _CUENTA_LLAVERO, payload)
+            # Si antes hubo archivo, se borra: `cargar()` prefiere el llavero,
+            # así que ese archivo ya no se leería nunca — quedaría un refresh
+            # token muerto en disco para siempre. Un secreto que nadie usa sigue
+            # siendo un secreto que alguien puede leer.
+            try:
+                os.unlink(ruta_credenciales())
+            except OSError:
+                pass
             return "llavero"
         except Exception:
             pass                        # cae al archivo, que siempre funciona
