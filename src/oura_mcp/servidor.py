@@ -135,6 +135,43 @@ def oura_revisar() -> dict:
     return revisar()
 
 
+def _modo_de_autenticacion() -> str:
+    """Con qué se está autenticando, en el mismo orden en que `_token()` decide."""
+    if os.environ.get("OURA_PAT_FILE"):
+        return "token personal (OURA_PAT_FILE)"
+    if os.environ.get("OURA_PAT"):
+        return "token personal (OURA_PAT)"
+    return "OAuth2"
+
+
+def _estado_de_oauth() -> dict:
+    """Alcances y caducidad, SIN un solo token.
+
+    Los alcances son la respuesta a la pregunta que más se hace cuando algo
+    devuelve vacío: «¿es que no hay datos, o es que no di permiso?». Oura
+    contesta esa diferencia con un 403 que no siempre se distingue de un rango
+    sin registros, así que tenerlos a la mano ahorra el diagnóstico equivocado.
+    """
+    if os.environ.get("OURA_PAT_FILE") or os.environ.get("OURA_PAT"):
+        return {}
+    try:
+        from .credenciales import ALCANCES, cargar
+        cred = cargar()
+    except ErrorOura as e:
+        return {"credenciales": f"ilegibles: {e}"}
+    if cred is None:
+        return {}
+    import time
+    faltan = int(cred.expira_en - time.time())
+    fuera = sorted(set(ALCANCES) - set(cred.alcances))
+    return {
+        "alcances_concedidos": list(cred.alcances),
+        "alcances_no_concedidos": fuera,
+        "el_acceso_caduca_en_segundos": faltan,
+        "se_renueva_solo": cred.refresco is not None,
+    }
+
+
 def revisar() -> dict:
     """Igual que la herramienta, pero llamable desde la línea de comandos."""
     from .cliente import _token, base, en_sandbox
@@ -165,8 +202,9 @@ def revisar() -> dict:
     out: dict = {
         "token_presente": True,
         "token_largo": len(t),
-        "origen": "OURA_PAT_FILE" if os.environ.get("OURA_PAT_FILE") else "OURA_PAT",
+        "modo": _modo_de_autenticacion(),
     }
+    out.update(_estado_de_oauth())
     try:
         r = obtener("personal_info")
         out["oura_responde"] = True
