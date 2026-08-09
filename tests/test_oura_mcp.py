@@ -421,6 +421,73 @@ def test_sin_credenciales_se_ofrecen_los_tres_caminos(monkeypatch, tmp_path):
     assert "diciembre de 2025" in mensaje       # por qué el PAT ya no es opción
 
 
+# ── Entradas basura: que el error diga qué hacer ────────────────────────────
+def test_el_rango_al_reves_se_atrapa_aqui(monkeypatch):
+    """Se atrapa antes de salir a la red porque el margen de MARGEN_DIAS cambia
+    las fechas: Oura devolvería un 400 citando dos fechas que quien preguntó
+    nunca escribió, y diagnosticar eso cuesta más que el error mismo."""
+    _oura_falso([[{}]], monkeypatch)
+    with pytest.raises(cliente.ErrorOura, match="va al revés"):
+        cliente.obtener("daily_sleep", "2026-08-10", "2026-08-01")
+
+
+def test_el_error_del_rango_cita_las_fechas_que_se_escribieron(monkeypatch):
+    _oura_falso([[{}]], monkeypatch)
+    with pytest.raises(cliente.ErrorOura) as exc:
+        cliente.obtener("daily_sleep", "2026-08-10", "2026-08-01")
+    assert "2026-08-10" in str(exc.value) and "2026-08-01" in str(exc.value)
+    assert "2026-08-08" not in str(exc.value)      # la de adentro, no
+
+
+def test_el_422_de_oura_se_traduce_a_algo_legible(monkeypatch):
+    """Oura contesta `detail` como el arreglo de errores de pydantic, cuyo JSON
+    pasa de 200 caracteres antes de llegar a lo único que importa. Recortado en
+    crudo dejaba `{"detail":[{"type":"datetime_from_date_pars` y nada más."""
+    cuerpo = json.dumps({"detail": [{
+        "type": "datetime_from_date_parsing",
+        "loc": ["query", "start_date", "datetime"],
+        "msg": "Input should be a valid datetime or date",
+        "input": "ayer"}]}).encode()
+
+    def urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 422, "Unprocessable",
+                                     email.message.Message(), io.BytesIO(cuerpo))
+
+    monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x")
+    with pytest.raises(cliente.ErrorOura) as exc:
+        cliente.obtener("daily_sleep", "2026-08-01", "2026-08-01")
+    m = str(exc.value)
+    assert "start_date" in m
+    assert "valid datetime" in m
+    assert "'ayer'" in m                    # qué se recibió, que es lo que uno busca
+    assert "datetime_from_date_parsing" not in m   # el ruido, fuera
+
+
+def test_el_detail_de_cadena_tambien_se_lee(monkeypatch):
+    cuerpo = json.dumps({"detail": "Start time is greater than end time"}).encode()
+
+    def urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 400, "Bad Request",
+                                     email.message.Message(), io.BytesIO(cuerpo))
+
+    monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x")
+    with pytest.raises(cliente.ErrorOura, match="Start time is greater"):
+        cliente.obtener("personal_info")
+
+
+def test_un_cuerpo_de_error_ilegible_no_tumba_nada(monkeypatch):
+    def urlopen(req, timeout=None):
+        raise urllib.error.HTTPError(req.full_url, 500, "Server Error",
+                                     email.message.Message(), io.BytesIO(b"<html>"))
+
+    monkeypatch.setattr(cliente.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x")
+    with pytest.raises(cliente.ErrorOura, match="500"):
+        cliente.obtener("personal_info")
+
+
 # ── `dia`: que la consulta más común no obligue a escribir un rango ─────────
 def test_dia_equivale_a_inicio_igual_a_fin(monkeypatch):
     _oura_falso([[{"day": "2026-08-09"}, {"day": "2026-08-10"}]], monkeypatch)

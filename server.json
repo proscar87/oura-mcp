@@ -1,28 +1,54 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.proscar87/oura-mcp",
-  "description": "La API v2 de Oura como servidor MCP, con la paginación bien hecha",
+  "description": "La API v2 de Oura como servidor MCP, corrigiendo las cuatro formas en que Oura entrega de menos sin avisar",
   "repository": {
     "url": "https://github.com/proscar87/oura-mcp",
     "source": "github"
   },
-  "version": "0.1.1",
+  "version": "0.2.0",
   "packages": [
     {
       "registryType": "pypi",
       "identifier": "mcp-oura",
-      "version": "0.1.1",
-      "transport": { "type": "stdio" },
+      "version": "0.2.0",
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
+          "name": "OURA_SANDBOX",
+          "description": "Ponlo en 1 para usar los datos sintéticos oficiales de Oura sin credenciales. La forma recomendada de probar el servidor antes de autenticarse.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "OURA_CLIENT_ID",
+          "description": "client_id de tu aplicación de Oura, para OAuth2. Se registra en https://cloud.ouraring.com/oauth/applications con el redirect http://localhost:9876/callback/ (la diagonal final es obligatoria).",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "OURA_CLIENT_SECRET",
+          "description": "client_secret de tu aplicación de Oura. Sólo hace falta al correr `oura-mcp --autorizar` y al renovar el token.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "OURA_CREDENCIALES",
+          "description": "Dónde vive el archivo de credenciales de OAuth2. Por omisión ~/.config/oura-mcp/credenciales.json, con permisos 600.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
           "name": "OURA_PAT",
-          "description": "Personal Access Token de Oura. Se saca en https://cloud.ouraring.com/personal-access-tokens",
+          "description": "Personal Access Token de Oura. Sólo si ya tenías uno: Oura dejó de emitirlos en diciembre de 2025.",
           "isRequired": false,
           "isSecret": true
         },
         {
           "name": "OURA_PAT_FILE",
-          "description": "Ruta a un archivo con el token. Preferible a OURA_PAT: un servidor MCP se registra en un JSON que se respalda y se comparte al pedir ayuda; el archivo aparte se rota sin tocar la configuración.",
+          "description": "Ruta a un archivo con el token personal. Preferible a OURA_PAT: un servidor MCP se registra en un JSON que se respalda y se comparte al pedir ayuda; el archivo aparte se rota sin tocar la configuración.",
           "isRequired": false,
           "isSecret": false
         }

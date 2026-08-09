@@ -236,6 +236,39 @@ está documentado en ningún otro**, ni el rechazo de `latest` donde Oura lo
 ignora, ni el aviso de campos que no se aplicaron. Y ninguno declara no analizar
 como una postura.
 
+## Privacy Policy
+
+Este servidor corre **en tu máquina** y habla con **un solo servicio**: la API
+de Oura. No hay backend nuestro, no hay telemetría, no hay analítica.
+
+**Qué se recolecta.** Nada. Este software no recolecta datos. Los datos de salud
+que pides van de la API de Oura a tu cliente MCP y no pasan por ningún otro
+lado.
+
+**Qué se guarda, y dónde.** Sólo tus credenciales, y sólo en tu máquina:
+
+| | |
+|---|---|
+| Tokens de OAuth2 | `~/.config/oura-mcp/credenciales.json`, permisos `600` — o el llavero del sistema si tienes `keyring` |
+| Token personal | Donde tú lo pongas: `OURA_PAT` o el archivo de `OURA_PAT_FILE` |
+
+Ningún dato de salud se escribe en disco. No hay caché.
+
+**Con quién se comparte.** Con nadie. La única conexión saliente es a
+`api.ouraring.com`, con tu token, para traer lo que pediste. El uso que Oura
+hace de tus datos se rige por
+[su política de privacidad](https://ouraring.com/privacy-policy), no por ésta.
+
+**Cuánto se retiene.** Las credenciales, hasta que las borres:
+`oura-mcp --olvidar`, o borrando el archivo. Los datos de salud no se retienen —
+viven en la respuesta y ya.
+
+**Los diagnósticos no exponen nada.** `oura_revisar` reporta la longitud del
+token, nunca el token; los nombres de los campos del perfil, nunca sus valores.
+El token va envuelto en un tipo que no se imprime ni en una traza.
+
+**Contacto.** [Issues del repositorio](https://github.com/proscar87/oura-mcp/issues).
+
 ## Licencia
 
 MIT.

@@ -196,6 +196,38 @@ def _espera_pedida(e: urllib.error.HTTPError, intento: int) -> float:
     return min(2.0 ** intento, ESPERA_MAXIMA)
 
 
+def _detalle_de(e: urllib.error.HTTPError) -> str:
+    """Lo legible del cuerpo de error de Oura, o el crudo recortado.
+
+    Oura contesta `detail` de dos formas distintas y ninguna se lee bien en
+    crudo. Una es una cadena; la otra es el arreglo de errores de validación de
+    pydantic, cuyo JSON pasa de los 200 caracteres antes de llegar a lo único
+    que importa —qué campo y por qué—, así que recortarlo dejaba al usuario con
+    `{"detail":[{"type":"datetime_from_date_parsing","loc":["query","star` y
+    nada más.
+    """
+    try:
+        cuerpo = json.loads(e.read().decode("utf-8", "replace"))
+    except Exception:
+        return ""
+    d = cuerpo.get("detail") if isinstance(cuerpo, dict) else None
+    if isinstance(d, str):
+        return ": " + d[:200]
+    if isinstance(d, list):
+        partes = []
+        for item in d[:2]:              # dos bastan: el resto repite el mismo campo
+            if not isinstance(item, dict):
+                continue
+            campo = ".".join(str(x) for x in (item.get("loc") or [])[1:2]) or "?"
+            msg = item.get("msg") or ""
+            recibido = item.get("input")
+            partes.append(f"{campo}: {msg}"
+                          + (f" (recibido: {recibido!r})" if recibido is not None else ""))
+        if partes:
+            return ": " + "; ".join(partes)[:200]
+    return ": " + json.dumps(cuerpo, ensure_ascii=False)[:200]
+
+
 def _pedir(url: str, token: Secreto, reintentos: int = REINTENTOS_429) -> dict:
     """Una petición a Oura, con reintento acotado sólo para el 429.
 
@@ -225,11 +257,7 @@ def _pedir(url: str, token: Secreto, reintentos: int = REINTENTOS_429) -> dict:
             # permiso faltante). Se pasa recortado a 200 caracteres: un mensaje
             # de error es lo que más se copia y se pega, y no tiene por qué
             # arrastrar más.
-            detalle = ""
-            try:
-                detalle = ": " + e.read().decode("utf-8", "replace")[:200]
-            except Exception:
-                pass
+            detalle = _detalle_de(e)
             if e.code == 401:
                 raise ErrorOura("Oura rechazó el token (401). ¿Expiró el PAT?") from None
             if e.code == 429:
@@ -307,6 +335,14 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
     if f in CON_FECHA and not ultimo:
         if not inicio or not fin:
             raise ErrorOura(f"{coleccion} necesita inicio y fin")
+        if inicio > fin:
+            # Se atrapa AQUÍ y no en Oura porque el margen de MARGEN_DIAS cambia
+            # las fechas: Oura devolvería un 400 citando dos fechas que quien
+            # preguntó nunca escribió, y diagnosticar eso cuesta más que el
+            # error mismo.
+            raise ErrorOura(
+                f"el rango va al revés: inicio ({inicio}) es posterior a fin ({fin})"
+            )
         clave = "date" if f == "rango_fecha" else "datetime"
         # SE PIDE UN DÍA DE MÁS DE CADA LADO Y SE RECORTA AQUÍ. Dos fallas
         # distintas lo obligan, las dos medidas contra la API de verdad el
