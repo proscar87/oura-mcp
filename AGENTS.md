@@ -103,27 +103,27 @@ no romperlo:
 
 ## Lo que falta, en orden
 
-### v0.4 — Instalación de un clic
-- `uvx --from mcp-oura oura-mcp` ya está en el README. Falta publicar una
-  versión que lo respalde.
-- Plugin de Claude Code: un `.claude-plugin/marketplace.json`.
-- **El `.mcpb`**, y ahí está la decisión difícil. Anthropic empaqueta Node con
-  Claude Desktop; Python no. Las opciones y su costo están en `ROADMAP.md`,
-  §v0.4. La recomendación es binario con PyInstaller —conserva el trabajo hecho—
-  pero conviene decir en voz alta que **si el listado en Claude es la meta real,
-  TypeScript es el camino que el propio Anthropic recomienda**.
+### v0.4 — Instalación de un clic · casi toda hecha
+- **Hecho:** plugin de Claude Code (`.claude-plugin/`, los dos manifiestos pasan
+  `claude plugin validate --strict`), `smithery.yaml`, `glama.json`, `llms.txt`,
+  y `uvx` documentado — con la advertencia de que **`uvx` requiere tener `uv`**,
+  así que `pip install` es la ruta sin prerrequisitos.
+- **Falta:** publicar una versión que respalde todo eso, y el `.mcpb`. Las dos
+  están arriba, en «Lo que bloquea».
 
 ### v0.5 — Directorio de conectores de Claude
 La puerta viable es la **extensión de escritorio (MCPB)**: formulario aparte, sin
-requisito de organización Team. Falta política de privacidad en el README, ícono
-512×512, y el `.mcpb`. Las anotaciones de herramienta que exige ya están.
+requisito de organización Team. Las anotaciones de herramienta y la política de
+privacidad que exige **ya están**. Falta el ícono 512×512 y el `.mcpb` — que
+depende de la decisión de arriba.
 
 La otra puerta —conector remoto— **exige organización Team o Enterprise** y
 hospedar datos de salud de terceros. Es una decisión, no un pendiente.
 
 ### Gratis y para ayer
-`smithery.yaml`, `glama.json`, `llms.txt`, y PRs a `awesome-mcp-servers` y
-mcp.so. Es de donde viene la mayor parte del tráfico.
+Los tres archivos de descubrimiento ya están. Faltan los PRs a
+`awesome-mcp-servers` y a mcp.so, que es de donde viene la mayor parte del
+tráfico.
 
 ## Decisiones que NO hay que revertir
 
