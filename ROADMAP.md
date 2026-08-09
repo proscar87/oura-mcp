@@ -451,9 +451,12 @@ organización Team ni Enterprise.**
 
 - [ ] Un `.mcpb` que funcione (v0.4)
 - [ ] Anotaciones en las tres herramientas (v0.2)
-- [ ] **Política de privacidad** — sección «Privacy Policy» en el README,
-      arreglo `privacy_policies` en el `manifest.json`, URLs HTTPS. Debe cubrir
-      recolección, uso, almacenamiento, terceros, retención y contacto.
+- [x] **Política de privacidad** — sección «Privacy Policy» en el README, ya
+      escrita: recolección, uso, almacenamiento, terceros, retención y contacto.
+      Aquí es fácil y todo es cierto: no se recolecta nada, la única conexión
+      saliente es a `api.ouraring.com`, y ningún dato de salud toca el disco.
+      Falta el arreglo `privacy_policies` en el `manifest.json`, que sólo existe
+      si se construye el `.mcpb`.
       *«Missing or incomplete privacy policies result in immediate rejection.»*
 - [ ] Ícono PNG 512×512
 - [ ] Documentación de instalación y uso
