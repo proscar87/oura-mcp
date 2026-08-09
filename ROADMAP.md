@@ -295,10 +295,31 @@ Y una cuarta, de `davidmosiah`: los alcances que devuelve la pantalla de consent
 no se llaman igual que los que uno pidió (`fix(#8): doctor accepts full Oura
 consent scopes`). El autodiagnóstico tiene que aceptar ambas formas.
 
-**Dónde viven los tokens.** El principio de AGENTS.md —el secreto no va en el
-JSON de configuración del cliente MCP— se mantiene y se refuerza: llavero del
-sistema con caída a archivo `0600`. Un refresh token que rota no puede vivir en
-un archivo que el usuario editó a mano.
+**Dónde viven los tokens — con una corrección.** El plan decía «llavero del
+sistema con caída a archivo `0600`». Al ir a hacerlo: `keyring` **no es una
+dependencia de este paquete y no debe serlo**. Aquí está instalado, pero viene
+de `twine`, no de `mcp`; un usuario no lo tendría. Y la lista de dependencias
+vacía es justo lo que hace viable empaquetar esto como binario para Claude
+Desktop, que es el hito v0.4.
+
+Lo implementado: **archivo `0600`, escrito de forma atómica, en directorio
+`0700`** — y el llavero **sólo si resulta estar instalado**, con `try: import
+keyring`. Quien lo tenga sale ganando; a quien no, no le cuesta nada. El
+principio de AGENTS.md se mantiene: el secreto no va en el JSON de configuración
+del cliente MCP, y menos uno que rota solo.
+
+**La rotación es la parte peligrosa, y ya está hecha.** El refresh token de Oura
+es de un solo uso: cuando se canjea, Oura lo invalida. Entre la respuesta y el
+guardado hay una ventana en la que el viejo ya murió y el nuevo no existe en
+disco; caerse ahí pierde la sesión. `refrescar()` guarda **antes de devolver**, y
+de forma atómica — no se puede hacer mejor, porque Oura no ofrece un canje en
+dos fases, pero sí que la ventana dure lo mínimo y que nunca quede un archivo a
+medias.
+
+Y una que no estaba prevista: **dos procesos que refrescan a la vez** es un caso
+real —dos herramientas MCP llamadas en paralelo— y el que pierde la carrera
+recibe un 400 aunque la sesión esté viva. Antes de darla por perdida, se relee
+lo guardado.
 
 ---
 
