@@ -1,5 +1,5 @@
-# Cómo arrancar este servidor desde Smithery. Es stdio y local: el token nunca
-# sale de la máquina de quien lo corre.
+# How to start this server from Smithery. It's stdio and local: the token never
+# leaves the machine running it.
 startCommand:
   type: stdio
   configSchema:
@@ -9,14 +9,14 @@ startCommand:
         type: boolean
         default: true
         description: >-
-          Datos sintéticos de Oura, sin credenciales. Déjalo encendido para
-          probar; apágalo cuando hayas corrido `oura-mcp --autorizar`.
+          Oura's synthetic data, no credentials. Leave it on to try things out;
+          turn it off once you have run `oura-mcp --authorize`.
       ouraPat:
         type: string
         description: >-
-          Personal Access Token, sólo si ya tenías uno: Oura dejó de emitirlos
-          en diciembre de 2025. Lo normal hoy es OAuth2 con `oura-mcp
-          --autorizar`.
+          Personal Access Token, only if you already had one: Oura stopped
+          issuing them in December 2025. The normal path today is OAuth2 via
+          `oura-mcp --authorize`.
   commandFunction: |-
     (config) => ({
       command: 'oura-mcp',

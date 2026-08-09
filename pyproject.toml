@@ -3,22 +3,22 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-# El nombre de DISTRIBUCIÓN es `mcp-oura` porque `oura-mcp` ya está tomado en
-# PyPI por un paquete 0.1.0 sin autor ni repositorio. El paquete que se importa
-# sigue siendo `oura_mcp`: sólo cambia el nombre con el que se instala.
+# The DISTRIBUTION name is `mcp-oura` because `oura-mcp` was already taken on
+# PyPI by a 0.1.0 package with no author and no repository. The imported package
+# is still `oura_mcp`: only the install name differs.
 name = "mcp-oura"
 version = "0.2.0"
-description = "La API v2 de Oura como servidor MCP, corrigiendo las cuatro formas en que Oura entrega de menos sin avisar"
+description = "The Oura v2 API as an MCP server. Paginates, fixes the date range, warns when data is missing."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "Oscar Pacheco" }]
-keywords = ["oura", "mcp", "salud", "wearables"]
+keywords = ["oura", "mcp", "health", "wearables", "sleep"]
 dependencies = ["mcp>=1.0"]
 
 [project.urls]
-Repositorio = "https://github.com/proscar87/oura-mcp"
-Problemas = "https://github.com/proscar87/oura-mcp/issues"
+Repository = "https://github.com/proscar87/oura-mcp"
+Issues = "https://github.com/proscar87/oura-mcp/issues"
 
 [project.optional-dependencies]
 dev = ["pytest>=7"]

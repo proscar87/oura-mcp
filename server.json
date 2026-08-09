@@ -18,37 +18,37 @@
       "environmentVariables": [
         {
           "name": "OURA_SANDBOX",
-          "description": "Ponlo en 1 para usar los datos sintéticos oficiales de Oura sin credenciales. La forma recomendada de probar el servidor antes de autenticarse.",
+          "description": "Set to 1 to use Oura's official synthetic data with no credentials. The recommended way to try the server before authenticating.",
           "isRequired": false,
           "isSecret": false
         },
         {
           "name": "OURA_CLIENT_ID",
-          "description": "client_id de tu aplicación de Oura, para OAuth2. Se registra en https://cloud.ouraring.com/oauth/applications con el redirect http://localhost:9876/callback/ (la diagonal final es obligatoria).",
+          "description": "client_id of your Oura application, for OAuth2. Register one at https://cloud.ouraring.com/oauth/applications with the redirect http://localhost:9876/callback/ (the trailing slash is required).",
           "isRequired": false,
           "isSecret": false
         },
         {
           "name": "OURA_CLIENT_SECRET",
-          "description": "client_secret de tu aplicación de Oura. Sólo hace falta al correr `oura-mcp --autorizar` y al renovar el token.",
+          "description": "client_secret of your Oura application. Only needed when running `oura-mcp --authorize` and when refreshing the token.",
           "isRequired": false,
           "isSecret": true
         },
         {
           "name": "OURA_CREDENTIALS",
-          "description": "Dónde vive el archivo de credenciales de OAuth2. Por omisión ~/.config/oura-mcp/credenciales.json, con permisos 600.",
+          "description": "Where the OAuth2 credentials file lives. Defaults to ~/.config/oura-mcp/credentials.json, mode 600.",
           "isRequired": false,
           "isSecret": false
         },
         {
           "name": "OURA_PAT",
-          "description": "Personal Access Token de Oura. Sólo si ya tenías uno: Oura dejó de emitirlos en diciembre de 2025.",
+          "description": "Oura Personal Access Token. Only if you already had one: Oura stopped issuing them in December 2025.",
           "isRequired": false,
           "isSecret": true
         },
         {
           "name": "OURA_PAT_FILE",
-          "description": "Ruta a un archivo con el token personal. Preferible a OURA_PAT: un servidor MCP se registra en un JSON que se respalda y se comparte al pedir ayuda; el archivo aparte se rota sin tocar la configuración.",
+          "description": "Path to a file holding the personal token. Preferable to OURA_PAT: an MCP server is registered in a JSON that gets backed up and shared when asking for help; a separate file rotates without touching the config.",
           "isRequired": false,
           "isSecret": false
         }
