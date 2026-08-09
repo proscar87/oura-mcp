@@ -1,0 +1,55 @@
+# oura-mcp
+
+> La API v2 de Oura como servidor MCP. Las 19 colecciones, tres herramientas,
+> cero dependencias fuera del SDK de MCP.
+
+Existe porque Oura entrega de menos sin avisar de cuatro maneras distintas, y
+este servidor las corrige. Nunca devuelve un error cuando no puede darte lo que
+pediste: devuelve algo distinto con forma de respuesta correcta.
+
+  1. `next_token` sin seguir devuelve una fracción. Un día de heartrate son
+     1,231 muestras en 2 páginas; quien no pagina recibe el 81%.
+  2. `end_date` es inconsistente ENTRE colecciones —daily_activity, sleep y
+     workout excluyen el último día; las demás no— y workout se filtra por
+     fecha UTC reportando `day` en hora local.
+  3. `latest=true` en una colección que no lo soporta devuelve la colección
+     entera, sin error.
+  4. `fields=inventado` devuelve el registro completo, sin proyectar.
+
+## Herramientas
+
+- `oura_colecciones` — las 19, con qué trae cada una y qué parámetros pide.
+- `oura_consultar` — una colección completa en un rango, paginando hasta el
+  final. Parámetros: coleccion, dia, inicio, fin, campos, ultimo, formato.
+  El rango es INCLUSIVO en los dos extremos.
+- `oura_revisar` — autodiagnóstico: modo de autenticación, alcances concedidos
+  y caducidad. No devuelve el token ni ningún valor de salud.
+
+Las tres son de sólo lectura. No hay POST, PUT ni DELETE en todo el paquete.
+
+## Claves de aviso en la respuesta
+
+- `truncado` + `continuar_desde` — faltan datos; el cursor deja reanudar.
+- `campos_ignorados` — pediste campos que Oura no aplicó.
+- `descartados_fuera_de_rango` — cuántos registros del margen se recortaron.
+- `columnas_desiguales` — en CSV, no todos los registros traen las mismas claves.
+
+## Variables de entorno
+
+- `OURA_SANDBOX=1` — datos sintéticos oficiales de Oura, sin credenciales.
+- `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET` — para `oura-mcp --autorizar` (OAuth2).
+- `OURA_PAT`, `OURA_PAT_FILE` — token personal, si ya tenías uno.
+- `OURA_CREDENCIALES` — dónde vive el archivo 0600 de OAuth.
+- `OURA_API_BASE_URL` — apuntar a otro origen (pruebas).
+
+## Lo que NO hace
+
+No analiza: ni correlaciones, ni anomalías, ni comparación de periodos. Un
+promedio calculado adentro llega al modelo como un número sin su método. Los
+datos se entregan crudos y el análisis va donde se pueda citar el método.
+
+## Enlaces
+
+- Repositorio: https://github.com/proscar87/oura-mcp
+- PyPI: https://pypi.org/project/mcp-oura/
+- Registro de MCP: io.github.proscar87/oura-mcp

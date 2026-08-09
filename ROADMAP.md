@@ -371,11 +371,21 @@ terminal**, así que en su JSON hay que poner la ruta completa que da `which
 oura-mcp`. Un nombre pelado ahí falla en silencio, y es de los errores más
 comunes al configurar un servidor MCP.
 
-### 2. Plugin de Claude Code
+### 2. Plugin de Claude Code — **hecho y validado**
 
-`daveremy` publica el suyo con `claude plugin marketplace add` +
-`claude plugin install`. Es un `.claude-plugin/marketplace.json` y un
-repositorio. Barato, y pone el servidor donde la gente ya busca.
+`.claude-plugin/plugin.json` y `.claude-plugin/marketplace.json`, los dos pasan
+`claude plugin validate --strict` contra el validador real del CLI, no contra un
+esquema supuesto.
+
+```bash
+claude plugin marketplace add proscar87/oura-mcp
+claude plugin install oura@oura-mcp
+```
+
+Sin bloque `env`, a propósito: no verifiqué que este esquema interpole variables,
+y un plugin que cayera en sandbox sin decirlo mostraría datos sintéticos como si
+fueran tuyos. El mensaje de «no hay credenciales» del propio servidor ya ofrece
+los tres caminos.
 
 ### 3. MCPB — el `.mcpb` de un clic
 
@@ -386,18 +396,47 @@ literalmente, la definición de «a prueba de tontos».
 
 **El problema es Python.** La documentación de Anthropic es explícita: Node.js
 «ships with Claude Desktop on macOS and Windows, so users need no separate
-runtime». Python no. El spec admite `type: "python"`, pero eso apunta al
-`python` del sistema — que es justo lo que estamos tratando de eliminar.
+runtime». Python no.
+
+**Se midió, en vez de suponerlo.** Binario construido con PyInstaller el
+9-ago-2026, macOS arm64:
+
+| Variante | Tamaño | Primer arranque | Siguientes |
+|---|---|---|---|
+| `--onefile` | 22 MB | 7.6 s | **6.5–7.6 s, en cada corrida** |
+| `--onedir` | 45 MB | 7.8 s | **0.41 s** |
+| `python -m oura_mcp` | — | 0.40 s | 0.40 s |
+
+Dos cosas que cambian la decisión:
+
+1. **`--onefile` queda descartado.** Descomprime los 22 MB en un temporal cada
+   vez que arranca. Un servidor MCP que tarda siete segundos en responder al
+   *handshake* se ve como colgado, en cada sesión.
+2. **`--onedir` sí sirve** — 0.41 s tras la primera vez, igual que Python. Los
+   7.8 s iniciales son Gatekeeper verificando un binario **firmado sólo
+   ad-hoc** (`flags=0x2(adhoc)`, verificado con `codesign`).
+
+Y ahí está el costo que no se ve en la tabla: distribuir eso en serio pide
+**Developer ID y notarización de Apple**, más *runners* de macOS y Windows en
+CI, y ~45 MB por plataforma. Todo para que Claude Desktop arranque un intérprete
+de Python que sólo corre nuestras 1,281 líneas.
 
 | | Qué implica | Veredicto |
 |---|---|---|
 | `type: "python"` | Depende del Python del usuario | No cumple el objetivo |
-| `type: "binary"` | PyInstaller, un binario por plataforma (darwin arm64/x64, win32), CI que los construya | **Recomendada.** Sin dependencias fuera del SDK, congela limpio |
-| Portar a TypeScript | ~320 líneas. Un día. Node incluido, cero fricción | La opción honesta si el `.mcpb` es la prioridad real |
+| `type: "binary"` (`--onedir`) | 45 MB × 3 plataformas, notarización de Apple, CI en macOS y Windows | Viable, pero el precio es alto |
+| Portar a TypeScript | Reescribir 1,281 líneas de fuente y 936 de pruebas | Node ya viene incluido: sin binario, sin firma, sin CI por plataforma |
 
-La recomendación es el binario: conserva el trabajo hecho y el CI ya existe.
-Pero conviene decirlo sin adorno — **si el objetivo final es el listado en
-Claude, TypeScript es el camino que el propio Anthropic recomienda.**
+**La medición invirtió la recomendación.** Antes decía «binario, porque conserva
+el trabajo hecho». Con los números en la mano, el binario cuesta notarización +
+tres compilaciones + 135 MB de artefactos, y todo eso *para el hito cuyo punto
+es que instalar sea trivial*. Si el `.mcpb` se quiere de verdad, **TypeScript**.
+
+**Pero hay una tercera vía, y probablemente es la correcta:** el plugin de
+Claude Code (§2, ya hecho y validado) da instalación de un comando a los
+usuarios de Claude Code sin nada de esto. La pregunta que decide no es técnica
+sino de alcance — *¿hace falta Claude **Desktop**, o basta Claude **Code**?* Si
+basta, v0.4 ya está completa y el `.mcpb` no se construye.
 
 ---
 
