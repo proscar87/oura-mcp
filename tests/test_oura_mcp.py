@@ -408,6 +408,25 @@ def test_sin_token_dice_donde_conseguirlo(monkeypatch):
         cliente.obtener("personal_info")
 
 
+# ── `dia`: que la consulta más común no obligue a escribir un rango ─────────
+def test_dia_equivale_a_inicio_igual_a_fin(monkeypatch):
+    _oura_falso([[{"day": "2026-08-09"}, {"day": "2026-08-10"}]], monkeypatch)
+    from oura_mcp.servidor import oura_consultar
+    f = getattr(oura_consultar, "fn", oura_consultar)
+    r = f(coleccion="workout", dia="2026-08-10")
+    assert r["n"] == 1 and r["datos"][0]["day"] == "2026-08-10"
+
+
+def test_dia_y_rango_juntos_es_un_error(monkeypatch):
+    """Mezclar los dos no tiene una interpretación obvia, y elegir una en
+    silencio es cómo se cuelan los rangos equivocados."""
+    _oura_falso([[{}]], monkeypatch)
+    from oura_mcp.servidor import oura_consultar
+    f = getattr(oura_consultar, "fn", oura_consultar)
+    assert "no ambos" in f(coleccion="workout", dia="2026-08-10",
+                           inicio="2026-08-01")["error"]
+
+
 # ── Anotaciones: lo que el cliente MCP necesita saber sin preguntar ─────────
 def test_las_tres_se_declaran_de_solo_lectura():
     """No es una promesa: no hay un POST, ni un PUT, ni un DELETE en todo el

@@ -70,6 +70,8 @@ def oura_consultar(
     coleccion: Annotated[str, Field(description="Nombre exacto. Ver `oura_colecciones`.")],
     inicio: Annotated[str | None, Field(description="AAAA-MM-DD, o ISO 8601 con hora")] = None,
     fin: Annotated[str | None, Field(description="AAAA-MM-DD, o ISO 8601 con hora")] = None,
+    dia: Annotated[str | None, Field(
+        description="Atajo para un solo día: equivale a inicio=fin=dia.")] = None,
     campos: Annotated[list[str] | None, Field(
         description="Sólo estos campos. Oura recorta del lado suyo, así que baja "
                     "menos: úsalo en rangos largos de heartrate. `day` e `id` "
@@ -99,6 +101,13 @@ def oura_consultar(
     if coleccion not in COLECCIONES:
         return {"error": f"«{coleccion}» no es una colección de Oura",
                 "las_que_hay": sorted(COLECCIONES)}
+    if dia:
+        # «Un solo día» es la consulta más común y la que estaba rota. Que la
+        # ruta común no obligue a escribir un rango es la mitad del arreglo: la
+        # otra mitad ya está en el cliente.
+        if inicio or fin:
+            return {"error": "usa `dia`, o `inicio` y `fin`, pero no ambos"}
+        inicio = fin = dia
     if forma(coleccion) in CON_FECHA and not ultimo and not (inicio and fin):
         return {"error": f"{coleccion} necesita `inicio` y `fin`",
                 "formato": "AAAA-MM-DD" if forma(coleccion) == "rango_fecha" else "ISO 8601 con hora"}
