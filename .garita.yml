@@ -1,0 +1,8 @@
+# oura-mcp no guarda datos: es un tubo entre la API de Oura y un cliente MCP.
+# El riesgo real no es un token en el código —no hay ninguno, el PAT vive en el
+# entorno— sino que alguien pegue una respuesta REAL de Oura como ejemplo en el
+# README o en una prueba. Un `personal_info` trae correo, edad, peso y estatura.
+#
+# Sin exenciones, y la clave va omitida en vez de escrita como lista vacía:
+# `exenciones: []` tropieza con el parser de Garita v0, que la lee como la
+# cadena "[]".
