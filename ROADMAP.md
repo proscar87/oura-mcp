@@ -850,6 +850,25 @@ Oura cambie vuelve a fallar callada).
 
 ---
 
+## Por qué se detuvo el ciclo
+
+El ciclo de construir → probar → auditar corrió quince vueltas y encontró nueve
+bugs reales. Se detuvo aquí, y conviene decir por qué en vez de dejarlo correr.
+
+**Lo que queda no es trabajo, son dos decisiones tuyas** —publicar la v0.2.0, y
+si el `.mcpb` hace falta o basta el plugin de Claude Code—. Un agente que las
+tome solo está adivinando qué quieres, no ayudando.
+
+**Y las preguntas que faltaban por simular son análisis**: comparar dos
+periodos, encontrar el peor día, cruzar sueño con entrenamiento. Se comprobó que
+el servidor entrega los datos correctos para las tres; hacer algo más ahí sería
+revertir la postura del proyecto para tener en qué ocuparse.
+
+Seguir iterando cuando ya no hay nada que encontrar sería su propia versión de
+«parece que funcionó» — que es justo lo que este repositorio persigue.
+
+---
+
 ## Orden de ejecución
 
 1. **v0.2** — `end_date` primero (bug confirmado, en silencio, en la ruta más
