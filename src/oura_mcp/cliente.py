@@ -54,6 +54,38 @@ class ErrorOura(RuntimeError):
     """Falla al hablar con Oura. NUNCA lleva el token en el mensaje."""
 
 
+class Secreto:
+    """Un token que no se imprime por accidente. Hay que pedirlo con `revelar()`.
+
+    Un `str` con el token adentro sale solo por demasiados lados: el `repr` de
+    las variables locales que imprimen algunos formateadores de traza, un
+    `print` de depuración que se quedó, una excepción que arrastra su contexto,
+    un f-string escrito de prisa.
+
+    Aquí ya costó un token una vez —un `~/.pypirc` mal formado hizo que el
+    parser volcara el token completo a un transcript, el 9-ago-2026— y la
+    lección no fue «ten más cuidado»: fue que el cuidado no se puede sostener a
+    mano. Con esta clase, imprimirlo sin querer es imposible; revelarlo es una
+    llamada explícita que se ve en el código y se puede buscar con grep.
+    """
+
+    __slots__ = ("_valor",)
+
+    def __init__(self, valor: str):
+        self._valor = valor
+
+    def revelar(self) -> str:
+        return self._valor
+
+    def __len__(self) -> int:
+        return len(self._valor)
+
+    def __repr__(self) -> str:
+        return f"<secreto de {len(self._valor)} caracteres>"
+
+    __str__ = __repr__
+
+
 def en_sandbox() -> bool:
     """¿Está puesto `OURA_SANDBOX`? Cualquier valor menos vacío, `0`, `no`."""
     v = (os.environ.get("OURA_SANDBOX") or "").strip().lower()
@@ -82,7 +114,7 @@ def base() -> str:
     return BASE
 
 
-def _token() -> str:
+def _token() -> Secreto:
     """El PAT, de `OURA_PAT` o del archivo que apunte `OURA_PAT_FILE`.
 
     La variante de archivo existe porque un servidor MCP se registra en un JSON de
@@ -94,7 +126,7 @@ def _token() -> str:
         # El sandbox acepta cualquier cadena. Pedir un token aquí sería inventar
         # un requisito que la API no tiene, y con él se pierde justo a quien
         # todavía no tiene cómo conseguirlo.
-        return "sandbox"
+        return Secreto("sandbox")
     ruta = (os.environ.get("OURA_PAT_FILE") or "").strip()
     if ruta:
         try:
@@ -103,14 +135,14 @@ def _token() -> str:
             raise ErrorOura(f"no se pudo leer OURA_PAT_FILE: {e.strerror}") from None
         if not t:
             raise ErrorOura(f"OURA_PAT_FILE apunta a un archivo vacío: {ruta}")
-        return t
+        return Secreto(t)
     t = (os.environ.get("OURA_PAT") or "").strip()
     if not t:
         raise ErrorOura(
             "falta OURA_PAT (o OURA_PAT_FILE). Sácalo de "
             "https://cloud.ouraring.com/personal-access-tokens"
         )
-    return t
+    return Secreto(t)
 
 
 def _espera_pedida(e: urllib.error.HTTPError, intento: int) -> float:
@@ -137,7 +169,7 @@ def _espera_pedida(e: urllib.error.HTTPError, intento: int) -> float:
     return min(2.0 ** intento, ESPERA_MAXIMA)
 
 
-def _pedir(url: str, token: str, reintentos: int = REINTENTOS_429) -> dict:
+def _pedir(url: str, token: Secreto, reintentos: int = REINTENTOS_429) -> dict:
     """Una petición a Oura, con reintento acotado sólo para el 429.
 
     SÓLO el 429 se reintenta. Un 401 no mejora esperando y un 400 tampoco: lo
@@ -151,7 +183,8 @@ def _pedir(url: str, token: str, reintentos: int = REINTENTOS_429) -> dict:
     rendirse al primer 429 tira a la basura todo lo ya traído.
     """
     req = urllib.request.Request(
-        url, headers={"Authorization": f"Bearer {token}", "Accept": "application/json"}
+        url, headers={"Authorization": f"Bearer {token.revelar()}",
+                 "Accept": "application/json"}
     )
     for intento in range(reintentos + 1):
         try:

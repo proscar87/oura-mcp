@@ -213,29 +213,52 @@ Hay que devolver el cursor: `truncado` + `continuar_desde`, y que
 `oura_consultar` lo acepte. **No es análisis** — es transporte, y es la
 extensión natural del bucle que es el producto.
 
-### 6. Anotaciones de herramienta
+### 6. Anotaciones de herramienta — **hecho**
 
-El directorio de Claude las exige: `title` y `readOnlyHint` / `destructiveHint`
-en cada herramienta. Aquí **las tres son de sólo lectura**, así que es una tarde
-y además es verdad: no hay una sola escritura en todo el código. Conviene
-hacerlo aunque nunca se mandara al directorio — es la señal que evita que un
-cliente MCP pida confirmación en cada llamada.
+Las tres declaran `title`, `read_only_hint`, `destructive_hint` e
+`idempotent_hint`. Y `open_world_hint` en `True`, que es la que casi nadie pone:
+los datos vienen de un servicio externo y la misma llamada dos veces puede
+diferir si el anillo sincronizó en medio. Decir lo contrario invitaría a
+memoizar la respuesta.
 
-*(De paso: el README dice «cuatro herramientas» y hay tres.)*
+Hay además una prueba que **lee el código fuente** buscando `POST`, `PUT`,
+`DELETE` y `PATCH`. La anotación de sólo lectura es verdad hoy; esa prueba es la
+que se entera el día que deje de serlo.
 
-### 7. El token, fuera de cualquier `repr`
+*(De paso: el README dice «cuatro herramientas» y hay tres. Sigue pendiente.)*
 
-`spxrogers`: `Auth: redact TokenResponse Debug`. Que el token no pueda salir en
-una traza ni en un volcado de excepción. Es la preocupación de Garita resuelta
-en el tipo, y ya costó un token una vez —el `~/.pypirc` mal formado del 9-ago.
+### 7. El token, fuera de cualquier `repr` — **hecho**
 
-### 8. Deriva del spec, en CI
+`_token()` ya no devuelve un `str`: devuelve un `Secreto`, cuyo `__repr__` y
+`__str__` dicen `<secreto de 32 caracteres>`. Sacar el valor exige
+`.revelar()` — una llamada explícita, visible en el código y grepeable.
 
-Un job **opcional** que compare `colecciones.py` contra el `openapi.json` de
-Oura y falle si aparece una colección nueva o cambia una forma de parámetros.
-Es la versión automática de la línea de AGENTS.md: «si Oura agrega una
-colección, se toca aquí y nada más». Opcional, nunca bloqueante — el CI
-obligatorio sigue sin tocar la red.
+No es paranoia teórica: un `~/.pypirc` mal formado ya hizo que el parser
+volcara un token completo a un transcript. La lección no fue «ten más cuidado»,
+fue que el cuidado no se sostiene a mano.
+
+### 8. Deriva de colecciones, en CI — **hecho, pero no como estaba escrito**
+
+El plan decía «compara `colecciones.py` contra el `openapi.json` de Oura». **No
+se puede: Oura no publica su spec en ninguna URL estable.** Cinco rutas
+plausibles, las cinco 404. La única copia pública está vendorizada en el
+repositorio de `spxrogers`, y colgar nuestro CI del repositorio de un tercero es
+cambiar una dependencia por otra peor.
+
+Lo que sí se puede, y ya corre: `herramientas/revisar_deriva.py` pregunta por
+las 19 colecciones **contra el sandbox**, que no pide credenciales. Job semanal
+y a mano, nunca en push — una prueba que sale a internet no puede decidir si un
+PR entra.
+
+Con sus límites dichos en voz alta, que es la mitad del valor:
+
+| Atrapa | No atrapa |
+|---|---|
+| Una colección renombrada, movida o retirada | Una colección **nueva** |
+
+El sandbox no se puede enumerar, así que descubrir altas sigue siendo trabajo
+humano. Decirlo en el propio script vale más que un chequeo que aparente
+cubrir algo que no cubre.
 
 ---
 
