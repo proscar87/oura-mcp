@@ -1,0 +1,70 @@
+name: Publicar
+
+# Se dispara al empujar una etiqueta `v*`. Publicar es entonces:
+#
+#     git tag v0.1.0 && git push origin v0.1.0
+#
+# SIN UN SOLO SECRETO. Ni token de PyPI ni token del registro de MCP: las dos
+# publicaciones usan OIDC, o sea GitHub le demuestra a cada servicio quién es,
+# con una credencial de un solo uso que dura minutos y que nadie tiene que
+# guardar, rotar ni cuidar. Un token de PyPI en `secrets` sería una llave
+# permanente con permiso de publicar, viviendo en un lugar más.
+#
+# Requisito de una sola vez, en la web de PyPI (Publishing → Add a new pending
+# publisher), sin generar ningún token:
+#     proyecto  mcp-oura
+#     dueño     proscar87
+#     repo      oura-mcp
+#     workflow  publicar.yml
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  pruebas:
+    name: Pruebas antes de publicar
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install -e ".[dev]"
+      - run: python -m pytest -q
+
+  pypi:
+    name: PyPI
+    needs: pruebas
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write        # lo único que hace falta para OIDC
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install build
+      - run: python -m build
+      - uses: pypa/gh-action-pypi-publish@release/v1
+
+  registro:
+    name: Registro de MCP
+    needs: pypi
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      # El registro comprueba que el paquete de PyPI declare este repositorio
+      # antes de aceptarlo, así que este paso va DESPUÉS de publicar en PyPI.
+      - name: Instalar el publicador
+        run: |
+          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_amd64.tar.gz" \
+            | tar xz mcp-publisher
+      - name: Publicar
+        run: |
+          ./mcp-publisher login github-oidc
+          ./mcp-publisher publish
