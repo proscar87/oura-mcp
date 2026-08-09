@@ -1,0 +1,23 @@
+{
+  "name": "oura",
+  "version": "0.2.0",
+  "description": "La API v2 de Oura como servidor MCP, corrigiendo las cuatro formas en que Oura entrega de menos sin avisar",
+  "author": {
+    "name": "Oscar Pacheco"
+  },
+  "homepage": "https://github.com/proscar87/oura-mcp",
+  "repository": "https://github.com/proscar87/oura-mcp",
+  "license": "MIT",
+  "keywords": [
+    "oura",
+    "salud",
+    "sueño",
+    "wearables",
+    "mcp"
+  ],
+  "mcpServers": {
+    "oura": {
+      "command": "oura-mcp"
+    }
+  }
+}

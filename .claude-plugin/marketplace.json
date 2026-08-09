@@ -1,0 +1,20 @@
+{
+  "name": "oura-mcp",
+  "owner": { "name": "Oscar Pacheco", "url": "https://github.com/proscar87" },
+  "metadata": {
+    "description": "Servidor MCP para el anillo Oura",
+    "version": "0.2.0"
+  },
+  "plugins": [
+    {
+      "name": "oura",
+      "source": "./",
+      "description": "Las 19 colecciones de Oura vía MCP. Pagina hasta el final, corrige el rango de fechas, y avisa cuando entrega de menos.",
+      "version": "0.2.0",
+      "author": { "name": "Oscar Pacheco" },
+      "homepage": "https://github.com/proscar87/oura-mcp",
+      "license": "MIT",
+      "keywords": ["oura", "salud", "wearables"]
+    }
+  ]
+}

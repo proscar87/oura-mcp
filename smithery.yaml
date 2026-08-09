@@ -1,0 +1,29 @@
+# Cómo arrancar este servidor desde Smithery. Es stdio y local: el token nunca
+# sale de la máquina de quien lo corre.
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    properties:
+      ouraSandbox:
+        type: boolean
+        default: true
+        description: >-
+          Datos sintéticos de Oura, sin credenciales. Déjalo encendido para
+          probar; apágalo cuando hayas corrido `oura-mcp --autorizar`.
+      ouraPat:
+        type: string
+        description: >-
+          Personal Access Token, sólo si ya tenías uno: Oura dejó de emitirlos
+          en diciembre de 2025. Lo normal hoy es OAuth2 con `oura-mcp
+          --autorizar`.
+  commandFunction: |-
+    (config) => ({
+      command: 'oura-mcp',
+      args: [],
+      env: Object.assign(
+        {},
+        config.ouraSandbox ? { OURA_SANDBOX: '1' } : {},
+        config.ouraPat ? { OURA_PAT: config.ouraPat } : {}
+      )
+    })
