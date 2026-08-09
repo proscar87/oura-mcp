@@ -39,9 +39,25 @@ from .colecciones import COLECCIONES, CON_FECHA, describir, forma
 _SOLO_LECTURA = dict(read_only_hint=True, destructive_hint=False,
                      idempotent_hint=True, open_world_hint=True)
 
+def _version() -> str:
+    """La versión del paquete instalado, no una copia escrita a mano.
+
+    Estaba escrita a mano y se quedó en 0.1.0 mientras `pyproject.toml` iba en
+    0.2.0. Lo detectó la prueba de humo por stdio, no las 88 de función: el
+    número que ve el cliente MCP sale del `serverInfo` del handshake, que
+    ninguna prueba de función mira. Un servidor que miente sobre su versión hace
+    imposible diagnosticar «¿tienes la que trae el arreglo?».
+    """
+    try:
+        from importlib.metadata import version
+        return version("mcp-oura")
+    except Exception:
+        return "desconocida"
+
+
 servidor = MCPServer(
     name="oura",
-    version="0.1.0",
+    version=_version(),
     instructions=(
         "Datos crudos del anillo Oura, vía su API v2. Las respuestas traen `n` "
         "(cuántos registros) y `paginas`. Si aparece la clave `truncado`, FALTAN "
