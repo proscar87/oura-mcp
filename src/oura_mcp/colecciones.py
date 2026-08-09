@@ -1,0 +1,65 @@
+"""Las 19 colecciones de la API v2 de Oura, y sólo eso.
+
+Toda la complejidad de hablarle a Oura vive en esta tabla. El resto —el cliente,
+el servidor MCP— es presentación. Por eso está en su propio archivo: si Oura
+agrega una colección, se toca aquí y nada más.
+
+CUATRO FORMAS DE PARÁMETROS, no diecinueve:
+
+    rango_fecha      start_date / end_date        (la mayoría)
+    rango_datetime   start_datetime / end_datetime (heartrate, batería)
+    unica            sin parámetros                (personal_info)
+    solo_token       sin parámetros, sin fecha     (ring_configuration)
+"""
+
+from __future__ import annotations
+
+BASE = "https://api.ouraring.com/v2/usercollection"
+
+# {nombre: (forma, para qué sirve)}
+COLECCIONES: dict[str, tuple[str, str]] = {
+    # Los resúmenes diarios: lo que se consulta a diario.
+    "daily_sleep":              ("rango_fecha", "puntaje de sueño y sus contribuyentes"),
+    "daily_readiness":          ("rango_fecha", "puntaje de preparación y sus contribuyentes"),
+    "daily_activity":           ("rango_fecha", "pasos, calorías, tiempo por intensidad"),
+    "daily_stress":             ("rango_fecha", "minutos de estrés y de recuperación"),
+    "daily_spo2":               ("rango_fecha", "saturación de oxígeno promedio nocturna"),
+    "daily_resilience":         ("rango_fecha", "resiliencia (limited…exceptional)"),
+    "daily_cardiovascular_age": ("rango_fecha", "edad cardiovascular estimada"),
+    "vO2_max":                  ("rango_fecha", "VO2 máx estimado"),
+
+    # El detalle que los puntajes esconden.
+    "sleep":        ("rango_fecha", "sesiones de sueño: etapas, HRV, temperatura, latencia"),
+    "sleep_time":   ("rango_fecha", "ventana de sueño recomendada"),
+    "workout":      ("rango_fecha", "entrenamientos con tipo, duración e intensidad"),
+    "session":      ("rango_fecha", "sesiones de respiración, meditación, siesta"),
+    "rest_mode_period": ("rango_fecha", "periodos de modo descanso"),
+    "tag":          ("rango_fecha", "etiquetas (obsoleta: Oura recomienda enhanced_tag)"),
+    "enhanced_tag": ("rango_fecha", "etiquetas con hora de inicio y fin"),
+
+    # Alta resolución. El único que OBLIGA a paginar.
+    "heartrate":          ("rango_datetime", "frecuencia cardiaca cada 5 min"),
+    "ring_battery_level": ("rango_datetime", "batería del anillo"),
+
+    # Sin rango.
+    "personal_info":      ("unica", "edad, peso, estatura, sexo biológico"),
+    "ring_configuration": ("solo_token", "modelo, talla y color del anillo"),
+}
+
+CON_FECHA = {"rango_fecha", "rango_datetime"}
+
+
+def forma(coleccion: str) -> str:
+    """Forma de parámetros de la colección. KeyError si no existe — a propósito.
+
+    Un nombre inventado tiene que tronar aquí y no convertirse en una petición a
+    una URL que no existe, cuyo 404 después hay que interpretar.
+    """
+    return COLECCIONES[coleccion][0]
+
+
+def describir() -> str:
+    """Las 19 colecciones con su descripción, para el prompt de la herramienta."""
+    return "\n".join(
+        f"  {n:<24} {d}" for n, (_f, d) in COLECCIONES.items()
+    )

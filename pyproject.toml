@@ -1,0 +1,23 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "oura-mcp"
+version = "0.1.0"
+description = "La API v2 de Oura como servidor MCP, con la paginación bien hecha"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Oscar Pacheco" }]
+keywords = ["oura", "mcp", "salud", "wearables"]
+dependencies = ["mcp>=1.0"]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+oura-mcp = "oura_mcp.__main__:cli"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/oura_mcp"]
