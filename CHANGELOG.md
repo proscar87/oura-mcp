@@ -93,7 +93,7 @@ citing the dates you wrote rather than the ones we sent with the margin.
   keep that true.
 - The token is wrapped in a type that won't print in a stack trace.
 - Claude Code plugin, `smithery.yaml`, `glama.json`, `llms.txt`.
-- `herramientas/revisar_deriva.py` and a weekly job checking that all 19
+- `tools/check_drift.py` and a weekly job checking that all 19
   collections still exist, without credentials.
 - 124 tests, none of which touch the network.
 
