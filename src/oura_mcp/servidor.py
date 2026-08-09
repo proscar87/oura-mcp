@@ -22,10 +22,22 @@ import os
 from typing import Annotated
 
 from mcp.server.mcpserver import MCPServer
+from mcp.types import ToolAnnotations
 from pydantic import Field
 
 from .cliente import ErrorOura, obtener
 from .colecciones import COLECCIONES, CON_FECHA, describir, forma
+
+# LAS TRES SON DE SÓLO LECTURA, y no es una promesa: no hay una sola escritura
+# en todo el paquete — ni un POST, ni un PUT, ni un DELETE. Declararlo evita que
+# el cliente pida confirmación en cada llamada, y el directorio de conectores de
+# Claude lo exige (`title` y `readOnlyHint` en cada herramienta).
+#
+# `open_world_hint` va en True porque los datos vienen de un servicio externo:
+# la misma llamada dos veces puede devolver distinto si el anillo sincronizó en
+# medio. Decir lo contrario sería invitar a que alguien memoice la respuesta.
+_SOLO_LECTURA = dict(read_only_hint=True, destructive_hint=False,
+                     idempotent_hint=True, open_world_hint=True)
 
 servidor = MCPServer(
     name="oura",
@@ -40,7 +52,9 @@ servidor = MCPServer(
 )
 
 
-@servidor.tool()
+@servidor.tool(title="Catálogo de colecciones de Oura",
+               annotations=ToolAnnotations(title="Catálogo de colecciones de Oura",
+                                           **_SOLO_LECTURA))
 def oura_colecciones() -> dict:
     """Las 19 colecciones de Oura, con qué trae cada una y qué parámetros pide.
 
@@ -49,7 +63,9 @@ def oura_colecciones() -> dict:
     return {n: {"forma": f, "que_trae": d} for n, (f, d) in COLECCIONES.items()}
 
 
-@servidor.tool()
+@servidor.tool(title="Consultar una colección de Oura",
+               annotations=ToolAnnotations(title="Consultar una colección de Oura",
+                                           **_SOLO_LECTURA))
 def oura_consultar(
     coleccion: Annotated[str, Field(description="Nombre exacto. Ver `oura_colecciones`.")],
     inicio: Annotated[str | None, Field(description="AAAA-MM-DD, o ISO 8601 con hora")] = None,
@@ -97,7 +113,9 @@ def oura_consultar(
         return {"error": str(e)}
 
 
-@servidor.tool()
+@servidor.tool(title="Autodiagnóstico de la conexión con Oura",
+               annotations=ToolAnnotations(title="Autodiagnóstico de la conexión con Oura",
+                                           **_SOLO_LECTURA))
 def oura_revisar() -> dict:
     """Autodiagnóstico: ¿hay token y responde Oura? Sin exponer nada.
 

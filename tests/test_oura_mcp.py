@@ -356,7 +356,7 @@ def test_el_sandbox_no_pide_token(monkeypatch):
     monkeypatch.delenv("OURA_PAT", raising=False)
     monkeypatch.delenv("OURA_PAT_FILE", raising=False)
     monkeypatch.setenv("OURA_SANDBOX", "1")
-    assert cliente._token() == "sandbox"
+    assert cliente._token().revelar() == "sandbox"
 
 
 def test_el_sandbox_cambia_la_base(monkeypatch):
@@ -408,7 +408,57 @@ def test_sin_token_dice_donde_conseguirlo(monkeypatch):
         cliente.obtener("personal_info")
 
 
+# ── Anotaciones: lo que el cliente MCP necesita saber sin preguntar ─────────
+def test_las_tres_se_declaran_de_solo_lectura():
+    """No es una promesa: no hay un POST, ni un PUT, ni un DELETE en todo el
+    paquete. Declararlo evita que el cliente confirme en cada llamada, y el
+    directorio de conectores de Claude lo exige."""
+    import asyncio
+    from oura_mcp.servidor import servidor
+    herramientas = asyncio.run(servidor.list_tools())
+    assert len(herramientas) == 3
+    for t in herramientas:
+        assert t.title, t.name
+        assert t.annotations.read_only_hint is True, t.name
+        assert t.annotations.destructive_hint is False, t.name
+        # Los datos vienen de un servicio externo: la misma llamada dos veces
+        # puede diferir si el anillo sincronizó en medio. Decir lo contrario
+        # sería invitar a que alguien memoice la respuesta.
+        assert t.annotations.open_world_hint is True, t.name
+
+
+def test_no_hay_una_sola_escritura_en_el_paquete():
+    """La anotación de sólo lectura tiene que seguir siendo verdad cuando alguien
+    agregue código. Esta prueba es la que se entera."""
+    import pathlib
+    raiz = pathlib.Path(__file__).parent.parent / "src" / "oura_mcp"
+    for archivo in raiz.glob("*.py"):
+        texto = archivo.read_text(encoding="utf-8")
+        for verbo in ('"POST"', "'POST'", '"PUT"', "'PUT'", '"DELETE"', "'DELETE'",
+                      '"PATCH"', "'PATCH'"):
+            assert verbo not in texto, f"{archivo.name} trae {verbo}"
+
+
 # ── Que nada se lleve el token ──────────────────────────────────────────────
+def test_el_token_no_se_imprime_por_accidente():
+    """Un str con el token adentro sale solo por demasiados lados: el repr de las
+    locales en una traza, un print de depuración que se quedó, un f-string
+    escrito de prisa. Aquí ya costó un token una vez."""
+    s = cliente.Secreto("abcdefghij")
+    assert "abcdefghij" not in repr(s)
+    assert "abcdefghij" not in str(s)
+    assert "abcdefghij" not in f"{s}"
+    assert "abcdefghij" not in "{}".format(s)
+    assert "10" in repr(s)              # la longitud sí, que es lo que diagnostica
+    assert s.revelar() == "abcdefghij"  # revelarlo es explícito y se puede grepear
+
+
+def test_el_secreto_sabe_cuanto_mide():
+    """`--revisar` reporta la longitud del token, nunca el token."""
+    assert len(cliente.Secreto("abc")) == 3
+
+
+
 def test_el_error_nunca_lleva_el_token(monkeypatch):
     """Los mensajes de error son lo que más se copia y se pega. El token va en un
     encabezado y no tiene por qué salir de ahí jamás."""
@@ -445,7 +495,7 @@ def test_el_token_puede_venir_de_un_archivo(monkeypatch, tmp_path):
     f.write_text("token-del-archivo\n")
     monkeypatch.delenv("OURA_PAT", raising=False)
     monkeypatch.setenv("OURA_PAT_FILE", str(f))
-    assert cliente._token() == "token-del-archivo"
+    assert cliente._token().revelar() == "token-del-archivo"
 
 
 def test_el_archivo_gana_sobre_la_variable(monkeypatch, tmp_path):
@@ -453,7 +503,7 @@ def test_el_archivo_gana_sobre_la_variable(monkeypatch, tmp_path):
     f.write_text("del-archivo")
     monkeypatch.setenv("OURA_PAT", "de-la-variable")
     monkeypatch.setenv("OURA_PAT_FILE", str(f))
-    assert cliente._token() == "del-archivo"
+    assert cliente._token().revelar() == "del-archivo"
 
 
 def test_un_archivo_vacio_no_pasa_por_token(monkeypatch, tmp_path):
