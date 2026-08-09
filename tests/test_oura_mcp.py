@@ -179,6 +179,41 @@ def test_al_truncar_deja_el_cursor_para_continuar(monkeypatch):
     assert r["continuar_desde"] == "3"
 
 
+# ── El sandbox: probarlo sin tener con qué autenticarse ─────────────────────
+# Oura deprecó los tokens personales en diciembre de 2025. Quien llega hoy no
+# tiene cómo conseguir uno, así que «instálalo y luego consigue un token» dejó
+# de ser un camino. El sandbox es oficial —está en el OpenAPI, con 34 rutas
+# espejo— y acepta cualquier cadena como Authorization.
+def test_el_sandbox_no_pide_token(monkeypatch):
+    monkeypatch.delenv("OURA_PAT", raising=False)
+    monkeypatch.delenv("OURA_PAT_FILE", raising=False)
+    monkeypatch.setenv("OURA_SANDBOX", "1")
+    assert cliente._token() == "sandbox"
+
+
+def test_el_sandbox_cambia_la_base(monkeypatch):
+    monkeypatch.setenv("OURA_SANDBOX", "1")
+    assert cliente.base().endswith("/v2/sandbox/usercollection")
+    monkeypatch.setenv("OURA_SANDBOX", "0")
+    assert cliente.base().endswith("/v2/usercollection")
+
+
+def test_la_base_se_puede_forzar(monkeypatch):
+    """`OURA_API_BASE_URL` gana sobre todo: es lo que permite apuntar a un doble
+    en una prueba sin monkeypatchear el módulo."""
+    monkeypatch.setenv("OURA_SANDBOX", "1")
+    monkeypatch.setenv("OURA_API_BASE_URL", "http://localhost:9999/v2/x/")
+    assert cliente.base() == "http://localhost:9999/v2/x"
+
+
+def test_apagado_el_sandbox_el_token_vuelve_a_ser_obligatorio(monkeypatch):
+    monkeypatch.delenv("OURA_PAT", raising=False)
+    monkeypatch.delenv("OURA_PAT_FILE", raising=False)
+    monkeypatch.delenv("OURA_SANDBOX", raising=False)
+    with pytest.raises(cliente.ErrorOura, match="personal-access-tokens"):
+        cliente._token()
+
+
 # ── Parámetros ──────────────────────────────────────────────────────────────
 def test_las_de_fecha_exigen_rango(monkeypatch):
     monkeypatch.setenv("OURA_PAT", "x")
