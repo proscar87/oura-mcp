@@ -1,7 +1,7 @@
 {
   "name": "oura",
   "version": "0.2.0",
-  "description": "La API v2 de Oura como servidor MCP, corrigiendo las cuatro formas en que Oura entrega de menos sin avisar",
+  "description": "The Oura v2 API as an MCP server. Paginates, fixes the date range, warns when data is missing.",
   "author": {
     "name": "Oscar Pacheco"
   },

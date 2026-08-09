@@ -72,10 +72,15 @@ def test_el_readme_conserva_la_prueba_de_propiedad():
 
 def test_el_readme_trae_la_politica_de_privacidad():
     """El directorio de conectores de Claude rechaza de inmediato si falta o
-    está incompleta. Tiene que cubrir seis cosas."""
+    está incompleta. Tiene que cubrir seis cosas.
+
+    El README está en inglés —es lo que lee un desconocido y lo que lee quien
+    revisa el directorio— mientras el código y los documentos internos siguen en
+    español. Por eso los términos que se buscan aquí son los ingleses."""
     readme = (RAIZ / "README.md").read_text(encoding="utf-8")
     assert "## Privacy Policy" in readme
-    for tema in ("recolecta", "guarda", "comparte", "retiene", "Contacto"):
+    for tema in ("What is collected", "What is stored", "shared with",
+                 "retained", "Contact"):
         assert tema in readme, tema
 
 
@@ -132,13 +137,32 @@ def test_el_numero_de_colecciones_es_el_mismo_en_todos_lados():
 
 
 def test_las_mediciones_se_citan_igual_en_todos_lados():
-    """1,231 muestras en 2 páginas, y 56% menos con CSV. Son números medidos; si
-    uno se copia mal a otro archivo, la próxima persona no sabe cuál creer."""
+    """1,231 muestras en 2 páginas. Es un número medido; si se copia mal a otro
+    archivo, la próxima persona no sabe cuál creer. El README está en inglés, así
+    que ahí la unidad se llama «pages»."""
     for nombre, texto in _docs().items():
         if "1,231" in texto or "1231" in texto:
-            assert "2 páginas" in texto, f"{nombre} cita las muestras sin las páginas"
+            assert ("2 páginas" in texto or "2 pages" in texto), \
+                f"{nombre} cita las muestras sin las páginas"
         # Ningún documento debe traer la estimación vieja como si fuera medida.
         assert "1,250 muestras en 2 páginas" not in texto, nombre
+
+
+def test_lo_de_cara_al_mundo_esta_en_ingles():
+    """README y llms.txt son lo primero que ve un desconocido y lo que lee quien
+    revisa el directorio de Claude. Los documentos internos siguen en español a
+    propósito; mezclarlos es lo que hay que evitar."""
+    readme = (RAIZ / "README.md").read_text(encoding="utf-8")
+    llms = (RAIZ / "llms.txt").read_text(encoding="utf-8")
+    for texto, nombre in ((readme, "README.md"), (llms, "llms.txt")):
+        # Encabezados en español que se hayan quedado a medio traducir.
+        for resto in ("## Instalación", "## Las herramientas", "## Licencia",
+                      "## El problema"):
+            assert resto not in texto, f"{nombre} conserva {resto}"
+    assert "## License" in readme
+    # Los nombres de parámetro SÍ siguen en español, y el README lo declara para
+    # que nadie los tome por un error de traducción.
+    assert "Parameter names are in Spanish" in readme
 
 
 def test_ningun_documento_manda_a_crear_un_token_personal():
