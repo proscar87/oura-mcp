@@ -48,6 +48,34 @@ class ErrorOura(RuntimeError):
     """Falla al hablar con Oura. NUNCA lleva el token en el mensaje."""
 
 
+def en_sandbox() -> bool:
+    """¿Está puesto `OURA_SANDBOX`? Cualquier valor menos vacío, `0`, `no`."""
+    v = (os.environ.get("OURA_SANDBOX") or "").strip().lower()
+    return bool(v) and v not in ("0", "no", "false")
+
+
+def base() -> str:
+    """A dónde se pide. Sandbox, override explícito, o Oura de verdad.
+
+    EL SANDBOX ES OFICIAL, no un truco: está en el OpenAPI de Oura con 34 rutas
+    espejo, y acepta CUALQUIER cadena como `Authorization`. Eso permite instalar
+    el servidor, verlo funcionar y entender la forma de los datos ANTES de pelear
+    con la autenticación — que desde que Oura deprecó los tokens personales en
+    diciembre de 2025 dejó de ser un trámite de un minuto.
+
+    Lo que el sandbox NO sirve es para medir el comportamiento de la API: es un
+    GENERADOR, no un filtro. Devuelve n-1 registros para cualquier ventana y cero
+    para una de una hora que contiene una muestra. Medir la semántica de las
+    fechas ahí da respuestas equivocadas — ya pasó una vez.
+    """
+    override = (os.environ.get("OURA_API_BASE_URL") or "").strip()
+    if override:
+        return override.rstrip("/")
+    if en_sandbox():
+        return BASE.replace("/v2/usercollection", "/v2/sandbox/usercollection")
+    return BASE
+
+
 def _token() -> str:
     """El PAT, de `OURA_PAT` o del archivo que apunte `OURA_PAT_FILE`.
 
@@ -56,6 +84,11 @@ def _token() -> str:
     respalda, se sincroniza y se comparte al pedir ayuda. Un archivo aparte con
     permisos 600 se puede rotar sin tocar la configuración y no viaja con ella.
     """
+    if en_sandbox():
+        # El sandbox acepta cualquier cadena. Pedir un token aquí sería inventar
+        # un requisito que la API no tiene, y con él se pierde justo a quien
+        # todavía no tiene cómo conseguirlo.
+        return "sandbox"
     ruta = (os.environ.get("OURA_PAT_FILE") or "").strip()
     if ruta:
         try:
@@ -177,12 +210,13 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
             params[f"start_{clave}"] = inicio
             params[f"end_{clave}"] = fin
 
+    raiz = base()
     datos, paginas, siguiente = [], 0, None
     while True:
         q = dict(params)
         if siguiente:
             q["next_token"] = siguiente
-        url = f"{BASE}/{coleccion}" + (f"?{urllib.parse.urlencode(q)}" if q else "")
+        url = f"{raiz}/{coleccion}" + (f"?{urllib.parse.urlencode(q)}" if q else "")
         cuerpo = _pedir(url, token)
         paginas += 1
         # `personal_info` y `ring_configuration` no vienen envueltos en `data`.

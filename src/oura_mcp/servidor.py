@@ -92,7 +92,27 @@ def oura_revisar() -> dict:
 
 def revisar() -> dict:
     """Igual que la herramienta, pero llamable desde la línea de comandos."""
-    from .cliente import _token
+    from .cliente import _token, base, en_sandbox
+    if en_sandbox():
+        # En sandbox no hay token que revisar y no debe parecer que sí: quien lea
+        # esta respuesta tiene que saber que los datos que verá son inventados.
+        out: dict = {"modo": "sandbox", "datos": "sintéticos, de Oura, no tuyos",
+                     "base": base()}
+        try:
+            # El pulso NO puede ser `personal_info`: es la única de las 19 que el
+            # sandbox no sirve. Tiene sentido —es la que devuelve correo, edad,
+            # peso y estatura— pero significa que aquí hay que preguntar otra
+            # cosa, o el autodiagnóstico reporta caída una API que está de pie.
+            r = obtener("daily_sleep", "2026-01-01", "2026-01-03")
+            out["oura_responde"] = True
+            out["campos_de_ejemplo"] = sorted(r["datos"][0]) if r["datos"] else []
+        except ErrorOura as e:
+            out["oura_responde"] = False
+            out["error"] = str(e)
+        out["no_disponible_en_sandbox"] = ["personal_info"]
+        out["siguiente_paso"] = ("quita OURA_SANDBOX y pon tu propio token para ver "
+                                 "tus datos")
+        return out
     try:
         t = _token()
     except ErrorOura as e:
