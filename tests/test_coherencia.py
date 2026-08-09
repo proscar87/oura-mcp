@@ -148,3 +148,16 @@ def test_ningun_documento_manda_a_crear_un_token_personal():
         if "personal-access-tokens" in texto:
             # Sólo se permite si va acompañado de la advertencia.
             assert "diciembre de 2025" in texto, f"{nombre} manda a la página sin advertir"
+
+
+def test_la_descripcion_cabe_en_el_registro():
+    """El registro de MCP topa `description` en 100 caracteres. La v0.2.0 se
+    publicó en PyPI y falló en el registro por seis caracteres de más — con PyPI
+    ya subido, que es la mitad irreversible."""
+    d = _leer_json("server.json")["description"]
+    assert len(d) <= 100, f"{len(d)} caracteres: {d}"
+
+
+def test_el_nombre_del_servidor_cabe():
+    """Mismo tope de la misma familia; más vale enterarse aquí."""
+    assert len(_leer_json("server.json")["name"]) <= 200
