@@ -1,55 +1,61 @@
 # oura-mcp
 
-> La API v2 de Oura como servidor MCP. Las 19 colecciones, tres herramientas,
-> cero dependencias fuera del SDK de MCP.
+> The Oura v2 API as an MCP server. All 19 collections, three tools, no
+> dependencies beyond the MCP SDK.
 
-Existe porque Oura entrega de menos sin avisar de cuatro maneras distintas, y
-este servidor las corrige. Nunca devuelve un error cuando no puede darte lo que
-pediste: devuelve algo distinto con forma de respuesta correcta.
+It exists because Oura under-delivers without saying so, in four distinct ways,
+and this server corrects all four. Oura never returns an error when it can't
+give you what you asked for: it returns something different, shaped like a
+correct response.
 
-  1. `next_token` sin seguir devuelve una fracción. Un día de heartrate son
-     1,231 muestras en 2 páginas; quien no pagina recibe el 81%.
-  2. `end_date` es inconsistente ENTRE colecciones —daily_activity, sleep y
-     workout excluyen el último día; las demás no— y workout se filtra por
-     fecha UTC reportando `day` en hora local.
-  3. `latest=true` en una colección que no lo soporta devuelve la colección
-     entera, sin error.
-  4. `fields=inventado` devuelve el registro completo, sin proyectar.
+  1. Not following `next_token` returns a fraction. One local day of heartrate
+     is 1,231 samples across 2 pages; a client that doesn't paginate gets 81%.
+  2. `end_date` is inconsistent ACROSS collections —daily_activity, sleep and
+     workout exclude the last day; the others don't— and workout filters by UTC
+     date while reporting `day` in local time.
+  3. `latest=true` on a collection that doesn't support it returns the entire
+     collection, with no error.
+  4. `fields=made_up` returns the complete record, without projecting.
 
-## Herramientas
+## Tools
 
-- `oura_colecciones` — las 19, con qué trae cada una y qué parámetros pide.
-- `oura_consultar` — una colección completa en un rango, paginando hasta el
-  final. Parámetros: coleccion, dia, inicio, fin, campos, ultimo, formato.
-  El rango es INCLUSIVO en los dos extremos.
-- `oura_revisar` — autodiagnóstico: modo de autenticación, alcances concedidos
-  y caducidad. No devuelve el token ni ningún valor de salud.
+- `oura_colecciones` — all 19, what each carries and which parameters it takes.
+- `oura_consultar` — one collection in full over a range, paginating to the end.
+  Parameters: coleccion, dia, inicio, fin, campos, ultimo, formato.
+  The range is INCLUSIVE on both ends.
+- `oura_revisar` — self-check: auth mode, granted scopes, expiry. Returns
+  neither the token nor any health value.
 
-Las tres son de sólo lectura. No hay POST, PUT ni DELETE en todo el paquete.
+All three are read-only. There is no POST, PUT or DELETE in the package.
+Parameter names are in Spanish because the codebase is.
 
-## Claves de aviso en la respuesta
+## Warning keys in the response
 
-- `truncado` + `continuar_desde` — faltan datos; el cursor deja reanudar.
-- `campos_ignorados` — pediste campos que Oura no aplicó.
-- `descartados_fuera_de_rango` — cuántos registros del margen se recortaron.
-- `columnas_desiguales` — en CSV, no todos los registros traen las mismas claves.
+- `truncado` + `continuar_desde` — data is missing; the cursor lets you resume.
+- `ciclo_de_paginacion` — Oura repeated a token; what's there may be incomplete.
+- `campos_ignorados` — you asked for fields Oura didn't apply.
+- `descartados_fuera_de_rango` — records from the safety margin that were cut.
+- `columnas_desiguales` — in CSV, not every record has the same keys.
+- `vacio` — the query came back empty; explains what's knowable about why.
+- `respuesta_grande` — the payload is heavy; names the field that dominates it.
 
-## Variables de entorno
+## Environment variables
 
-- `OURA_SANDBOX=1` — datos sintéticos oficiales de Oura, sin credenciales.
-- `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET` — para `oura-mcp --autorizar` (OAuth2).
-- `OURA_PAT`, `OURA_PAT_FILE` — token personal, si ya tenías uno.
-- `OURA_CREDENCIALES` — dónde vive el archivo 0600 de OAuth.
-- `OURA_API_BASE_URL` — apuntar a otro origen (pruebas).
+- `OURA_SANDBOX=1` — Oura's official synthetic data, no credentials needed.
+- `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET` — for `oura-mcp --autorizar` (OAuth2).
+- `OURA_PAT`, `OURA_PAT_FILE` — personal token, if you already had one. Oura
+  stopped issuing them in December 2025.
+- `OURA_CREDENCIALES` — where the 0600 OAuth file lives.
+- `OURA_API_BASE_URL` — point at another origin (testing).
 
-## Lo que NO hace
+## What it does NOT do
 
-No analiza: ni correlaciones, ni anomalías, ni comparación de periodos. Un
-promedio calculado adentro llega al modelo como un número sin su método. Los
-datos se entregan crudos y el análisis va donde se pueda citar el método.
+It doesn't analyze: no correlations, no anomalies, no period comparison. An
+average computed inside reaches the model as a number without its method. The
+data is delivered raw and the analysis belongs where the method can be cited.
 
-## Enlaces
+## Links
 
-- Repositorio: https://github.com/proscar87/oura-mcp
+- Repository: https://github.com/proscar87/oura-mcp
 - PyPI: https://pypi.org/project/mcp-oura/
-- Registro de MCP: io.github.proscar87/oura-mcp
+- MCP registry: io.github.proscar87/oura-mcp

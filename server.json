@@ -1,7 +1,7 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-09-29/server.schema.json",
   "name": "io.github.proscar87/oura-mcp",
-  "description": "La API v2 de Oura como servidor MCP. Pagina, arregla el rango de fechas y avisa si falta algo.",
+  "description": "The Oura v2 API as an MCP server. Paginates, fixes the date range, warns when data is missing.",
   "repository": {
     "url": "https://github.com/proscar87/oura-mcp",
     "source": "github"

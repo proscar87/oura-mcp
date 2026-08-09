@@ -1,12 +1,18 @@
 {
   "name": "@proscar87/oura-mcp",
   "version": "0.3.0",
-  "description": "La API v2 de Oura como servidor MCP. Pagina, arregla el rango de fechas y avisa si falta algo.",
+  "description": "The Oura v2 API as an MCP server. Paginates, fixes the date range, warns when data is missing.",
   "license": "MIT",
   "type": "module",
-  "bin": { "oura-mcp": "dist/principal.js" },
-  "files": ["dist"],
-  "engines": { "node": ">=20" },
+  "bin": {
+    "oura-mcp": "dist/principal.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
