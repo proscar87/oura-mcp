@@ -26,7 +26,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .colecciones import BASE, CON_FECHA, forma
+from .colecciones import BASE, CON_FECHA, CON_ULTIMO, forma
 
 TIEMPO_LIMITE = 30
 LIMITE_PAGINAS = 50          # ~50k registros; más que eso es un error de uso
@@ -166,6 +166,7 @@ def _correr_dias(fecha: str, dias: int) -> str:
 
 
 def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
+            campos: list[str] | None = None, ultimo: bool = False,
             limite_paginas: int = LIMITE_PAGINAS) -> dict:
     """Trae una colección COMPLETA, siguiendo `next_token` hasta el final.
 
@@ -178,7 +179,21 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
     f = forma(coleccion)
     token = _token()
     params: dict[str, str] = {}
-    if f in CON_FECHA:
+
+    if ultimo:
+        # Oura NO se queja si se le manda `latest` a una colección que no lo
+        # soporta: devuelve la colección entera. Pedir el último registro y
+        # recibir diez creyendo que es uno es peor que un error.
+        if coleccion not in CON_ULTIMO:
+            raise ErrorOura(
+                f"`ultimo` sólo lo respeta Oura en {', '.join(sorted(CON_ULTIMO))}; "
+                f"en {coleccion} lo ignora y devuelve la colección entera"
+            )
+        params["latest"] = "true"
+    if campos:
+        params["fields"] = ",".join(campos)
+
+    if f in CON_FECHA and not ultimo:
         if not inicio or not fin:
             raise ErrorOura(f"{coleccion} necesita inicio y fin")
         clave = "date" if f == "rango_fecha" else "datetime"
@@ -234,12 +249,34 @@ def obtener(coleccion: str, inicio: str | None = None, fin: str | None = None,
                     "datos": datos}
     datos, sobrantes = _recortar(datos, inicio, fin, f)
     salida = {"coleccion": coleccion, "n": len(datos), "paginas": paginas, "datos": datos}
+    if (ignorados := _campos_ignorados(campos, datos)):
+        salida["campos_ignorados"] = ignorados
     if sobrantes:
         # Se pidió un día de más para cubrir los endpoints exclusivos; éste es el
         # que se descartó. Se dice, en vez de callarlo: quien lea la respuesta
         # tiene que poder distinguir «no hay dato» de «lo quitamos nosotros».
         salida["descartados_fuera_de_rango"] = sobrantes
     return salida
+
+
+def _campos_ignorados(campos: list[str] | None, datos: list) -> list[str]:
+    """Los campos pedidos que no aparecieron en ningún registro.
+
+    Oura NO se queja de un nombre de campo que no existe. Medido el 9-ago-2026:
+    `fields=no_existe` devuelve el registro COMPLETO —la proyección no ocurre— y
+    `fields=score,no_existe` aplica el bueno y tira el malo sin decir nada. En
+    los dos casos quien pidió cree haber filtrado y no filtró.
+
+    Se avisa en vez de fallar: un campo puede faltar legítimamente porque no hay
+    dato. Por eso el nombre es «no aparecieron», no «no existen».
+    """
+    if not campos or not datos:
+        return []
+    presentes = set()
+    for r in datos:
+        if isinstance(r, dict):
+            presentes |= set(r)
+    return sorted(c for c in campos if c not in presentes)
 
 
 def _recortar(datos: list, inicio: str | None, fin: str | None,
