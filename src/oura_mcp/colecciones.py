@@ -48,6 +48,12 @@ COLECCIONES: dict[str, tuple[str, str]] = {
 
 CON_FECHA = {"rango_fecha", "rango_datetime"}
 
+# Las únicas dos que respetan `latest=true`. Medido contra la API el 9-ago-2026:
+# en las demás Oura NO devuelve un error, devuelve la colección entera. Pedir el
+# último registro y recibir diez, sin aviso, es la misma familia de falla que no
+# paginar — por eso aquí se rechaza antes de salir a la red.
+CON_ULTIMO = {"heartrate", "ring_battery_level"}
+
 
 def forma(coleccion: str) -> str:
     """Forma de parámetros de la colección. KeyError si no existe — a propósito.

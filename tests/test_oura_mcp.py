@@ -179,6 +179,52 @@ def test_al_truncar_deja_el_cursor_para_continuar(monkeypatch):
     assert r["continuar_desde"] == "3"
 
 
+# ── `fields` y `latest`: los dos que Oura ignora en silencio ────────────────
+# Medido contra la API el 9-ago-2026. Los dos fallan igual: no dan error, dan
+# de más. `fields=no_existe` devuelve el registro COMPLETO —la proyección no
+# ocurre— y `latest=true` en una colección que no lo soporta devuelve la
+# colección entera. Quien pidió cree que filtró, y no filtró.
+def test_los_campos_van_como_fields(monkeypatch):
+    urls = []
+    _oura_falso([[{"day": "2026-08-10", "score": 1}]], monkeypatch, registrar=urls)
+    cliente.obtener("daily_sleep", "2026-08-10", "2026-08-10", campos=["score", "day"])
+    assert "fields=score%2Cday" in urls[-1]
+
+
+def test_avisa_de_los_campos_que_no_aparecieron(monkeypatch):
+    _oura_falso([[{"day": "2026-08-10", "score": 1}]], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-10", "2026-08-10",
+                        campos=["score", "no_existe"])
+    assert r["campos_ignorados"] == ["no_existe"]
+
+
+def test_sin_campos_pedidos_no_hay_aviso(monkeypatch):
+    _oura_falso([[{"day": "2026-08-10"}]], monkeypatch)
+    r = cliente.obtener("daily_sleep", "2026-08-10", "2026-08-10")
+    assert "campos_ignorados" not in r
+
+
+def test_ultimo_solo_donde_oura_lo_respeta(monkeypatch):
+    urls = []
+    _oura_falso([[{"bpm": 60}]], monkeypatch, registrar=urls)
+    cliente.obtener("heartrate", ultimo=True)
+    assert "latest=true" in urls[-1]
+
+
+def test_ultimo_se_rechaza_donde_oura_lo_ignora(monkeypatch):
+    """Rechazarlo AQUÍ y no dejar que Oura devuelva la colección entera: pedir el
+    último registro y recibir diez creyendo que es uno es peor que un error."""
+    _oura_falso([[{}]], monkeypatch)
+    with pytest.raises(cliente.ErrorOura, match="lo ignora"):
+        cliente.obtener("daily_sleep", "2026-08-01", "2026-08-10", ultimo=True)
+
+
+def test_ultimo_no_exige_rango(monkeypatch):
+    """`latest` no necesita fechas, y exigirlas sería inventar un requisito."""
+    _oura_falso([[{"bpm": 60}]], monkeypatch)
+    assert cliente.obtener("ring_battery_level", ultimo=True)["n"] == 1
+
+
 # ── El sandbox: probarlo sin tener con qué autenticarse ─────────────────────
 # Oura deprecó los tokens personales en diciembre de 2025. Quien llega hoy no
 # tiene cómo conseguir uno, así que «instálalo y luego consigue un token» dejó

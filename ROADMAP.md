@@ -153,13 +153,28 @@ Lo que el sandbox **no** da: `heartrate` devuelve 2 muestras y sin
 `next_token`. Sirve para demostrar, no para probar la paginación. Ésa se sigue
 probando con la API falsa de `tests/`.
 
-### 3. `fields` y `latest`, pasados a Oura
+### 3. `fields` y `latest`, pasados a Oura — **hecho**
 
 - `campos: ["bpm"]` → `fields=bpm`. **Recorta del lado de Oura**: ahorra ancho
-  de banda además de contexto. Muy superior a filtrar después de bajar 37,000
-  registros.
+  de banda además de contexto.
 - `ultimo: true` → `latest=true`. Resuelve de raíz «mi frecuencia cardiaca más
-  reciente», que hoy sólo se puede contestar bajando la ventana entera.
+  reciente», que antes sólo se podía contestar bajando la ventana entera.
+
+**Y los dos resultaron traer su propia falla silenciosa**, medida el 9-ago:
+
+| Lo que pides | Lo que hace Oura |
+|---|---|
+| `fields=no_existe` | Devuelve el registro **completo**. La proyección no ocurre |
+| `fields=score,no_existe` | Aplica el bueno, tira el malo, no dice nada |
+| `latest=true` en `daily_sleep` | **Lo ignora y devuelve la colección entera** |
+
+Ninguna da error. Es la misma familia que no paginar: pides una cosa, recibes
+otra, y nada te avisa. Por eso `ultimo` se **rechaza aquí** para las 17
+colecciones que no lo respetan —antes de salir a la red— y los campos que no
+aparecieron en ninguna respuesta se reportan en `campos_ignorados`.
+
+Un hallazgo que ayudó: **`fields` siempre devuelve `day` e `id`**, así que el
+recorte por fecha del punto 1 no se rompe cuando alguien proyecta columnas.
 
 Y una que la API no da y hay que hacer: **`formato: "csv"`**, la misma tabla sin
 repetir las claves 37,000 veces. `echocharlie` ya entrega todo en CSV «con las

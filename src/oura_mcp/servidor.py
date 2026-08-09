@@ -54,12 +54,23 @@ def oura_consultar(
     coleccion: Annotated[str, Field(description="Nombre exacto. Ver `oura_colecciones`.")],
     inicio: Annotated[str | None, Field(description="AAAA-MM-DD, o ISO 8601 con hora")] = None,
     fin: Annotated[str | None, Field(description="AAAA-MM-DD, o ISO 8601 con hora")] = None,
+    campos: Annotated[list[str] | None, Field(
+        description="Sólo estos campos. Oura recorta del lado suyo, así que baja "
+                    "menos: úsalo en rangos largos de heartrate. `day` e `id` "
+                    "vuelven siempre.")] = None,
+    ultimo: Annotated[bool, Field(
+        description="Sólo el registro más reciente. Únicamente en heartrate y "
+                    "ring_battery_level; no necesita rango.")] = False,
 ) -> dict:
     """Trae una colección de Oura COMPLETA en el rango pedido.
 
     Sigue la paginación hasta el final: Oura entrega `next_token` y quien no lo
     persigue recibe la primera página sin que nada se lo diga. Un día de
     `heartrate` son ~1,250 muestras en 2 páginas; un mes, ~37,000.
+
+    El rango es INCLUSIVO en los dos extremos: `inicio` y `fin` iguales devuelven
+    ese día. Oura no se comporta así —unas colecciones excluyen el último día y
+    otras no, y `workout` va desfasada a UTC— pero eso se corrige aquí.
 
     Las colecciones de rango de fecha usan AAAA-MM-DD. `heartrate` y
     `ring_battery_level` usan ISO 8601 con hora. `personal_info` y
@@ -68,11 +79,11 @@ def oura_consultar(
     if coleccion not in COLECCIONES:
         return {"error": f"«{coleccion}» no es una colección de Oura",
                 "las_que_hay": sorted(COLECCIONES)}
-    if forma(coleccion) in CON_FECHA and not (inicio and fin):
+    if forma(coleccion) in CON_FECHA and not ultimo and not (inicio and fin):
         return {"error": f"{coleccion} necesita `inicio` y `fin`",
                 "formato": "AAAA-MM-DD" if forma(coleccion) == "rango_fecha" else "ISO 8601 con hora"}
     try:
-        return obtener(coleccion, inicio, fin)
+        return obtener(coleccion, inicio, fin, campos=campos, ultimo=ultimo)
     except ErrorOura as e:
         # Se devuelve como dato, no se lanza: una excepción corta la conversación
         # entera por lo que casi siempre es una fecha mal escrita o un token vencido.
