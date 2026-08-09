@@ -58,12 +58,12 @@ jobs:
 
   registro:
     name: Registro de MCP
-    # Depende de las PRUEBAS, no de PyPI. El registro sólo comprueba que el
-    # paquete exista en PyPI y declare este repositorio — no le importa quién lo
-    # subió. Encadenarlo a `pypi` hacía que un fallo de publicación (por ejemplo,
-    # el publicador confiable aún sin configurar) se llevara por delante un paso
-    # que no tenía por qué fallar.
-    needs: pruebas
+    # Depende de PyPI, y tiene que ser así: el registro comprueba que la VERSIÓN
+    # exacta exista en PyPI antes de aceptarla. Lo desacoplé un rato como parche
+    # mientras el publicador confiable no estaba configurado, y el resultado fue
+    # una carrera — el registro terminó en 5 segundos, buscó la 0.1.1 y todavía
+    # no existía. Un paso que valida contra otro no puede correr en paralelo con él.
+    needs: pypi
     runs-on: ubuntu-latest
     permissions:
       id-token: write
@@ -79,4 +79,11 @@ jobs:
       - name: Publicar
         run: |
           ./mcp-publisher login github-oidc
-          ./mcp-publisher publish
+          # PyPI tarda un poco en servir una versión recién subida por su índice,
+          # y el registro la consulta de inmediato. Se reintenta en vez de fallar.
+          for i in 1 2 3 4 5; do
+            ./mcp-publisher publish && exit 0
+            echo "intento $i sin éxito; PyPI puede seguir propagando"
+            sleep 20
+          done
+          exit 1
