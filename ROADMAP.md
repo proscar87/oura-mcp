@@ -272,7 +272,7 @@ cubrir algo que no cubre.
 
 ---
 
-## v0.3 — OAuth2, la puerta de entrada
+## v0.3 — OAuth2, la puerta de entrada · **COMPLETA**
 
 Sin esto el servidor no sirve para nadie nuevo. El PAT se queda soportado y sin
 ruido: quien ya tiene uno no debería tener que migrar, y `OURA_PAT` /
@@ -291,9 +291,36 @@ Tres cosas que los demás ya aprendieron a golpes:
 - **`--manual` para máquinas sin navegador**: imprime la URL, el usuario la abre
   donde sea, y pega de regreso la URL del callback fallido.
 
-Y una cuarta, de `davidmosiah`: los alcances que devuelve la pantalla de consentimiento
-no se llaman igual que los que uno pidió (`fix(#8): doctor accepts full Oura
-consent scopes`). El autodiagnóstico tiene que aceptar ambas formas.
+Y una cuarta, de `davidmosiah`: los alcances que devuelve la pantalla de
+consentimiento no son los que uno pidió — el usuario puede conceder menos. Se
+guardan los **concedidos**, no los pedidos, y `oura_revisar` reporta las dos
+listas. Es la respuesta a la pregunta que más se hace cuando algo sale vacío:
+«¿no hay datos, o no di permiso?».
+
+**Lo que quedó, y una decisión que no estaba en el plan.** El flujo vive en
+`oura-mcp --autorizar`, en la terminal, **nunca dentro del servidor MCP**: uno
+que habla por stdin/stdout no puede abrir un navegador ni pedirle nada a nadie,
+y pretender que sí es cómo se cuelga un cliente MCP para siempre. Con
+`--manual` para máquinas sin navegador, y `--olvidar` para revocar localmente.
+
+**El `state` se verifica, y no era opcional.** El callback llega a un servidor
+HTTP en localhost que atiende lo que le manden. Sin comparar el `state`,
+cualquier página abierta en el navegador del usuario puede mandarle un código de
+autorización de **otra cuenta** y dejarlo conectado a datos que no son suyos,
+sin que nada se vea raro. Se genera con `secrets` y se compara con
+`compare_digest`.
+
+**Y el mensaje de «falta token» cambió**, que era lo que sostenía todo el
+hallazgo #2 de este roadmap. Antes mandaba a la página de tokens personales —que
+desde diciembre de 2025 ya no emite ninguno— y quien llegaba ahí se quedaba
+atorado sin saber por qué. Ahora ofrece tres caminos, de menos a más trámite, y
+el primero no exige registrarse en nada:
+
+```
+  1. OURA_SANDBOX=1 — datos de ejemplo, sin registrarte en nada
+  2. oura-mcp --autorizar — OAuth2, una vez, en el navegador
+  3. OURA_PAT / OURA_PAT_FILE — sólo si ya tenías uno
+```
 
 **Dónde viven los tokens — con una corrección.** El plan decía «llavero del
 sistema con caída a archivo `0600`». Al ir a hacerlo: `keyring` **no es una

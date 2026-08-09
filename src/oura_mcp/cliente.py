@@ -137,12 +137,39 @@ def _token() -> Secreto:
             raise ErrorOura(f"OURA_PAT_FILE apunta a un archivo vacío: {ruta}")
         return Secreto(t)
     t = (os.environ.get("OURA_PAT") or "").strip()
-    if not t:
+    if t:
+        return Secreto(t)
+    return _token_de_oauth()
+
+
+def _token_de_oauth() -> Secreto:
+    """El access token de OAuth2, renovándolo si hace falta.
+
+    Se importa aquí adentro y no arriba porque `credenciales` importa de este
+    módulo. La alternativa era partir `Secreto` y `ErrorOura` a un tercer
+    archivo, que es más ceremonia de la que justifica un import diferido.
+    """
+    from .credenciales import cargar, refrescar
+
+    cred = cargar()
+    if cred is None:
+        # EL MENSAJE IMPORTA. Antes mandaba a la página de tokens personales, y
+        # desde diciembre de 2025 esa página ya no deja crear ninguno: quien
+        # llegara ahí se quedaba atorado sin saber por qué. Ahora la primera
+        # opción es la que funciona, y el sandbox va antes que nada porque
+        # permite ver el servidor andar sin conseguir credencial alguna.
         raise ErrorOura(
-            "falta OURA_PAT (o OURA_PAT_FILE). Sácalo de "
-            "https://cloud.ouraring.com/personal-access-tokens"
+            "no hay credenciales. Tres caminos, de menos a más trámite:\n"
+            "  1. OURA_SANDBOX=1 — datos de ejemplo, sin registrarte en nada\n"
+            "  2. oura-mcp --autorizar — OAuth2, una vez, en el navegador\n"
+            "  3. OURA_PAT / OURA_PAT_FILE — sólo si ya tenías un token "
+            "personal: Oura dejó de emitirlos en diciembre de 2025"
         )
-    return Secreto(t)
+    if not cred.caducado():
+        return cred.acceso
+    from .autorizar import credenciales_de_app
+    cid, csec = credenciales_de_app()
+    return refrescar(cred, cid, csec).acceso
 
 
 def _espera_pedida(e: urllib.error.HTTPError, intento: int) -> float:

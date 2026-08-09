@@ -374,11 +374,13 @@ def test_la_base_se_puede_forzar(monkeypatch):
     assert cliente.base() == "http://localhost:9999/v2/x"
 
 
-def test_apagado_el_sandbox_el_token_vuelve_a_ser_obligatorio(monkeypatch):
+def test_apagado_el_sandbox_vuelven_a_hacer_falta_credenciales(monkeypatch, tmp_path):
     monkeypatch.delenv("OURA_PAT", raising=False)
     monkeypatch.delenv("OURA_PAT_FILE", raising=False)
     monkeypatch.delenv("OURA_SANDBOX", raising=False)
-    with pytest.raises(cliente.ErrorOura, match="personal-access-tokens"):
+    monkeypatch.setenv("OURA_CREDENCIALES", str(tmp_path / "no-existe.json"))
+    monkeypatch.setenv("OURA_SIN_LLAVERO", "1")
+    with pytest.raises(cliente.ErrorOura, match="no hay credenciales"):
         cliente._token()
 
 
@@ -402,10 +404,21 @@ def test_cada_forma_manda_el_parametro_que_le_toca(monkeypatch):
     assert "?" not in urls[-1]      # sin rango no se inventan parámetros
 
 
-def test_sin_token_dice_donde_conseguirlo(monkeypatch):
+def test_sin_credenciales_se_ofrecen_los_tres_caminos(monkeypatch, tmp_path):
+    """El mensaje mandaba a la página de tokens personales, y desde diciembre de
+    2025 esa página ya no deja crear ninguno: quien llegaba ahí se quedaba
+    atorado sin saber por qué. Ahora la primera opción es la que funciona."""
     monkeypatch.delenv("OURA_PAT", raising=False)
-    with pytest.raises(cliente.ErrorOura, match="personal-access-tokens"):
+    monkeypatch.delenv("OURA_PAT_FILE", raising=False)
+    monkeypatch.delenv("OURA_SANDBOX", raising=False)
+    monkeypatch.setenv("OURA_CREDENCIALES", str(tmp_path / "no-existe.json"))
+    monkeypatch.setenv("OURA_SIN_LLAVERO", "1")
+    with pytest.raises(cliente.ErrorOura) as exc:
         cliente.obtener("personal_info")
+    mensaje = str(exc.value)
+    assert "OURA_SANDBOX=1" in mensaje          # lo que no exige trámite, primero
+    assert "--autorizar" in mensaje
+    assert "diciembre de 2025" in mensaje       # por qué el PAT ya no es opción
 
 
 # ── `dia`: que la consulta más común no obligue a escribir un rango ─────────
