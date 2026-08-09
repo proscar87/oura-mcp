@@ -48,6 +48,12 @@ jobs:
       - run: python -m pip install build
       - run: python -m build
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # Idempotente a propósito. La v0.1.0 se subió a mano antes de que
+          # existiera este flujo; sin esto, volver a etiquetarla tronaría y se
+          # llevaría por delante el paso del registro, que va después. Un flujo
+          # de publicación que sólo funciona la primera vez no es un flujo.
+          skip-existing: true
 
   registro:
     name: Registro de MCP
