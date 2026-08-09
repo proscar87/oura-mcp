@@ -109,11 +109,20 @@ que pasar. Del mismo spec salen otras tres confirmaciones:
 
 ---
 
-## v0.2 — Lo que está mal, y el sandbox
+## v0.2 — Lo que está mal, y el sandbox · **COMPLETA**
 
-Nada de esto agrega herramientas. Todo corrige o abarata.
+Nada de esto agregó herramientas. Todo corrige o abarata. Los ocho puntos
+cerrados, 46 pruebas, ninguna toca la red.
 
-### 1. `end_date` inclusivo, y una prueba por colección
+Lo que no estaba en el plan y salió al medirlo: `end_date` no era «exclusivo»
+sino inconsistente por colección; `workout` va desfasada a UTC; `latest` y
+`fields` los ignora Oura en silencio cuando no aplican; y el sandbox es un
+generador, no un filtro, así que no sirve para medir la semántica de la API.
+Cuatro fallas de la misma familia — pides una cosa, recibes otra, nada avisa —
+que es la misma que la paginación. Resulta que la tesis del repositorio
+aplicaba en más lugares de los que decía.
+
+### 1. `end_date` inclusivo, y una prueba por colección — **hecho**
 
 El arreglo tiene dos mitades y la segunda es la que importa:
 
@@ -128,7 +137,7 @@ Y un parámetro de conveniencia, robado a `spxrogers`: **`dia`**, para una sola
 fecha. La trampa no vuelve a existir si la ruta común no obliga a escribir un
 rango.
 
-### 2. Modo sandbox
+### 2. Modo sandbox — **hecho**
 
 Verificado: `https://api.ouraring.com/v2/sandbox/usercollection/…` **acepta
 cualquier cadena como `Authorization`** y devuelve datos sintéticos.
@@ -203,7 +212,7 @@ límite de tasa** en las respuestas buenas — ni `X-RateLimit-Remaining` ni
 equivalente. Un cliente no puede saber qué tan cerca está del tope; sólo se
 entera cuando ya se lo negaron. Por eso reaccionar bien es lo único que queda.
 
-### 5. `truncado` avisa, pero no deja continuar
+### 5. `truncado` avisa, pero no deja continuar — **hecho**
 
 Hoy, al toparse con el tope de 50 páginas, la respuesta dice «acorta el rango».
 Correcto, pero el modelo no puede hacer más que reintentar a ciegas.
