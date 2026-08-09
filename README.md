@@ -139,3 +139,10 @@ ISO 8601 con hora.
 ## Licencia
 
 MIT.
+
+---
+
+<!-- El registro de MCP exige esta línea en el README del paquete publicado en
+     PyPI: es como comprueba que quien publica el servidor es el mismo que
+     controla el paquete. Sin ella, `mcp-publisher publish` devuelve un 400. -->
+mcp-name: io.github.proscar87/oura-mcp
