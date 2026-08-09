@@ -725,6 +725,31 @@ secreto que nadie usa sigue siendo un secreto que alguien puede leer. Se borra.
 
 ---
 
+## Y un cuarto final del bucle, que casi se nos escapa
+
+El bucle de paginación tenía dos salidas: `next_token` vacío, o el tope de
+páginas. Falta una tercera y es la clásica: **si Oura repite el mismo
+`next_token`, eso es un ciclo.**
+
+Sin detectarlo se hacían **50 peticiones idénticas**, se devolvían 50 copias del
+mismo registro, y el aviso decía «acorta el rango» — consejo inútil, porque
+acortar no arregla que la API se repita. Encima quemaba 49 peticiones contra un
+límite de tasa que Oura no anuncia por ninguna cabecera. Ahora para en la
+segunda y lo llama por su nombre: `ciclo_de_paginacion`, no `truncado`.
+
+Habría sido irónico tenerlo justo en el archivo que es la razón de ser del
+proyecto.
+
+De paso, dos formas de respuesta que se trataban con demasiada generosidad. El
+código envolvía el cuerpo entero como un registro siempre que `data` no fuera
+una lista — lo cual es correcto para `personal_info`, que no viene envuelta,
+pero convertía un `{"data": {...}}` inesperado en «un registro» con forma
+`{"data": …}` que se ve legítimo. Ahora se distingue por la **ausencia** de la
+clave: si `data` viene y no es lista, la forma cambió y se dice, en vez de
+inventar una interpretación.
+
+---
+
 ## Orden de ejecución
 
 1. **v0.2** — `end_date` primero (bug confirmado, en silencio, en la ruta más

@@ -98,6 +98,15 @@ def _docs() -> dict[str, str]:
     return docs
 
 
+def test_el_codigo_fuente_tampoco_repite_la_frase():
+    """La prueba de abajo sólo miraba los documentos, y la frase también vivía en
+    el docstring de `cliente.py`. Los comentarios envejecen igual que el README y
+    engañan igual — con la diferencia de que nadie los relee."""
+    for f in (RAIZ / "src" / "oura_mcp").glob("*.py"):
+        texto = re.sub(r"«[^»]*»", "«…»", f.read_text(encoding="utf-8"))
+        assert "más completo de todos no pagina" not in texto, f.name
+
+
 def test_ningun_documento_repite_la_frase_que_dejo_de_ser_cierta():
     """«El más completo de todos no pagina» era verdad y dejó de serlo:
     benngermin/oura-mcp pagina, con cursor reanudable. Una afirmación sobre la
