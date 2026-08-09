@@ -1,8 +1,8 @@
-# oura-mcp no guarda datos: es un tubo entre la API de Oura y un cliente MCP.
-# El riesgo real no es un token en el código —no hay ninguno, el PAT vive en el
-# entorno— sino que alguien pegue una respuesta REAL de Oura como ejemplo en el
-# README o en una prueba. Un `personal_info` trae correo, edad, peso y estatura.
+# oura-mcp stores no data: it's a pipe between the Oura API and an MCP client.
+# The real risk isn't a token in the code — there is none, the credential lives
+# in the environment — it's that someone pastes a REAL Oura response as an
+# example into the README or a test. A `personal_info` carries email, age,
+# weight and height.
 #
-# Sin exenciones, y la clave va omitida en vez de escrita como lista vacía:
-# `exenciones: []` tropieza con el parser de Garita v0, que la lee como la
-# cadena "[]".
+# No exemptions, and the key is omitted rather than written as an empty list:
+# `exenciones: []` trips Garita v0's parser, which reads it as the string "[]".

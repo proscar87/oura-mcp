@@ -5,8 +5,8 @@ on:
   pull_request:
 
 jobs:
-  pruebas:
-    name: Pruebas
+  tests:
+    name: Tests
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -17,8 +17,8 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e ".[dev]"
-      # Sin red y sin token: las pruebas no llaman a Oura. Un CI que necesita el
-      # PAT de alguien para pasar no es un CI, es una dependencia de esa persona.
+      # No network and no token: the tests never call Oura. A CI that needs
+      # someone's PAT to pass isn't a CI, it's a dependency on that person.
       - run: python -m pytest -q
 
   garita:

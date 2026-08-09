@@ -249,11 +249,13 @@ stated position.
 
 ## Privacy Policy
 
-This server runs **on your machine** and talks to **one service**: the Oura API.
-There is no backend of ours, no telemetry, no analytics.
+This section exists because the Claude connectors directory requires one. It is
+short because there is little to describe: the server runs on your machine and
+talks to a single service, the Oura API.
 
-**What is collected.** Nothing. This software collects no data. The health data
-you request goes from the Oura API to your MCP client and passes nowhere else.
+**What is collected.** Nothing, by us. The health data you request goes from the
+Oura API to your MCP client and passes through no server of ours, because there
+isn't one.
 
 **What is stored, and where.** Only your credentials, and only on your machine:
 

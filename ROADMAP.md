@@ -1,96 +1,91 @@
 # Roadmap
 
-Escrito el **9 de agosto de 2026**, después de revisar los 431 repositorios de
-Oura que hay en GitHub y de comprobar contra la API de verdad qué sigue vivo y
-qué no.
+Written on **9 August 2026**, after reviewing the 431 Oura repositories on
+GitHub and checking against the real API what is still alive and what isn't.
 
-Tres objetivos, en este orden: **que se pueda instalar sin saber nada**, **que
-esté listado en Claude**, **que cubra lo que hay que cubrir**.
+Three goals, in this order: **make it installable without knowing anything**,
+**get it listed in Claude**, **cover what needs covering**.
 
-El orden de los *hitos*, sin embargo, es otro — primero se arregla lo que hoy
-entrega datos incorrectos en silencio, porque empaquetar un bug para instalarlo
-de un clic sólo lo distribuye más rápido.
+The order of the *milestones*, however, is different — first you fix what
+silently returns wrong data, because packaging a bug for one-click install only
+distributes it faster.
 
 ---
 
-## Lo que ya está hecho
+## Already done
 
 | | |
 |---|---|
-| GitHub | público, MIT, CI verde |
-| PyPI | `mcp-oura` 0.1.0 y 0.1.1 |
-| Registro de MCP | `io.github.proscar87/oura-mcp` v0.1.1, `active`, buscable |
-
-El registro entró el 9-ago a las 05:28 UTC. Los tres puntos de publicación que
-pedía AGENTS.md están cerrados.
+| GitHub | public, MIT, CI green |
+| PyPI | `mcp-oura` 0.1.0, 0.1.1 and **0.2.0** |
+| MCP registry | `io.github.proscar87/oura-mcp` v0.2.0, `active`, latest |
 
 ---
 
-## Los tres hallazgos que reordenan el mapa
+## The three findings that reordered the map
 
-### 1. El rango de fechas estaba roto — **medido, y ya arreglado**
+### 1. The date range was broken — **measured, and already fixed**
 
-Pedir un solo día devolvía **cero registros** en tres colecciones. Sin error,
-sin `truncado`, con `paginas: 1` afirmando que la página venía completa. Es
-exactamente el modo de falla que este repositorio existe para no cometer, en la
-ruta más común de todas: «¿cómo dormí ayer?».
+Asking for a single day returned **zero records** in three collections. No
+error, no `truncated`, and `pages: 1` asserting the page came back complete.
+That is exactly the failure mode this repository exists not to commit, on the
+most common path of all: "how did I sleep last night?"
 
-Medido contra la API real el 9-ago-2026, colección por colección, son **dos
-fallas distintas que se suman**:
+Measured against the real API on 2026-08-09, collection by collection, it is
+**two distinct failures that stack**:
 
-**a) `end_date` es inconsistente entre colecciones.** No es «exclusivo» a secas,
-como dice la nota de `crcatala` — depende de cuál:
+**a) `end_date` is inconsistent across collections.** Not "exclusive" flatly, as
+`crcatala`'s note says — it depends which one:
 
-| Exclusivas (pierden el último día) | Inclusivas |
+| Exclusive (they lose the last day) | Inclusive |
 |---|---|
 | `daily_activity`, `sleep`, `workout` | `daily_sleep`, `daily_readiness`, `daily_stress`, `daily_spo2`, `daily_resilience`, `daily_cardiovascular_age`, `sleep_time` |
 
-**b) `workout` se filtra por la fecha UTC pero reporta `day` en hora local.** Con
-`-06:00`, pedir `[16-jul .. 18-jul]` devolvía registros de los días **15 y 16**
-— anteriores al inicio pedido. Un entrenamiento de la tarde cae en el día UTC
-siguiente.
+**b) `workout` filters by UTC date but reports `day` in local time.** At
+`-06:00`, asking for `[16 Jul .. 18 Jul]` returned records from the **15th and
+16th** — before the requested start. An evening workout lands on the next UTC
+day.
 
-*(Nota de método: el sandbox no sirve para medir esto. Es un **generador**, no
-un filtro: devuelve `n-1` registros para cualquier ventana y 0 para una de una
-hora que contiene una muestra. Medido ahí, todo parece exclusivo. La primera
-versión de este roadmap decía justo eso, y estaba mal.)*
+*(A note on method: the sandbox is useless for measuring this. It's a
+**generator**, not a filter: it returns `n-1` records for any window and 0 for a
+one-hour window containing a sample. Measured there, everything looks exclusive.
+The first version of this roadmap said exactly that, and it was wrong.)*
 
-**El arreglo, ya en el código:** pedir dos días de más de cada lado y recortar
-por `day` del lado del cliente. Dos, no uno, porque `workout` es exclusiva *y*
-desfasada, y las dos cosas se suman; el desfase horario máximo del mundo es de
-±14 h y la exclusividad cuesta otro día. Una tabla por colección no servía —
-cinco colecciones no tenían datos con qué medirlas, y una tabla que Oura cambie
-vuelve a fallar en silencio. Ensanchar y recortar es correcto en los cuatro
-casos y lo sigue siendo cuando cambie.
+**The fix, already in the code:** request two extra days on each side and trim by
+`day` on the client. Two, not one, because `workout` is exclusive *and* skewed,
+and the two stack; the largest UTC offset in the world is ±14 h and the
+exclusivity costs another day. A per-collection table wouldn't do — five
+collections had no data to measure them with, and a table Oura changes fails
+silently again. Widening and trimming is correct in all four cases and stays
+correct when it changes.
 
-Verificado en las 13 colecciones con datos, a 1, 7 y 30 días: **todas
-correctas**. Los dos días descartados se reportan en
-`descartados_fuera_de_rango` en vez de callarse.
+Verified across the 13 collections that have data, at 1, 7 and 30 days: **all
+correct**. The two discarded days are reported in `discarded_out_of_range`
+rather than swallowed.
 
-No lo encontramos solos: `daveremy` publicó la semana pasada
-`fix(client): Oura treats end_date as exclusive — single-day queries returned
-empty`. Lo del UTC no lo tiene documentado nadie.
+We didn't find it alone: `daveremy` shipped `fix(client): Oura treats end_date as
+exclusive — single-day queries returned empty` the same week. The UTC skew isn't
+documented anywhere.
 
-### 2. Oura deprecó los Personal Access Tokens en diciembre de 2025
+### 2. Oura deprecated Personal Access Tokens in December 2025
 
-No se pueden crear nuevos; los que ya existían siguen funcionando. Comprobado
-por los dos lados: el token de Oscar **responde hoy**, y la página de creación
-ahora redirige al nuevo proveedor de identidad (`moi.ouraring.com`) — la
-migración que documenta `crcatala` como «Oura migrated to a new identity
-provider». Tres proyectos actualizados esta semana ya migraron a OAuth2.
+New ones can't be created; existing ones still work. Verified from both sides:
+the token in use **responds today**, and the creation page now redirects to the
+new identity provider (`moi.ouraring.com`) — the migration `crcatala` documents.
+Three projects updated that week had already moved to OAuth2.
 
-> **Este servidor se instala a prueba de tontos para una sola persona: Oscar.**
-> Cualquier otro llega al README, lee «es un token y ya», abre la página de
-> Oura, y no encuentra dónde crearlo.
+> **This server installed foolproof for exactly one person.** Anyone else reached
+> the README, read "it's a token and that's it", opened Oura's page, and found
+> nowhere to create one.
 
-Es la puerta de entrada, y está tapiada para todos menos para quien ya tenía
-llave.
+That was the front door, bricked up for everyone except whoever already had a
+key.
 
-### 3. Oura publica un OpenAPI, y trae dos parámetros que no usamos
+### 3. Oura publishes an OpenAPI spec, and it carries two parameters we weren't using
 
-El `openapi.json` que `spxrogers` mantiene en su repo —«Oura API
-Documentation», v2.0, 452 KB, con chequeo de deriva en CI— dice que cada
-colección acepta:
+The `openapi.json` `spxrogers` maintains in their repo — "Oura API
+Documentation", v2.0, 452 KB, with a drift check in CI — says every collection
+accepts:
 
 ```
 fields   Comma-separated list of fields to include in the response,
@@ -98,786 +93,732 @@ fields   Comma-separated list of fields to include in the response,
 latest   If True, returns most recent sample.   (heartrate, ring_battery_level)
 ```
 
-Eso convierte dos features que había que construir en dos parámetros que hay
-que pasar. Del mismo spec salen otras tres confirmaciones:
+That turns two features that had to be built into two parameters that have to be
+passed. Three more confirmations come from the same spec:
 
-- **Nuestra tabla de 19 colecciones está completa.** 35 rutas bajo
-  `/v2/usercollection`; no falta ninguna.
-- **El sandbox es oficial**: 34 rutas espejo bajo `/v2/sandbox`.
-- Existen **webhooks** (`/v2/webhook/subscription`) y 32 rutas
-  `/{document_id}`.
-
----
-
-## v0.2 — Lo que está mal, y el sandbox · **COMPLETA**
-
-Nada de esto agregó herramientas. Todo corrige o abarata. Los ocho puntos
-cerrados, 46 pruebas, ninguna toca la red.
-
-Lo que no estaba en el plan y salió al medirlo: `end_date` no era «exclusivo»
-sino inconsistente por colección; `workout` va desfasada a UTC; `latest` y
-`fields` los ignora Oura en silencio cuando no aplican; y el sandbox es un
-generador, no un filtro, así que no sirve para medir la semántica de la API.
-Cuatro fallas de la misma familia — pides una cosa, recibes otra, nada avisa —
-que es la misma que la paginación. Resulta que la tesis del repositorio
-aplicaba en más lugares de los que decía.
-
-### 1. `end_date` inclusivo, y una prueba por colección — **hecho**
-
-Dos días de más de cada lado, y recorte por `day` del lado del cliente. Dos y
-no uno porque las dos fallas se suman: la exclusividad cuesta un día y el
-desfase a UTC otro. Correcto tanto si el endpoint es inclusivo como si es
-exclusivo, y tanto si el desfase va hacia adelante como hacia atrás — que es lo
-que lo mantiene correcto cuando Oura lo cambie.
-
-Verificado colección por colección contra la API **real**, no contra el sandbox:
-arreglarlo en `daily_sleep` no lo arreglaba en `workout`, y el sandbox miente
-sobre esto.
-
-Y un parámetro de conveniencia, robado a `spxrogers`: **`dia`**, para una sola
-fecha. La trampa no vuelve a existir si la ruta común —«¿cómo dormí ayer?»— no
-obliga a escribir un rango.
-
-### 2. Modo sandbox — **hecho**
-
-Verificado: `https://api.ouraring.com/v2/sandbox/usercollection/…` **acepta
-cualquier cadena como `Authorization`** y devuelve datos sintéticos.
-
-```
-$ curl -H "Authorization: Bearer cualquiercosa" ".../sandbox/…/daily_sleep?…"
-{"data":[{"id":"daily_sleep-1-2026-8-1","score":73, …
-```
-
-Un `OURA_SANDBOX=1` que cambia la base y nada más. Vale por tres cosas a la vez:
-
-- **Instalación a prueba de tontos**: se instala, se prueba, se ve funcionar, y
-  *después* se pelea con la autenticación. Hoy el orden es al revés, y ahí se
-  pierde a la gente.
-- **El directorio de Claude lo pide**: la revisión exige instrucciones de
-  cuenta de prueba «lo bastante detalladas para que un revisor llegue de punta
-  a punta». Un modo sandbox es esa respuesta en una línea.
-- **CI contra la API real** sin depender del token de nadie — la regla de
-  AGENTS.md, respetada.
-
-Lo que el sandbox **no** da: `heartrate` devuelve 2 muestras y sin
-`next_token`. Sirve para demostrar, no para probar la paginación. Ésa se sigue
-probando con la API falsa de `tests/`.
-
-### 3. `fields` y `latest`, pasados a Oura — **hecho**
-
-- `campos: ["bpm"]` → `fields=bpm`. **Recorta del lado de Oura**: ahorra ancho
-  de banda además de contexto.
-- `ultimo: true` → `latest=true`. Resuelve de raíz «mi frecuencia cardiaca más
-  reciente», que antes sólo se podía contestar bajando la ventana entera.
-
-**Y los dos resultaron traer su propia falla silenciosa**, medida el 9-ago:
-
-| Lo que pides | Lo que hace Oura |
-|---|---|
-| `fields=no_existe` | Devuelve el registro **completo**. La proyección no ocurre |
-| `fields=score,no_existe` | Aplica el bueno, tira el malo, no dice nada |
-| `latest=true` en `daily_sleep` | **Lo ignora y devuelve la colección entera** |
-
-Ninguna da error. Es la misma familia que no paginar: pides una cosa, recibes
-otra, y nada te avisa. Por eso `ultimo` se **rechaza aquí** para las 17
-colecciones que no lo respetan —antes de salir a la red— y los campos que no
-aparecieron en ninguna respuesta se reportan en `campos_ignorados`.
-
-Un hallazgo que ayudó: **`fields` siempre devuelve `day` e `id`**, así que el
-recorte por fecha del punto 1 no se rompe cuando alguien proyecta columnas.
-
-Y una que la API no da y ya está hecha: **`formato: "csv"`**, la misma tabla sin
-repetir las claves 37,000 veces. Medido sobre un día real de `heartrate`:
-**56% menos caracteres**. El encabezado sale de la unión de todas las claves, no
-del primer registro —sacarlo del primero pierde un campo entero en silencio— y
-si los registros no traen las mismas claves la respuesta lo dice, porque una
-celda vacía puede ser «campo ausente» o «valor nulo».
-
-*(De la misma medición salió el número que le faltaba al README: un día local de
-`heartrate` son **1,231 muestras en 2 páginas**. Quien no pagina recibe 1,000 de
-1,231 —el 81%— sin un solo aviso.)*
-
-La línea sigue clara: **elegir columnas no es promediar.** Un `resumen=true`
-que devuelva medias sigue prohibido.
-
-### 4. Un 429 no se reintenta — **hecho**
-
-Se rendía al primero. En una consulta que encadena hasta 50 peticiones, eso tira
-a la basura todo lo ya traído. Ahora reintenta dos veces, honrando `Retry-After`
-en sus dos formas (segundos y fecha HTTP), con backoff exponencial cuando no
-viene, y un tope de 8 s para que una cabecera generosa no cuelgue la
-conversación. **Sólo el 429**: un 401 no mejora esperando.
-
-Y una medición que conviene tener escrita: **Oura no manda ninguna cabecera de
-límite de tasa** en las respuestas buenas — ni `X-RateLimit-Remaining` ni
-equivalente. Un cliente no puede saber qué tan cerca está del tope; sólo se
-entera cuando ya se lo negaron. Por eso reaccionar bien es lo único que queda.
-
-### 5. `truncado` avisa, pero no deja continuar — **hecho**
-
-Hoy, al toparse con el tope de 50 páginas, la respuesta dice «acorta el rango».
-Correcto, pero el modelo no puede hacer más que reintentar a ciegas.
-`benngermin` devuelve `{truncated, nextToken}` para que quien llama reanude.
-
-Hay que devolver el cursor: `truncado` + `continuar_desde`, y que
-`oura_consultar` lo acepte. **No es análisis** — es transporte, y es la
-extensión natural del bucle que es el producto.
-
-### 6. Anotaciones de herramienta — **hecho**
-
-Las tres declaran `title`, `read_only_hint`, `destructive_hint` e
-`idempotent_hint`. Y `open_world_hint` en `True`, que es la que casi nadie pone:
-los datos vienen de un servicio externo y la misma llamada dos veces puede
-diferir si el anillo sincronizó en medio. Decir lo contrario invitaría a
-memoizar la respuesta.
-
-Hay además una prueba que **lee el código fuente** buscando `POST`, `PUT`,
-`DELETE` y `PATCH`. La anotación de sólo lectura es verdad hoy; esa prueba es la
-que se entera el día que deje de serlo.
-
-*(El README decía que había cuatro; son tres. Corregido, y ahora hay una prueba de coherencia que no deja que vuelva.)*
-
-### 7. El token, fuera de cualquier `repr` — **hecho**
-
-`_token()` ya no devuelve un `str`: devuelve un `Secreto`, cuyo `__repr__` y
-`__str__` dicen `<secreto de 32 caracteres>`. Sacar el valor exige
-`.revelar()` — una llamada explícita, visible en el código y grepeable.
-
-No es paranoia teórica: un `~/.pypirc` mal formado ya hizo que el parser
-volcara un token completo a un transcript. La lección no fue «ten más cuidado»,
-fue que el cuidado no se sostiene a mano.
-
-### 8. Deriva de colecciones, en CI — **hecho, pero no como estaba escrito**
-
-El plan decía «compara `colecciones.py` contra el `openapi.json` de Oura». **No
-se puede: Oura no publica su spec en ninguna URL estable.** Cinco rutas
-plausibles, las cinco 404. La única copia pública está vendorizada en el
-repositorio de `spxrogers`, y colgar nuestro CI del repositorio de un tercero es
-cambiar una dependencia por otra peor.
-
-Lo que sí se puede, y ya corre: `herramientas/revisar_deriva.py` pregunta por
-las 19 colecciones **contra el sandbox**, que no pide credenciales. Job semanal
-y a mano, nunca en push — una prueba que sale a internet no puede decidir si un
-PR entra.
-
-Con sus límites dichos en voz alta, que es la mitad del valor:
-
-| Atrapa | No atrapa |
-|---|---|
-| Una colección renombrada, movida o retirada | Una colección **nueva** |
-
-El sandbox no se puede enumerar, así que descubrir altas sigue siendo trabajo
-humano. Decirlo en el propio script vale más que un chequeo que aparente
-cubrir algo que no cubre.
+- **Our table of 19 collections is complete.** 35 routes under
+  `/v2/usercollection`; none missing.
+- **The sandbox is official**: 34 mirror routes under `/v2/sandbox`.
+- **Webhooks exist** (`/v2/webhook/subscription`), plus 32 `/{document_id}`
+  routes.
 
 ---
 
-## v0.3 — OAuth2, la puerta de entrada · **COMPLETA**
+## v0.2 — What's broken, and the sandbox · **COMPLETE**
 
-Sin esto el servidor no sirve para nadie nuevo. El PAT se queda soportado y sin
-ruido: quien ya tiene uno no debería tener que migrar, y `OURA_PAT` /
-`OURA_PAT_FILE` siguen ganando si están puestos.
+None of this added tools. All of it corrects or cheapens. Eight points closed,
+124 tests, none touching the network.
 
-Endpoints: autorización en `cloud.ouraring.com/oauth/authorize`, token en
-`api.ouraring.com/oauth/token`, revocación en `/oauth/revoke`. Ocho alcances:
+What wasn't in the plan and surfaced by measuring: `end_date` wasn't "exclusive"
+but inconsistent per collection; `workout` is skewed to UTC; `latest` and
+`fields` are silently ignored by Oura where they don't apply; and the sandbox is
+a generator, not a filter, so it can't be used to measure API semantics. Four
+failures of the same family — you ask for one thing, you get another, nothing
+warns you — which is the same family as not paginating. The repository's thesis
+applied in more places than it claimed.
+
+### 1. Inclusive `end_date`, and a test per collection — **done**
+
+Two extra days on each side, and a trim by `day` on the client. Two and not one
+because the two failures stack: exclusivity costs a day and the UTC skew another.
+Correct whether the endpoint is inclusive or exclusive, and whether the skew runs
+forward or backward — which is what keeps it correct when Oura changes it.
+
+Verified collection by collection against the **real** API, not the sandbox:
+fixing it in `daily_sleep` didn't fix it in `workout`, and the sandbox lies about
+this.
+
+Plus a convenience parameter borrowed from `spxrogers`: **`day`**, for a single
+date. The trap stops existing if the common path — "how did I sleep last night?"
+— doesn't force you to write a range.
+
+### 2. Sandbox mode — **done**
+
+Verified: `https://api.ouraring.com/v2/sandbox/usercollection/…` **accepts any
+string as `Authorization`** and returns synthetic data.
+
+An `OURA_SANDBOX=1` that changes the base and nothing else. It's worth three
+things at once:
+
+- **Foolproof installation**: install it, try it, watch it work, and *then* fight
+  with authentication. The order used to be backwards, and that's where people
+  were lost.
+- **The Claude directory asks for it**: review requires test-account instructions
+  "detailed enough for a reviewer to access your server end to end". A sandbox
+  mode is that answer in one line.
+- **CI against the real API** without depending on anyone's token.
+
+What the sandbox does **not** give: `heartrate` returns 2 samples and no
+`next_token`. Good for demonstrating, not for testing pagination. That's still
+tested with the fake API in `tests/`.
+
+### 3. `fields` and `latest`, passed through to Oura — **done**
+
+- `fields: ["bpm"]` → **trims on Oura's side**: saves bandwidth as well as
+  context.
+- `latest: true` → answers "my most recent heart rate", which previously could
+  only be answered by pulling the entire window.
+
+**And both turned out to carry their own silent failure**, measured 2026-08-09:
+
+| What you ask for | What Oura does |
+|---|---|
+| `fields=made_up` | Returns the **complete** record. The projection never happens |
+| `fields=score,made_up` | Applies the good one, drops the bad one, says nothing |
+| `latest=true` on `daily_sleep` | **Ignores it and returns the entire collection** |
+
+Neither errors. Same family as not paginating: you ask for one thing, you get
+another, nothing warns you. So `latest` is **rejected here** for the 17
+collections that don't honor it — before going near the network — and fields that
+appeared in no response are reported in `ignored_fields`.
+
+One finding that helped: **`fields` always returns `day` and `id`**, so the date
+trim in point 1 doesn't break when someone projects columns.
+
+Also, one thing the API doesn't provide and is now built: **`format: "csv"`**,
+the same table without repeating the keys 37,000 times. Savings vary by
+collection: 55% on `heartrate`, 10% on `daily_sleep`. The header comes from the
+union of all keys, not the first record — taking it from the first loses an
+entire field silently — and if records don't share keys the response says so,
+because an empty cell can mean "absent field" or "null value".
+
+*(The same measurement produced the number the README was missing: one local day
+of `heartrate` is **1,231 samples across 2 pages**. A client that doesn't
+paginate receives 1,000 of 1,231 — 81% — with no warning at all.)*
+
+### 4. A 429 wasn't retried — **done**
+
+It gave up on the first one. On a query that chains up to 50 requests, that
+throws away everything already fetched. It now retries twice, honoring
+`Retry-After` in both its forms (seconds and HTTP date), with exponential backoff
+when it's absent and an 8 s cap so a generous header can't hang the conversation.
+**Only the 429**: a 401 doesn't improve by waiting.
+
+And a measurement worth writing down: **Oura sends no rate-limit headers** on
+successful responses — no `X-RateLimit-Remaining` or equivalent. A client can't
+know how close it is to the ceiling; it only finds out once it's been refused.
+Reacting well is all that's left.
+
+### 5. `truncated` warned but didn't let you continue — **done**
+
+It said "shorten the range". Correct, but the model could do nothing but retry
+blind. `benngermin` returns `{records, truncated, nextToken}` so the caller can
+resume. Now the cursor comes back too: `truncated` plus `continue_from`, and
+`fetch` accepts it. **This isn't analysis** — it's transport, and the natural
+extension of the loop that is the product.
+
+### 6. Tool annotations — **done**
+
+All three declare `title`, `readOnlyHint`, `destructiveHint` and
+`idempotentHint`. And `openWorldHint` true, which almost nobody sets: the data
+comes from an external service and the same call twice can differ if the ring
+synced in between. Saying otherwise would invite memoization.
+
+There's also a test that **reads the source** looking for `POST`, `PUT`, `DELETE`
+and `PATCH`. The read-only annotation is true today; that test is what finds out
+the day it stops being.
+
+### 7. The token, out of every `repr` — **done**
+
+The credential is no longer a plain string: it's a type whose printed form says
+`<secret, 32 characters>`. Getting the value requires an explicit call — visible
+in the code and greppable.
+
+Not theoretical paranoia: a malformed `~/.pypirc` already made a parser dump a
+full token into a transcript. The lesson wasn't "be more careful", it was that
+care doesn't hold up by hand.
+
+### 8. Collection drift, in CI — **done, but not as written**
+
+The plan said "compare `collections.py` against Oura's `openapi.json`". **You
+can't: Oura doesn't publish its spec at any stable URL.** Five plausible paths,
+five 404s. The only public copy is vendored in `spxrogers`' repository, and
+hanging our CI off a third party's repo trades one dependency for a worse one.
+
+What is possible, and already runs: `tools/check_drift.py` asks after the 19
+collections **against the sandbox**, which needs no credentials. Weekly and on
+demand, never on push — a test that goes out to the internet can't decide whether
+a PR lands.
+
+With its limits said out loud, which is half the value:
+
+| Catches | Doesn't catch |
+|---|---|
+| A renamed, moved or retired collection | A **new** collection |
+
+The sandbox can't be enumerated, so discovering additions is still human work.
+Saying that in the script itself is worth more than a check that appears to cover
+something it doesn't.
+
+---
+
+## v0.3 — OAuth2, the front door · **COMPLETE**
+
+Without this the server is useless to anyone new. Personal tokens stay supported
+and quiet: whoever already has one shouldn't have to migrate, and `OURA_PAT` /
+`OURA_PAT_FILE` still win when set.
+
+Endpoints: authorization at `cloud.ouraring.com/oauth/authorize`, token at
+`api.ouraring.com/oauth/token`, revocation at `/oauth/revoke`. Eight scopes:
 `email`, `personal`, `daily`, `heartrate`, `workout`, `tag`, `session`, `spo2`.
 
-Tres cosas que los demás ya aprendieron a golpes:
+Three things others learned the hard way:
 
-- **El refresh token es de un solo uso.** Hay que rotarlo y **persistirlo antes**
-  de consumirlo, o una carrera deja la sesión muerta (`crcatala`).
-- **El redirect URI necesita la diagonal final.** El portal rechaza
-  `…/callback` con `invalid_redirect_uri` y acepta `…/callback/`.
-- **`--manual` para máquinas sin navegador**: imprime la URL, el usuario la abre
-  donde sea, y pega de regreso la URL del callback fallido.
+- **The refresh token is single-use.** It has to be rotated and **persisted
+  before** being consumed, or a race leaves the session dead (`crcatala`).
+- **The redirect URI needs the trailing slash.** The portal rejects `…/callback`
+  with `invalid_redirect_uri` and accepts `…/callback/`.
+- **`--manual` for machines with no browser**: print the URL, the user opens it
+  wherever, and pastes the failed callback URL back.
 
-Y una cuarta, de `davidmosiah`: los alcances que devuelve la pantalla de
-consentimiento no son los que uno pidió — el usuario puede conceder menos. Se
-guardan los **concedidos**, no los pedidos, y `oura_revisar` reporta las dos
-listas. Es la respuesta a la pregunta que más se hace cuando algo sale vacío:
-«¿no hay datos, o no di permiso?».
+And a fourth, from `davidmosiah`: the scopes the consent screen returns aren't the
+ones you asked for — the user can grant fewer. The **granted** ones are stored,
+not the requested ones, and `oura_check` reports both lists. That's the answer to
+the question people ask most when something comes back empty: "is there no data,
+or did I not grant permission?"
 
-**Lo que quedó, y una decisión que no estaba en el plan.** El flujo vive en
-`oura-mcp --autorizar`, en la terminal, **nunca dentro del servidor MCP**: uno
-que habla por stdin/stdout no puede abrir un navegador ni pedirle nada a nadie,
-y pretender que sí es cómo se cuelga un cliente MCP para siempre. Con
-`--manual` para máquinas sin navegador, y `--olvidar` para revocar localmente.
+**What shipped, and one decision that wasn't in the plan.** The flow lives in
+`oura-mcp --authorize`, in the terminal, **never inside the MCP server**: one
+that speaks over stdin/stdout can't open a browser or ask anyone anything, and
+pretending otherwise is how you hang an MCP client forever. With `--manual` for
+headless machines, and `--forget` to revoke locally.
 
-**El `state` se verifica, y no era opcional.** El callback llega a un servidor
-HTTP en localhost que atiende lo que le manden. Sin comparar el `state`,
-cualquier página abierta en el navegador del usuario puede mandarle un código de
-autorización de **otra cuenta** y dejarlo conectado a datos que no son suyos,
-sin que nada se vea raro. Se genera con `secrets` y se compara con
-`compare_digest`.
+**The `state` is verified, and it wasn't optional.** The callback arrives at an
+HTTP server on localhost that serves whatever it's sent. Without comparing the
+`state`, any page open in the user's browser can hand them an authorization code
+from **another account** and leave them connected to data that isn't theirs, with
+nothing looking wrong. It's generated with a CSPRNG and compared in constant time.
 
-**Y el mensaje de «falta token» cambió**, que era lo que sostenía todo el
-hallazgo #2 de este roadmap. Antes mandaba a la página de tokens personales —que
-desde diciembre de 2025 ya no emite ninguno— y quien llegaba ahí se quedaba
-atorado sin saber por qué. Ahora ofrece tres caminos, de menos a más trámite, y
-el primero no exige registrarse en nada:
+**And the "missing token" message changed**, which was what supported finding #2
+of this roadmap. It used to point at the personal-tokens page — which since
+December 2025 issues none — and whoever landed there got stuck without knowing
+why. It now offers three paths, from least to most paperwork, and the first
+requires signing up for nothing:
 
 ```
-  1. OURA_SANDBOX=1 — datos de ejemplo, sin registrarte en nada
-  2. oura-mcp --autorizar — OAuth2, una vez, en el navegador
-  3. OURA_PAT / OURA_PAT_FILE — sólo si ya tenías uno
+  1. OURA_SANDBOX=1 — sample data, no signup of any kind
+  2. oura-mcp --authorize — OAuth2, once, in the browser
+  3. OURA_PAT / OURA_PAT_FILE — only if you already had one
 ```
 
-**Dónde viven los tokens — con una corrección.** El plan decía «llavero del
-sistema con caída a archivo `0600`». Al ir a hacerlo: `keyring` **no es una
-dependencia de este paquete y no debe serlo**. Aquí está instalado, pero viene
-de `twine`, no de `mcp`; un usuario no lo tendría. Y la lista de dependencias
-vacía es justo lo que hace viable empaquetar esto como binario para Claude
-Desktop, que es el hito v0.4.
+**Where the tokens live — with a correction.** The plan said "system keychain
+falling back to a `0600` file". On going to do it: `keyring` **is not a
+dependency of this package and mustn't be**. It's installed here, but it comes
+from `twine`, not `mcp`; a user wouldn't have it. And an empty dependency list is
+exactly what makes packaging this as a binary viable.
 
-Lo implementado: **archivo `0600`, escrito de forma atómica, en directorio
-`0700`** — y el llavero **sólo si resulta estar instalado**, con `try: import
-keyring`. Quien lo tenga sale ganando; a quien no, no le cuesta nada. El
-principio de AGENTS.md se mantiene: el secreto no va en el JSON de configuración
-del cliente MCP, y menos uno que rota solo.
+What shipped: **a `0600` file, written atomically, in a `0700` directory** — and
+the keychain **only if it happens to be installed**. Whoever has it wins; whoever
+doesn't loses nothing.
 
-**La rotación es la parte peligrosa, y ya está hecha.** El refresh token de Oura
-es de un solo uso: cuando se canjea, Oura lo invalida. Entre la respuesta y el
-guardado hay una ventana en la que el viejo ya murió y el nuevo no existe en
-disco; caerse ahí pierde la sesión. `refrescar()` guarda **antes de devolver**, y
-de forma atómica — no se puede hacer mejor, porque Oura no ofrece un canje en
-dos fases, pero sí que la ventana dure lo mínimo y que nunca quede un archivo a
-medias.
+**The rotation is the dangerous part, and it's done.** Oura's refresh token is
+single-use: the moment the request goes out, the one we held is dead. Between the
+response and the save there's a window where the old one has died and the new one
+doesn't exist on disk; crashing there loses the session. The refresh saves
+**before returning**, atomically — you can't do better, because Oura offers no
+two-phase exchange, but you can make the window as short as possible and ensure a
+half-written file never exists.
 
-Y una que no estaba prevista: **dos procesos que refrescan a la vez** es un caso
-real —dos herramientas MCP llamadas en paralelo— y el que pierde la carrera
-recibe un 400 aunque la sesión esté viva. Antes de darla por perdida, se relee
-lo guardado.
+And one that wasn't foreseen: **two processes refreshing at once** is a real case
+— two MCP tools called in parallel — and the one that loses the race gets a 400
+even though the session is alive. Before declaring it lost, it re-reads what's on
+disk.
 
 ---
 
-## v0.4 — Instalar sin terminal
+## v0.4 — Installing without a terminal
 
-La escalera, del escalón más barato al más caro.
+The ladder, from cheapest rung to most expensive.
 
-### 1. `uvx` documentado — **hecho, con una corrección**
+### 1. `uvx` documented — **done, with a correction**
 
-Todos los competidores son TypeScript y se instalan con `npx -y`. El equivalente
-en Python es `uvx --from mcp-oura oura-mcp`, y ya está en el README.
+Every competitor is TypeScript and installs with `npx -y`. The Python equivalent
+is `uvx --from mcp-oura oura-mcp`, and it's in the README.
 
-**Pero no como ruta por defecto, y ese fue el error de la primera redacción.**
-`uvx` requiere tener `uv` instalado. En esta máquina no lo está, que es cómo se
-descubrió: un README que abre con «nada que instalar» y da un comando que
-responde `command not found` es exactamente lo contrario del objetivo. `pip
-install mcp-oura` es la ruta sin prerrequisitos; `uvx` es la mejora para quien
-ya tiene `uv`.
+**But not as the default path, and that was the first draft's mistake.** `uvx`
+requires having `uv` installed. It isn't installed on this machine, which is how
+it was discovered: a README that opens with "nothing to install" and gives a
+command that answers `command not found` is exactly the opposite of the goal.
+`pip install mcp-oura` is the no-prerequisites path; `uvx` is the upgrade for
+whoever already has `uv`.
 
-De paso, otra que faltaba: **Claude Desktop no hereda el `PATH` de la
-terminal**, así que en su JSON hay que poner la ruta completa que da `which
-oura-mcp`. Un nombre pelado ahí falla en silencio, y es de los errores más
-comunes al configurar un servidor MCP.
+Along the way, another one that was missing: **Claude Desktop doesn't inherit the
+terminal's `PATH`**, so its JSON needs the full path from `which oura-mcp`. A
+bare name there fails silently, and it's one of the most common mistakes when
+configuring an MCP server.
 
-### 2. Plugin de Claude Code — **hecho y validado**
+### 2. Claude Code plugin — **done and validated**
 
-`.claude-plugin/plugin.json` y `.claude-plugin/marketplace.json`, los dos pasan
-`claude plugin validate --strict` contra el validador real del CLI, no contra un
-esquema supuesto.
+`.claude-plugin/plugin.json` and `.claude-plugin/marketplace.json`, both passing
+`claude plugin validate --strict` against the CLI's real validator, not against a
+schema someone assumed.
 
 ```bash
 claude plugin marketplace add proscar87/oura-mcp
 claude plugin install oura@oura-mcp
 ```
 
-Sin bloque `env`, a propósito: no verifiqué que este esquema interpole variables,
-y un plugin que cayera en sandbox sin decirlo mostraría datos sintéticos como si
-fueran tuyos. El mensaje de «no hay credenciales» del propio servidor ya ofrece
-los tres caminos.
+No `env` block, deliberately: I didn't verify that this schema interpolates
+variables, and a plugin silently falling back to the sandbox would show synthetic
+data as if it were yours. The server's own "no credentials" message already
+offers the three paths.
 
-### 3. MCPB — el `.mcpb` de un clic
+### 3. MCPB — the one-click `.mcpb`
 
-Un zip con el servidor y un `manifest.json`; se instala con doble clic en
-Claude Desktop, sin terminal ni JSON. `user_config` con `"sensitive": true`
-genera la UI del campo solo y guarda el valor en el almacén seguro. Es,
-literalmente, la definición de «a prueba de tontos».
+An `.mcpb` is a zip with the server and a `manifest.json`; it installs with a
+double click in Claude Desktop, no terminal and no JSON. `user_config` with
+`"sensitive": true` generates the field's UI on its own and stores the value in
+the secure store. It is, literally, the definition of foolproof.
 
-**El problema es Python.** La documentación de Anthropic es explícita: Node.js
-«ships with Claude Desktop on macOS and Windows, so users need no separate
-runtime». Python no.
+**The problem is Python.** Anthropic's documentation is explicit: Node.js "ships
+with Claude Desktop on macOS and Windows, so users need no separate runtime".
+Python doesn't.
 
-**Se midió, en vez de suponerlo.** Binario construido con PyInstaller el
-9-ago-2026, macOS arm64:
+**It was measured rather than assumed.** Binary built with PyInstaller on
+2026-08-09, macOS arm64:
 
-| Variante | Tamaño | Primer arranque | Siguientes |
+| Variant | Size | First start | Subsequent |
 |---|---|---|---|
-| `--onefile` | 22 MB | 7.6 s | **6.5–7.6 s, en cada corrida** |
+| `--onefile` | 22 MB | 7.6 s | **6.5–7.6 s, every single run** |
 | `--onedir` | 45 MB | 7.8 s | **0.41 s** |
 | `python -m oura_mcp` | — | 0.40 s | 0.40 s |
 
-Dos cosas que cambian la decisión:
+Two things change the decision:
 
-1. **`--onefile` queda descartado.** Descomprime los 22 MB en un temporal cada
-   vez que arranca. Un servidor MCP que tarda siete segundos en responder al
-   *handshake* se ve como colgado, en cada sesión.
-2. **`--onedir` sí sirve** — 0.41 s tras la primera vez, igual que Python. Los
-   7.8 s iniciales son Gatekeeper verificando un binario **firmado sólo
-   ad-hoc** (`flags=0x2(adhoc)`, verificado con `codesign`).
+1. **`--onefile` is disqualified.** It unpacks 22 MB into a temp directory every
+   time it starts. An MCP server that takes seven seconds to answer the handshake
+   looks hung, in every session.
+2. **`--onedir` does work** — 0.41 s after the first run, same as Python. The
+   initial 7.8 s is Gatekeeper verifying a binary that is **ad-hoc signed only**
+   (`flags=0x2(adhoc)`, verified with `codesign`).
 
-Y ahí está el costo que no se ve en la tabla: distribuir eso en serio pide
-**Developer ID y notarización de Apple**, más *runners* de macOS y Windows en
-CI, y ~45 MB por plataforma. Todo para que Claude Desktop arranque un intérprete
-de Python que sólo corre nuestras 1,281 líneas.
+And there's the cost the table doesn't show: distributing that seriously requires
+**an Apple Developer ID and notarization**, plus macOS and Windows runners in CI,
+and ~45 MB per platform. All so Claude Desktop can start a Python interpreter
+that only runs our 1,281 lines.
 
-| | Qué implica | Veredicto |
+| | What it implies | Verdict |
 |---|---|---|
-| `type: "python"` | Depende del Python del usuario | No cumple el objetivo |
-| `type: "binary"` (`--onedir`) | 45 MB × 3 plataformas, notarización de Apple, CI en macOS y Windows | Viable, pero el precio es alto |
-| Portar a TypeScript | Reescribir 1,281 líneas de fuente y 936 de pruebas | Node ya viene incluido: sin binario, sin firma, sin CI por plataforma |
+| `type: "python"` | Depends on the user's Python | Doesn't meet the goal |
+| `type: "binary"` (`--onedir`) | 45 MB × 3 platforms, Apple notarization, CI on macOS and Windows | Viable, but the price is high |
+| Port to TypeScript | Rewrite 1,281 lines of source and 936 of tests | Node is already bundled: no binary, no signing, no per-platform CI |
 
-**La medición invirtió la recomendación.** Antes decía «binario, porque conserva
-el trabajo hecho». Con los números en la mano, el binario cuesta notarización +
-tres compilaciones + 135 MB de artefactos, y todo eso *para el hito cuyo punto
-es que instalar sea trivial*. Si el `.mcpb` se quiere de verdad, **TypeScript**.
+**The measurement inverted the recommendation.** It used to say "binary, because
+it preserves the work already done". With the numbers in hand, the binary costs
+notarization plus three builds plus 135 MB of artifacts — all for the milestone
+whose entire point is that installing be trivial. If the `.mcpb` is genuinely
+wanted: **TypeScript**.
 
-**Pero hay una tercera vía, y probablemente es la correcta:** el plugin de
-Claude Code (§2, ya hecho y validado) da instalación de un comando a los
-usuarios de Claude Code sin nada de esto. La pregunta que decide no es técnica
-sino de alcance — *¿hace falta Claude **Desktop**, o basta Claude **Code**?* Si
-basta, v0.4 ya está completa y el `.mcpb` no se construye.
+**The port exists and has verified parity.** Five queries in both
+implementations return the same `n` and the same page counts, and in the case
+that justifies the project — one local day of `heartrate`, 1,231 samples across 2
+pages — both return exactly the same records in the same order.
 
----
-
-## v0.5 — Listado en Claude
-
-Hay dos puertas y no son intercambiables.
-
-### Puerta A — Extensión de escritorio (MCPB) · **la viable**
-
-Formulario aparte, en `clau.de/desktop-extention-submission`. **No requiere
-organización Team ni Enterprise.**
-
-- [ ] Un `.mcpb` que funcione (v0.4)
-- [ ] Anotaciones en las tres herramientas (v0.2)
-- [x] **Política de privacidad** — sección «Privacy Policy» en el README, ya
-      escrita: recolección, uso, almacenamiento, terceros, retención y contacto.
-      Aquí es fácil y todo es cierto: no se recolecta nada, la única conexión
-      saliente es a `api.ouraring.com`, y ningún dato de salud toca el disco.
-      Falta el arreglo `privacy_policies` en el `manifest.json`, que sólo existe
-      si se construye el `.mcpb`.
-      *«Missing or incomplete privacy policies result in immediate rejection.»*
-- [ ] Ícono PNG 512×512
-- [ ] Documentación de instalación y uso
-- [ ] Ejemplos que ejerciten cada herramienta (el sandbox los da gratis)
-
-La política de privacidad aquí es fácil y además es un argumento: el servidor no
-guarda nada, no manda nada a ningún lado que no sea Oura, y el token no sale de
-la máquina. Se escribe en veinte líneas y todas son ciertas.
-
-### Puerta B — Conector remoto · **cerrada por ahora**
-
-El portal vive en los ajustes de administración de Claude.ai y **exige una
-organización Team o Enterprise**; en planes individuales no aparece. Además
-pide servidor HTTPS hospedado (streamable HTTP o SSE), OAuth 2.0, y declarar
-que maneja datos personales de salud — que los maneja.
-
-Es el camino a Claude web y móvil, y hospedar datos de salud de terceros es un
-compromiso serio, no un fin de semana. Va como opción consciente, no como
-pendiente.
+A lesson about differential testing came out of it: the first comparison used
+SHA fingerprints and reported a difference. The data didn't differ — Python's
+`json.dumps` puts a space after every comma and `JSON.stringify` doesn't, so
+identical content hashed differently. A test that compares serializations
+compares serializers.
 
 ---
 
-## La competencia, al 9 de agosto de 2026
+## v0.5 — Listed in Claude
 
-431 repositorios buscando «oura ring». La mayoría es ruido —dos repos `.github`
-de SEO, un tamagotchi, tests de Adobe— pero abajo del ruido pasó algo que hay
-que decir claro.
+There are two doors and they are not interchangeable.
 
-### Uno por uno, y qué se le roba a cada quién
+### Door A — Desktop extension (MCPB) · **the viable one**
+
+A separate form, at `clau.de/desktop-extention-submission`. **No Team or
+Enterprise organization required.**
+
+- [ ] A working `.mcpb` (v0.4)
+- [x] Annotations on all three tools (v0.2)
+- [x] **Privacy policy** — a "Privacy Policy" section in the README, already
+      written: collection, use, storage, third parties, retention and contact.
+      Still missing the `privacy_policies` array in `manifest.json`, which only
+      exists once the `.mcpb` is built.
+      *"Missing or incomplete privacy policies result in immediate rejection."*
+- [ ] 512×512 PNG icon
+- [ ] Installation and usage documentation
+- [ ] Examples exercising each tool (the sandbox gives these for free)
+
+### Door B — Remote connector · **closed for now**
+
+The submission portal lives in Claude.ai's admin settings and **requires a Team
+or Enterprise organization**; it doesn't appear on individual plans. It also
+requires a hosted HTTPS server (streamable HTTP or SSE), OAuth 2.0, and declaring
+that it handles personal health data — which it does.
+
+That's the route to Claude on web and mobile, and hosting third-party health data
+is a serious commitment, not a weekend. It goes here as a conscious option, not a
+to-do.
+
+---
+
+## The competition, as of 9 August 2026
+
+431 repositories searching for "oura ring". Most of it is noise — two SEO
+`.github` repos, a tamagotchi, Adobe test repos — but underneath the noise
+something happened that has to be said plainly.
+
+### One by one, and what to take from each
 
 **[spxrogers/oura-toolkit](https://github.com/spxrogers/oura-toolkit)** · Rust ·
-1★ · el mejor ingenierilmente, y el más parecido a ti en criterio.
+the best-engineered of the lot, and the closest in judgment.
 
-CLI + cinco SDKs generados + MCP + plugin, todo desde un `openapi.json` con
-`spec-drift.yml` en CI. Publica a crates.io **y** a npm **por OIDC con Trusted
-Publishing y provenance** — tu postura de «ningún secreto que rotar», aplicada a
-dos registros más. Sus commits son una lista de compras:
+CLI + five generated SDKs + MCP + plugin, all from an `openapi.json` with
+`spec-drift.yml` in CI. Publishes to crates.io **and** npm **via OIDC with
+Trusted Publishing and provenance** — the same "no secret to rotate" stance,
+applied to two more registries. Their commits read like a shopping list:
 
 - `Rate-limit handling: honor 429 + Retry-After, one bounded retry, typed error`
 - `Headless auth: --no-browser login, OURA_ACCESS_TOKEN, OURA_API_BASE_URL`
 - `MCP + CLI: single-day date convenience parameter`
 - `Auth: redact TokenResponse Debug`
 
-**Robar:** las cuatro. Ya están repartidas en v0.2 y v0.3.
+**Take:** all four. They're distributed across v0.2 and v0.3.
 
 ---
 
 **[davidmosiah/oura-mcp](https://github.com/davidmosiah/oura-mcp)** · TS ·
-0.4.11 · la superficie MCP más completa del conjunto.
+0.4.11 · the most complete MCP surface of the lot.
 
 Resources (`oura://capabilities`, `oura://latest/readiness`), prompts,
-`OURA_CACHE=sqlite`, tres modos de privacidad, `oura_demo` con datos sintéticos
-etiquetados `is_demo: true`, `smithery.yaml`, `glama.json`, `llms.txt`. Parte de
-un **registro de nueve conectores** de salud con instalador único.
+`OURA_CACHE=sqlite`, three privacy modes, `oura_demo` with synthetic data tagged
+`is_demo: true`, `smithery.yaml`, `glama.json`, `llms.txt`. Part of a **registry
+of nine health connectors** with a single installer.
 
-Sus fixes son una confesión útil: `stop all_pages truncating data` (tenían
-nuestro bug), `latest/readiness is the newest record by construction`, `doctor
-accepts full Oura consent scopes`. Y documenta la trampa que nadie más vio:
-**Oura sirve de más viejo a más nuevo y no acepta orden**, así que `limit: 1`
-devuelve el registro **más viejo**.
+Their fixes are a useful confession: `stop all_pages truncating data` (they had
+our bug), `latest/readiness is the newest record by construction`, `doctor
+accepts full Oura consent scopes`. And they document the trap nobody else spotted:
+**Oura serves oldest-first and accepts no sort parameter**, so `limit: 1` returns
+the **oldest** record.
 
-**Robar:** los tres archivos de descubrimiento, los resources, el modo demo.
-**No robar:** el `"recommendation": "green light for moderate-to-high
-intensity"` — plantilla sobre un puntaje, presentada como consejo. Es el número
-sin su método.
-
----
-
-**[benngermin/oura-mcp](https://github.com/benngermin/oura-mcp)** · TS · 12
-herramientas · stdio + HTTP multi-tenant.
-
-El único que compite en lo que creíamos nuestro: **pagina bien y devuelve cursor
-reanudable** (`{records, truncated, nextToken}` con `maxRecords`). Se anuncia
-«first-party» pero es de su propio LifeOS, no de Oura — 3 commits, 0 estrellas.
-
-**Robar:** el cursor reanudable.
+**Take:** the three discovery files, the resources, the demo mode. **Don't take:**
+the `"recommendation": "green light for moderate-to-high intensity"` — a template
+over a score, presented as advice. That's the number without its method.
 
 ---
 
-**[crcatala/oura-cli](https://github.com/crcatala/oura-cli)** · TS · CLI, no MCP
-· la mejor documentación de rarezas de la API.
+**[benngermin/oura-mcp](https://github.com/benngermin/oura-mcp)** · TS · 12 tools
+· stdio + multi-tenant HTTP.
 
-Llavero del SO con caída a 0600, `--sandbox`, `oura doctor`, JSON automático al
-hacer pipe, códigos de salida disciplinados (0/1/2/130), live tests opt-in y
-read-only disparados por un comentario `/run-live-tests`. Su sección «Notes &
-quirks» son tres párrafos que valen semanas.
+The only one that genuinely competes on what we thought was ours: **it paginates
+properly and returns a resumable cursor** (`{records, truncated, nextToken}` with
+`maxRecords`). It advertises itself as "first-party" but it belongs to its
+author's own LifeOS, not to Oura — 3 commits, 0 stars.
 
-**Robar:** las tres rarezas, y el patrón de live tests que nunca bloquean un PR.
+**Take:** the resumable cursor.
 
 ---
 
-**[daveremy/oura-mcp](https://github.com/daveremy/oura-mcp)** · TS · 4★ · el más
-instalado de los MCP.
+**[crcatala/oura-cli](https://github.com/crcatala/oura-cli)** · TS · a CLI, not
+an MCP server · the best documentation of the API's quirks.
 
-`claude plugin marketplace add`, `npx -y`, y un skill `/oura` que «orquesta las
-herramientas MCP en respuestas conversacionales en vez de JSON crudo» — que es
-exactamente la separación que este roadmap propone. Su commit de la semana
-pasada es nuestro bug confirmado.
+OS keychain with a 0600 fallback, `--sandbox`, `oura doctor`, automatic JSON when
+piped, disciplined exit codes (0/1/2/130), opt-in read-only live tests triggered
+by a `/run-live-tests` comment. Its "Notes & quirks" section is three paragraphs
+worth weeks.
 
-**Robar:** la estructura de plugin, y el skill como capa de interpretación
-separada del servidor.
+**Take:** the three quirks, and the pattern of live tests that never block a PR.
+
+---
+
+**[daveremy/oura-mcp](https://github.com/daveremy/oura-mcp)** · TS · 4★ · the
+most-installed of the MCP servers.
+
+`claude plugin marketplace add`, `npx -y`, and an `/oura` skill that "orchestrates
+the MCP tools into conversational responses instead of raw JSON" — which is
+exactly the separation this roadmap proposes. Their commit from that week is our
+confirmed bug.
+
+**Take:** the plugin structure, and the skill as an interpretation layer separate
+from the server.
 
 ---
 
 **[echocharlie/oura-mcp-server](https://github.com/echocharlie/oura-mcp-server)**
 · Python · FastMCP · read-only.
 
-Ocho herramientas, **todas devuelven CSV compacto con las unidades en el nombre
-de la columna**, y está diseñado para *componerse con un conector de Strava*:
-todo llaveado por fecha ISO para que el modelo pueda unir carga de entrenamiento
-contra recuperación en un solo paso de razonamiento. Sigue usando PAT — otra
-confirmación de que los tokens viejos siguen vivos.
+Eight tools, **all returning compact CSV with the units in the column names**,
+and designed to *compose with a Strava connector*: everything keyed by ISO date
+so the model can join training load against recovery in a single reasoning step.
+Still uses a PAT — more confirmation that old tokens still work.
 
-**Robar:** el CSV con unidades, y sobre todo **la composición por fecha**.
+**Take:** CSV with units, and above all **composition by date**.
 
 ---
 
-**El resto, en una línea cada uno:**
+**The rest, one line each:**
 
 | | |
 |---|---|
-| [Th0rgal/open_oura](https://github.com/Th0rgal/open_oura) · Rust · **475★** | BLE por ingeniería inversa: ni toca la nube. El centro de gravedad del ecosistema. **Sin licencia** — no se puede reutilizar nada |
-| [louispires/…Home-Assistant](https://github.com/louispires/Oura-Home-Assistant-Integration) · 58★ | OAuth2. La migración es general, no una moda de los MCP |
-| [entorb/analyze-oura](https://github.com/entorb/analyze-oura) · 10★ · desde 2022 | El más viejo y sigue vivo. Streamlit + pandas: análisis, y honesto sobre serlo |
-| [kesslerio/oura-analytics-openclaw-skill](https://github.com/kesslerio/oura-analytics-openclaw-skill) · 6★ | El form factor «skill», no servidor. Hay demanda de esa capa |
-| [legnoh/oura-exporter](https://github.com/legnoh/oura-exporter) · 6★ · desde 2023 | Prometheus. Otro consumidor de los mismos datos crudos |
-| [narwhaldc/TA-oura](https://github.com/narwhaldc/TA-oura) | Normaliza Oura a un modelo canónico de wearables. La idea de esquema común, en Splunk |
-| [Schimmilab/oura-mcp-server](https://github.com/Schimmilab/oura-mcp-server) | «intelligent analysis and recovery insights». 0★ desde dic-2025 |
-| `oura-ring/.github`, `oura-portable-charger/.github` | SEO puro. Ruido |
+| [Th0rgal/open_oura](https://github.com/Th0rgal/open_oura) · Rust · **475★** | Reverse-engineered BLE: never touches the cloud. The ecosystem's center of gravity. **No license** — nothing can be reused |
+| [louispires/…Home-Assistant](https://github.com/louispires/Oura-Home-Assistant-Integration) · 58★ | OAuth2. The migration is general, not an MCP fad |
+| [entorb/analyze-oura](https://github.com/entorb/analyze-oura) · 10★ · since 2022 | The oldest and still alive. Streamlit + pandas: analysis, and honest about being that |
+| [kesslerio/oura-analytics-openclaw-skill](https://github.com/kesslerio/oura-analytics-openclaw-skill) · 6★ | The "skill" form factor, not a server. There's demand for that layer |
+| [legnoh/oura-exporter](https://github.com/legnoh/oura-exporter) · 6★ · since 2023 | Prometheus. Another consumer of the same raw data |
+| [narwhaldc/TA-oura](https://github.com/narwhaldc/TA-oura) | Normalizes Oura into a canonical wearables model. The common-schema idea, in Splunk form |
+| [Schimmilab/oura-mcp-server](https://github.com/Schimmilab/oura-mcp-server) | "intelligent analysis and recovery insights". 0★ since Dec 2025 |
+| `oura-ring/.github`, `oura-portable-charger/.github` | Pure SEO. Noise |
 
-### Lo que esto significa
+### What this means
 
-**La paginación ya no es un diferenciador.** AGENTS.md dice que «de los siete
-servidores MCP de Oura, el más completo no pagina». Era cierto y hoy no lo es:
-`benngermin` pagina con cursor reanudable, un escalón por encima de nosotros.
-Esa línea del README y de AGENTS.md hay que actualizarla antes de que alguien la
-verifique.
+**Pagination is no longer a differentiator.** AGENTS.md used to say "of the seven
+Oura MCP servers, the most complete one doesn't paginate". That was true and is
+no longer: `benngermin` paginates with a resumable cursor, a rung above what we
+did until that night. That line had to be corrected before someone verified it.
 
-Lo que sí sigue siendo nuestro, y conviene defender:
+What does remain ours, and is worth defending:
 
-- **Tres herramientas, no doce ni diecinueve.** Todos los demás están en 8–12.
-- **No analiza, a propósito, y lo argumenta.** Es la única postura editorial del
-  conjunto.
-- **Cero dependencias** fuera del SDK de MCP. Es lo que hace viable el binario.
-- **Grita cuando entrega de menos.** Nadie más tiene un `truncado` con esa
-  intención — y después de v0.2, con cursor para continuar.
+- **Three tools, not twelve or nineteen.** Everyone else sits at 8–12.
+- **It doesn't analyze, deliberately, and argues why.** It's the only editorial
+  position in the set.
+- **Zero dependencies** beyond the MCP SDK.
+- **It shouts when it under-delivers.** Nobody else has a `truncated` with that
+  intent — and after v0.2, with a cursor to continue from.
 
-El lugar natural del análisis es un **skill de Claude Code** —como el de
-`daveremy`— que cargue el método y lo cite, mientras el servidor sigue
-entregando el dato. Así «más funciones» y «no analiza» dejan de estar en
-conflicto: se separan en dos artefactos, cada uno honesto sobre lo que hace.
-
----
-
-## Lo que NO va en el roadmap
-
-Sostenido de AGENTS.md, y ahora con más razón porque todos los competidores
-hacen lo contrario:
-
-- Herramientas de análisis, correlaciones, detección de anomalías, comparación
-  de periodos.
-- Una herramienta por colección.
-- **Webhooks.** Existen en el spec, pero exigen un endpoint público y rompen el
-  modelo local. Un servidor que corre en tu máquina no puede recibir un POST de
-  Oura sin dejar de ser local.
-- Un token de PyPI en `secrets` — las dos publicaciones van por OIDC.
-- Pruebas que salgan a internet en el CI obligatorio. Sandbox y deriva del spec
-  entran como trabajo *opcional*, nunca como requisito para que pase un PR.
-
-### Con condiciones: caché
-
-Los datos históricos de Oura no cambian; volver a pedir el mismo mes de
-`heartrate` tira 37,000 registros de red a la basura. `davidmosiah` usa
-`OURA_CACHE=sqlite`, opcional. Aquí entra sólo si no traiciona dos cosas: cero
-dependencias (sqlite es biblioteca estándar, así que se puede) y **que nunca
-sirva un dato viejo sin decirlo**. Un caché que responde en silencio con lo de
-ayer es el mismo pecado que no paginar. Si se hace, la respuesta lleva
-`de_cache` y la fecha en que se trajo.
+The natural home for analysis is a **Claude Code skill** — like `daveremy`'s —
+that carries the method and cites it, while the server keeps handing over the
+data. That way "more features" and "doesn't analyze" stop conflicting: they
+separate into two artifacts, each honest about what it does.
 
 ---
 
-## Una nota de estrategia, fuera del código
+## What is NOT on the roadmap
 
-`davidmosiah` no publicó un conector: publicó **nueve** —Oura, WHOOP, Garmin,
-Strava, Fitbit, Withings, Apple Health, Polar, nutrición— bajo un registro con
-su propio estándar de calidad, más un instalador que los configura todos de un
-comando.
+Held over from AGENTS.md, and with more reason now that every competitor does the
+opposite:
 
-Vale la pena mirarlo porque **ya tienes la mitad de esa constelación**:
-`oura-mcp`, un MCP de Withings, `cotejo` para biomarcadores de sangre, y
-`panel-salud` como el lugar donde todo se junta. La diferencia es que los suyos
-comparten instalación, documentación y una postura declarada; los tuyos son
-cuatro repositorios sueltos que resuelven el mismo problema con el mismo
-criterio.
+- Analysis tools, correlations, anomaly detection, period comparison.
+- One tool per collection.
+- **Webhooks.** They exist in the spec, but they require a public endpoint and
+  break the local model. A server running on your machine can't receive a POST
+  from Oura without ceasing to be local.
+- A PyPI token in `secrets` — both publications go through OIDC.
+- Tests that go out to the internet in the mandatory CI. The sandbox and the
+  drift check are *optional* work, never a requirement for a PR to pass.
 
-Y hay algo que ninguno de los nueve tiene: **una postura sobre el método**. Los
-suyos prometen «insights» y consejos generados por plantilla a partir de un
-puntaje, sin decir cuánto oscila solo ese puntaje. Un registro de conectores que
-entregan el dato crudo y mandan el análisis a donde se pueda citar el método
-sería una respuesta directa, y de las pocas defendibles.
+### Conditionally: caching
 
-El puente técnico ya lo señaló `echocharlie`: **componer por fecha**. Que
-`oura-mcp` y el MCP de Withings hablen `AAAA-MM-DD` con el mismo esquema de
-llave es lo que deja al modelo cruzarlos sin que ninguno de los dos analice
-nada.
-
-No es trabajo de v0.2. Pero si algún día se agrupan, el argumento ya está
-escrito.
+Oura's historical data doesn't change; re-requesting the same month of
+`heartrate` throws 37,000 records of network away. `davidmosiah` uses
+`OURA_CACHE=sqlite`, optional. It only lands here if it betrays neither of two
+things: zero dependencies (sqlite is standard library, so that's fine) and **that
+it never serves stale data silently**. A cache that quietly answers with
+yesterday's is the same sin as not paginating. If it's built, the response
+carries `from_cache` and the date it was fetched.
 
 ---
 
-## Lo que la auditoría de punta a punta encontró
+## A strategic note, outside the code
 
-Las 98 pruebas ejercitan funciones. Ninguna arrancaba **el proceso**. Y el modo
-en que un servidor MCP falla más feo no es devolviendo un dato equivocado: es no
-completar el *handshake*, o escribir en stdout algo que no sea JSON-RPC. Las dos
-se ven igual desde el cliente —un servidor que «no aparece»— y ninguna prueba de
-función las atrapa.
+`davidmosiah` didn't publish one connector: they published **nine** — Oura,
+WHOOP, Garmin, Strava, Fitbit, Withings, Apple Health, Polar, nutrition — under a
+registry with its own quality standard, plus an installer that configures them
+all in one command.
 
-`herramientas/humo_stdio.py` lo arranca de verdad y le habla por stdio. A la
-primera corrida encontró que **el servidor se anunciaba como `oura 0.1.0`** con
-`pyproject.toml` en 0.2.0: el número estaba escrito a mano en dos lugares. Ahora
-sale de `importlib.metadata`, y una prueba ata las seis declaraciones de versión
-que hay en el repo.
+It's worth looking at because **half of that constellation already exists here**:
+`oura-mcp`, a Withings MCP, `cotejo` for blood biomarkers, and `panel-salud` as
+the place where it all meets. The difference is that theirs share installation,
+documentation and a declared stance; these are four loose repositories solving the
+same problem with the same judgment.
 
-De paso, `tests/test_coherencia.py` fija lo que la documentación no puede
-contradecir: la línea `mcp-name:` que exige el registro, la política de
-privacidad que exige el directorio, y las afirmaciones que ya caducaron una vez
-—«cuatro herramientas», «el más completo no pagina»— para que no vuelvan.
+And there's something none of the nine has: **a position on method**. Theirs
+promise "insights" and template-generated advice from a score, without saying how
+much that score swings on its own. A registry of connectors that hand over raw
+data and send the analysis where the method can be cited would be a direct answer,
+and one of the few defensible ones.
 
-Y una que se atrapó a sí misma: la primera versión de esa prueba usaba
-`tomllib`, que es de Python 3.11, mientras `pyproject.toml` declara 3.10 como
-mínimo. Habría roto el CI justo en la versión más vieja que decimos soportar.
-Ahora todo el árbol se verifica contra la gramática de 3.10.
-
----
-
-## Tres bugs que sólo salieron al releer el código de los secretos
-
-`credenciales.py` y `autorizar.py` se escribieron de corrido y no se habían
-releído. Los tres son de la misma clase: casos que un usuario real produce sin
-proponérselo.
-
-**1. Un favicon mataba el flujo de autorización entero.** `esperar_callback`
-atendía *una* petición. Un navegador de verdad no manda una: pide
-`/favicon.ico` por su cuenta. Ése se llevaba el turno, el servidor se cerraba, y
-el callback bueno recibía *connection refused*. Desde afuera se veía «no llegó
-ningún callback en 300s», sin ninguna pista de por qué. Reproducido y arreglado:
-ahora atiende hasta que llegue algo a `/callback`.
-
-**2. Un código de OAuth con `=` se rechazaba.** Los códigos son base64url y
-traen `-`, `_` y `=` de relleno con toda normalidad. La heurística miraba si el
-texto tenía `=` o `/` para decidir si era una URL, así que `abc=` salía como
-«eso no trae un `code`» — a alguien que pegó exactamente lo que se le pidió.
-Ahora se decide por la forma (`http://` o `?`), no por los caracteres.
-
-**3. `OURA_CREDENCIALES=cred.json` tronaba.** Una ruta relativa pelada dejaba el
-directorio en cadena vacía y reventaba con `FileNotFoundError: ''`. Además
-habría hecho que las credenciales dependieran del directorio desde el que se
-arrancó el servidor, que en un cliente MCP no es el que uno cree. Ahora se
-normaliza a absoluta.
-
-Y una cuarta, menor pero fea: al guardar en el llavero, el archivo viejo se
-quedaba en disco con un refresh token muerto que `cargar()` ya nunca leería. Un
-secreto que nadie usa sigue siendo un secreto que alguien puede leer. Se borra.
+The technical bridge was already pointed out by `echocharlie`: **compose by
+date**. Having `oura-mcp` and the Withings MCP speak `YYYY-MM-DD` with the same
+key scheme is what lets a model cross them without either one analyzing anything.
 
 ---
 
-## Y un cuarto final del bucle, que casi se nos escapa
+## What the end-to-end audit found
 
-El bucle de paginación tenía dos salidas: `next_token` vacío, o el tope de
-páginas. Falta una tercera y es la clásica: **si Oura repite el mismo
-`next_token`, eso es un ciclo.**
+The 124 tests exercise functions. None started **the process**. And the ugliest
+way an MCP server fails isn't returning wrong data: it's failing the *handshake*,
+or writing something to stdout that isn't JSON-RPC. Both look identical from the
+client — a server that "doesn't show up" — and no function test catches either.
 
-Sin detectarlo se hacían **50 peticiones idénticas**, se devolvían 50 copias del
-mismo registro, y el aviso decía «acorta el rango» — consejo inútil, porque
-acortar no arregla que la API se repita. Encima quemaba 49 peticiones contra un
-límite de tasa que Oura no anuncia por ninguna cabecera. Ahora para en la
-segunda y lo llama por su nombre: `ciclo_de_paginacion`, no `truncado`.
+`tools/smoke_stdio.py` starts it for real and speaks stdio to it. On the first
+run it found that **the server was announcing itself as `oura 0.1.0`** with
+`pyproject.toml` at 0.2.0: the number was hand-written in two places. It now comes
+from `importlib.metadata`, and a test ties together the six version declarations
+in the repo.
 
-Habría sido irónico tenerlo justo en el archivo que es la razón de ser del
-proyecto.
+Along with it, `tests/test_coherence.py` pins what the documentation can't
+contradict: the `mcp-name:` line the registry demands, the privacy policy the
+directory demands, and the claims that expired once — "four tools", "the most
+complete one doesn't paginate" — so they can't come back.
 
-De paso, dos formas de respuesta que se trataban con demasiada generosidad. El
-código envolvía el cuerpo entero como un registro siempre que `data` no fuera
-una lista — lo cual es correcto para `personal_info`, que no viene envuelta,
-pero convertía un `{"data": {...}}` inesperado en «un registro» con forma
-`{"data": …}` que se ve legítimo. Ahora se distingue por la **ausencia** de la
-clave: si `data` viene y no es lista, la forma cambió y se dice, en vez de
-inventar una interpretación.
+And one that caught itself: the first version of that test used `tomllib`, which
+is Python 3.11, while `pyproject.toml` declares 3.10 as the minimum. It would have
+broken CI on precisely the oldest version we claim to support. The whole tree is
+now checked against 3.10 grammar.
 
 ---
 
-## Lo que nadie estaba midiendo: el tamaño de las respuestas
+## Three bugs that only surfaced on rereading the secret-handling code
 
-Toda la noche se optimizó la corrección de los datos y nunca su volumen. Medido
-contra la API real, lo que un modelo recibe de verdad:
+The credentials and authorization modules were written straight through and
+hadn't been reread. All three are the same class: cases a real user produces
+without trying.
 
-| Consulta | JSON | CSV | Ahorro |
+**1. A favicon killed the entire authorization flow.** The callback listener
+served *one* request. A real browser doesn't send one: it asks for
+`/favicon.ico` on its own. That one took the turn, the server closed, and the
+good callback got *connection refused*. From outside it looked like "no callback
+arrived in 300s", with no clue why. Reproduced and fixed: it now serves until
+something reaches `/callback`.
+
+**2. An OAuth code containing `=` was rejected.** Codes are base64url and carry
+`-`, `_` and `=` padding perfectly normally. The heuristic looked for `=` or `/`
+to decide whether the input was a URL, so `abc=` came back as "that carries no
+`code`" — to someone who pasted exactly what they were asked for. It's now decided
+by shape (`http://` or `?`), not by characters.
+
+**3. `OURA_CREDENTIALS=cred.json` crashed.** A bare relative path left the
+directory as an empty string and blew up with `FileNotFoundError: ''`. It would
+also have made credentials depend on the directory the server was started from,
+which in an MCP client is not the one you think. It's now normalized to absolute.
+
+And a fourth, minor but ugly: saving to the keychain left the old file on disk
+carrying a dead refresh token that a later load would never read. A secret nobody
+uses is still a secret somebody can read. It gets deleted.
+
+---
+
+## And a fourth exit from the loop, which nearly got away
+
+The pagination loop had two exits: an empty `next_token`, or the page cap. It was
+missing the classic one: **if Oura repeats the same `next_token`, that's a
+cycle.**
+
+Without detecting it, the client made **50 identical requests**, returned 50
+copies of the same record, and the warning said "shorten the range" — useless
+advice, because shortening doesn't stop the API from repeating itself. It also
+burned 49 requests against a rate limit Oura announces in no header. It now stops
+on the second one and calls it by its name: `pagination_cycle`, not `truncated`.
+
+It would have been ironic to carry that in the very file that is the project's
+reason to exist.
+
+Along the way, two response shapes that were being treated too generously. The
+code wrapped the whole body as a record whenever `data` wasn't a list — correct
+for `personal_info`, which isn't wrapped, but it turned an unexpected
+`{"data": {...}}` into "one record" shaped like `{"data": …}` that looks
+legitimate. It's now told apart by the **absence** of the key: if `data` arrives
+and isn't a list, the shape changed and it says so rather than inventing an
+interpretation.
+
+---
+
+## What nobody was measuring: response size
+
+All night was spent on the data's correctness and never on its volume. Measured
+against the real API, this is what a model actually receives:
+
+| Query | JSON | CSV | Savings |
 |---|---|---|---|
-| Catálogo (`oura_colecciones`) | 1,764 | — | — |
-| `daily_sleep`, 30 días | 7,296 | 6,608 | 10% |
-| `sleep` detallado, 30 días | 120,571 | 100,852 | 17% |
-| **`daily_activity`, 30 días** | **251,814** | 195,643 | 23% |
-| `heartrate`, 1 día | 139,720 | 63,841 | 55% |
+| Catalog (`oura_collections`) | 1,764 | — | — |
+| `daily_sleep`, 30 days | 7,296 | 6,608 | 10% |
+| `sleep` detailed, 30 days | 120,571 | 100,852 | 17% |
+| **`daily_activity`, 30 days** | **251,814** | 195,643 | 23% |
+| `heartrate`, 1 day | 139,720 | 63,841 | 55% |
 
-Dos correcciones salen de aquí.
+Two corrections come out of this.
 
-**El «56% menos» del README era el mejor caso, no el típico.** El ahorro del CSV
-va del 10% al 55% según cuánto anidamiento traiga la colección. Citar sólo el
-mejor número es la clase de cosa que este repositorio le reprocha a los demás.
-Corregido: se da el rango.
+**The README's "56% less" was the best case, not the typical one.** CSV savings
+range from 10% to 55% depending on how much nesting a collection carries. Quoting
+only the best number is the kind of thing this repository holds against others.
+Fixed: the range is given.
 
-**Y 30 días de `daily_activity` son un cuarto de millón de caracteres** —unos
-60,000 tokens— sin que nada lo advirtiera. El 92% de cada registro es un solo
-campo, `met`, que es una serie de MET por minuto. Pidiendo tres columnas con
-`campos`, los mismos 30 días bajan a 5,016 caracteres: **99% menos**.
+**And 30 days of `daily_activity` is a quarter of a million characters** — some
+60,000 tokens — with nothing warning about it. 92% of each record is a single
+field, `met`, a per-minute MET series. Asking for three columns with `fields`
+brings those same 30 days down to 5,016 characters: **99% less**.
 
-La respuesta ahora lleva `respuesta_grande` cuando pasa de 50,000 caracteres,
-diciendo qué campo pesa y qué porcentaje. **No recorta nada por su cuenta** —eso
-sería entregar de menos, justo lo que este paquete existe para no hacer— pero
-deja de gastar el contexto de quien pregunta en silencio.
-
----
-
-## Las cinco preguntas de verdad, simuladas
-
-El código estaba muy revisado y las respuestas eran correctas. Faltaba
-preguntarse si **un modelo puede contestar con ellas sin adivinar**. Se
-simularon las cinco que un usuario hace de verdad, por stdio.
-
-Cuatro salieron bien. La quinta reveló el agujero más grande que quedaba, y es
-la tesis del repositorio vuelta contra nosotros:
-
-> «¿cómo dormí ayer?» → `{"coleccion": "daily_sleep", "n": 0, "paginas": 1}`
-
-Eso no distingue entre **cuatro cosas que llevan a conclusiones opuestas**: no
-llevabas el anillo, el anillo no ha sincronizado, pediste una fecha futura, o tu
-token no tiene ese permiso. Un modelo que reciba `n: 0` contestará «no dormiste»
-con toda confianza — y `n: 0` es la respuesta más común a la pregunta más común.
-
-Entregar un vacío sin explicarlo es exactamente «entregar de menos sin avisar»,
-cometido por nosotros en la interacción principal.
-
-Ahora la respuesta trae `vacio`, que **no adivina** cuál de las cuatro es:
-enumera lo que se puede comprobar sin salir a la red —si el rango está en el
-futuro, si llega hasta hoy y por tanto puede no haber sincronizado, si a las
-credenciales les falta el alcance que esa colección necesita— y deja dicho que
-«no hay dato» no es «no ocurrió».
-
-Para lo del alcance hizo falta una tabla nueva, `ALCANCE_DE`: qué permiso de
-OAuth necesita cada colección. Sin ella, un `n: 0` por falta de permiso es
-indistinguible de uno por falta de datos.
-
-**Y la unión de dos pasos funciona.** «¿Cómo estuvo mi pulso durante el
-ejercicio de ayer?» exige pedir `workout`, sacar `start_datetime`/`end_datetime`
-y usarlos en `heartrate`. Los formatos encajan sin conversión — comprobado— pero
-nada se lo decía al modelo. Ahora está en las instrucciones del servidor, junto
-con las otras tres cosas que no puede adivinar.
+The response now carries `large_response` past 50,000 characters, naming the
+field that dominates and its share. **It trims nothing on its own** — that would
+be under-delivering, exactly what this package exists not to do — but it stops
+spending the asker's context in silence.
 
 ---
 
-## Estado al cerrar la noche
+## The five real questions, simulated
 
-**Hecho:** v0.2 (ocho correcciones), v0.3 (OAuth2 completo), v0.4 (plugin de
-Claude Code, archivos de descubrimiento, binario medido). 121 pruebas, ninguna
-toca la red. Diecinueve commits.
+The code was heavily reviewed and the answers were correct. What was missing was
+asking whether **a model can answer with them without guessing**. The five a user
+actually asks were simulated over stdio.
 
-**Nueve bugs reales**, todos encontrados releyendo código que ya se había dado
-por bueno, y todos de la misma familia — *parece que funcionó*:
+Four came out fine. The fifth revealed the largest remaining hole, and it's this
+repository's thesis turned against us:
+
+> "how did I sleep last night?" → `{"collection": "daily_sleep", "n": 0, "pages": 1}`
+
+That doesn't distinguish between **four things that lead to opposite
+conclusions**: you weren't wearing the ring, the ring hasn't synced, you asked
+for a future date, or your token lacks that scope. A model receiving `n: 0` will
+answer "you didn't sleep" with complete confidence — and `n: 0` is the most
+common answer to the most common question.
+
+Handing over an empty result without explaining it is precisely "under-delivering
+without warning", committed by us on the primary interaction.
+
+The response now carries `empty`, which **doesn't guess** which of the four it is:
+it lists what can be checked without going to the network — whether the range is
+in the future, whether it reaches today and therefore may not have synced, whether
+the credentials lack the scope that collection needs — and states that "no data"
+isn't "it didn't happen".
+
+The scope part required a new table, `SCOPE_OF`: which OAuth permission each
+collection needs. Without it, an `n: 0` caused by a missing permission is
+indistinguishable from one caused by missing data.
+
+**And the two-step join works.** "How was my heart rate during yesterday's
+workout?" requires requesting `workout`, taking `start_datetime`/`end_datetime`
+and using them on `heartrate`. The formats line up with no conversion — verified —
+but nothing told the model so. It's now in the server instructions, along with the
+other three things it can't guess.
+
+---
+
+## State at the close
+
+**Done:** v0.2 (eight fixes), v0.3 (full OAuth2), v0.4 (Claude Code plugin,
+discovery files, measured binary, TypeScript port). 124 tests, none touching the
+network.
+
+**Nine real bugs**, all found by rereading code that had already been called
+done, and all of the same family — *it looks like it worked*:
 
 | | |
 |---|---|
-| `end_date` inconsistente + desfase UTC en `workout` | pedir un día devolvía cero |
-| `latest` y `fields` ignorados en silencio por Oura | pedías uno, recibías todo |
-| Un favicon mataba el flujo de autorización | «no llegó ningún callback» |
-| Un código de OAuth con `=` se rechazaba | a quien pegó lo que se le pidió |
-| `OURA_CREDENCIALES` relativo tronaba | `FileNotFoundError: ''` |
-| `next_token` repetido: 50 peticiones idénticas | y el consejo equivocado |
-| El servidor mentía sobre su versión | 0.1.0 con pyproject en 0.2.0 |
-| Una bandera con un dedazo arrancaba el servidor | parecía colgado |
-| `personal_info` en sandbox devolvía un 404 crudo | parecía que todo estaba roto |
+| Inconsistent `end_date` + UTC skew in `workout` | asking for one day returned zero |
+| `latest` and `fields` silently ignored by Oura | you asked for one, you got everything |
+| A favicon killed the authorization flow | "no callback arrived" |
+| An OAuth code with `=` was rejected | to whoever pasted what they were asked for |
+| A relative `OURA_CREDENTIALS` crashed | `FileNotFoundError: ''` |
+| A repeated `next_token`: 50 identical requests | and the wrong advice |
+| The server lied about its version | 0.1.0 with pyproject at 0.2.0 |
+| A typo'd flag started the server | it looked hung |
+| `personal_info` in the sandbox returned a bare 404 | it looked like everything was broken |
 
-**Lo que no se hizo, y por qué:** las dos cosas que quedan son decisiones de
-Oscar —publicar, y el alcance del `.mcpb`—, no trabajo pendiente.
-
-**Lo que se decidió NO construir:** herramientas de análisis (sigue siendo la
-postura), webhooks (rompen el modelo local), caché (sólo si nunca sirve un dato
-viejo en silencio), y una tabla por colección para el `end_date` (una tabla que
-Oura cambie vuelve a fallar callada).
+**What wasn't done, and why:** what remains are decisions — the `.mcpb`'s scope —
+not pending work.
 
 ---
 
-## Por qué se detuvo el ciclo
+## Execution order
 
-El ciclo de construir → probar → auditar corrió quince vueltas y encontró nueve
-bugs reales. Se detuvo aquí, y conviene decir por qué en vez de dejarlo correr.
+1. **v0.2** — done.
+2. **v0.3** — done.
+3. **v0.4** — `uvx` in the README, plugin, and the binary-versus-port decision:
+   measured, and the answer is TypeScript if Claude Desktop is genuinely the goal.
+4. **v0.5** — submit the MCPB to the directory.
 
-**Lo que queda no es trabajo, son dos decisiones tuyas** —publicar la v0.2.0, y
-si el `.mcpb` hace falta o basta el plugin de Claude Code—. Un agente que las
-tome solo está adivinando qué quieres, no ayudando.
-
-**Y las preguntas que faltaban por simular son análisis**: comparar dos
-periodos, encontrar el peor día, cruzar sueño con entrenamiento. Se comprobó que
-el servidor entrega los datos correctos para las tres; hacer algo más ahí sería
-revertir la postura del proyecto para tener en qué ocuparse.
-
-Seguir iterando cuando ya no hay nada que encontrar sería su propia versión de
-«parece que funcionó» — que es justo lo que este repositorio persigue.
-
----
-
-## Orden de ejecución
-
-1. **v0.2** — `end_date` primero (bug confirmado, en silencio, en la ruta más
-   común), luego sandbox, `fields`/`latest`, 429, cursor, anotaciones,
-   redacción del token, deriva del spec.
-2. **v0.3** — OAuth2. Sin esto no hay usuarios nuevos.
-3. **v0.4** — `uvx` en el README hoy mismo; plugin; y decidir binario vs. port.
-4. **v0.5** — enviar el MCPB al directorio.
-
-Y aparte, gratis y para ayer — cuatro archivos y dos PRs: `smithery.yaml` y
-`glama.json` en la raíz, `llms.txt` con la lista de herramientas y variables de
-entorno, y PRs a `awesome-mcp-servers` y a mcp.so.
+And separately, free and overdue: `smithery.yaml`, `glama.json` and `llms.txt`
+are in. PRs to `awesome-mcp-servers` and mcp.so are not.

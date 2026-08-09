@@ -1,4 +1,4 @@
-name: Publicar
+name: Publish
 
 # Se dispara al empujar una etiqueta `v*`. Publicar es entonces:
 #
@@ -23,8 +23,8 @@ on:
   workflow_dispatch:        # para volver a intentar el registro sin inventar una versión
 
 jobs:
-  pruebas:
-    name: Pruebas antes de publicar
+  tests:
+    name: Tests antes de publicar
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -56,13 +56,13 @@ jobs:
           # de publicación que sólo funciona la primera vez no es un flujo.
           skip-existing: true
 
-  registro:
-    name: Registro de MCP
-    # Depende de PyPI, y tiene que ser así: el registro comprueba que la VERSIÓN
-    # exacta exista en PyPI antes de aceptarla. Lo desacoplé un rato como parche
-    # mientras el publicador confiable no estaba configurado, y el resultado fue
-    # una carrera — el registro terminó en 5 segundos, buscó la 0.1.1 y todavía
-    # no existía. Un paso que valida contra otro no puede correr en paralelo con él.
+  registry:
+    name: MCP registry
+    # Depends on PyPI, and it has to: the registry checks that the EXACT version
+    # exists on PyPI before accepting it. Decoupling them as a stopgap created a
+    # race — the registry finished in 5 seconds, looked for 0.1.1 and it wasn't
+    # there yet. A step that validates against another can't run in parallel
+    # with it.
     needs: pypi
     runs-on: ubuntu-latest
     permissions:
@@ -70,33 +70,32 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
-      # El registro comprueba que el paquete de PyPI declare este repositorio
-      # antes de aceptarlo, así que este paso va DESPUÉS de publicar en PyPI.
-      - name: Instalar el publicador
+      # The registry checks that the PyPI package declares this repository before
+      # accepting it, so this step goes AFTER publishing to PyPI.
+      - name: Install the publisher
         run: |
           curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_amd64.tar.gz" \
             | tar xz mcp-publisher
-      - name: Publicar
+      - name: Publish
         run: |
           ./mcp-publisher login github-oidc
-          # PyPI tarda un poco en servir una versión recién subida por su índice,
-          # y el registro la consulta de inmediato. Eso SÍ se reintenta.
+          # PyPI takes a moment to serve a freshly uploaded version through its
+          # index, and the registry queries it immediately. That IS retried.
           #
-          # Lo que NO se reintenta es un error de validación. La v0.2.0 falló
-          # cinco veces seguidas por una descripción de 106 caracteres contra un
-          # tope de 100, y cada intento imprimía «PyPI puede seguir propagando»:
-          # el mensaje mandaba a esperar algo que no iba a cambiar nunca, y
-          # escondía la causa real cinco veces. Un reintento que no distingue
-          # entre «todavía no» y «así nunca» convierte un error claro en un
-          # misterio.
+          # What is NOT retried is a validation error. v0.2.0 failed five times in
+          # a row over a 106-character description against a 100 cap, and every
+          # attempt printed "PyPI may still be propagating": the message sent
+          # you to wait for something that was never going to change, and hid
+          # the real cause five times over. A retry that can't tell "not yet"
+          # from "never like this" turns a clear error into a mystery.
           for i in 1 2 3 4 5; do
             salida=$(./mcp-publisher publish 2>&1) && { echo "$salida"; exit 0; }
             echo "$salida"
             if echo "$salida" | grep -q '"status":422'; then
-              echo "::error::el registro rechazó los datos de server.json; esperar no lo arregla"
+              echo "::error::the registry rejected server.json; waiting will not fix it"
               exit 1
             fi
-            echo "intento $i sin éxito; PyPI puede seguir propagando"
+            echo "attempt $i unsuccessful; PyPI may still be propagating"
             sleep 20
           done
           exit 1
