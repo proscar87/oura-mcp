@@ -46,8 +46,8 @@ const print = (x: unknown) => process.stdout.write(JSON.stringify(x, null, 2) + 
 export async function cli(argv: string[] = process.argv.slice(2)): Promise<number> {
   const unknown = argv.filter((a) => !ACTIONS.includes(a) && !MODIFIERS.includes(a));
   if (unknown.length) {
-    // A stderr y con código 2, no a stdout: si esto llegara a correr como
-    // srv, cualquier cosa en stdout que no sea JSON-RPC rompe el canal.
+    // To stderr and with exit code 2, not to stdout: if this ever ran as the
+    // server, anything on stdout that isn't JSON-RPC breaks the channel.
     process.stderr.write(`oura-mcp: I don't know ${unknown.join(", ")}\n\n${HELP}`);
     return 2;
   }
@@ -80,7 +80,7 @@ export async function cli(argv: string[] = process.argv.slice(2)): Promise<numbe
   if (argv.includes("--manual")) {
     // `--manual` on its own means nothing, and starting the server because of
     // it would be the old silence all over again.
-    process.stderr.write(`oura-mcp: \`--manual\` sólo acompaña a \`--authorize\`\n\n${HELP}`);
+    process.stderr.write(`oura-mcp: \`--manual\` only accompanies \`--authorize\`\n\n${HELP}`);
     return 2;
   }
   await createServer().connect(new StdioServerTransport());

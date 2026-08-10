@@ -1,4 +1,4 @@
-"""oura-mcp — la API v2 de Oura como server MCP, con la paginación bien hecha."""
+"""oura-mcp — the Oura v2 API as an MCP server, with the pagination done right."""
 
 from .client import OuraError, fetch
 from .collections import COLLECTIONS
