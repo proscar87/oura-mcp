@@ -1245,6 +1245,42 @@ surviving mutant is a question, not a verdict** — which is why the tool prints
 number here would have produced a test asserting something already guaranteed
 twice.
 
+### Round 8: a lone carriage return, and a lock with its key on the door
+
+**The `state` was never checked for being unpredictable.** Every existing test
+verified that a *mismatched* `state` is rejected, and the constant-time
+comparison had teeth. Nothing verified that an attacker couldn't simply know the
+right one — which is the only thing `state` exists for. Replacing
+`secrets.token_urlsafe(24)` with a constant passed the entire suite. A fixed
+state, faithfully and constant-time compared, is a lock with its key printed on
+the door. Both halves now check that twenty authorizations produce twenty
+different values, each long enough not to be guessed.
+
+**CSV: a real bug, found where it was expected to be.** `tag` and `enhanced_tag`
+carry `comment` — text the person typed — so commas, quotes and newlines are not
+edge cases there, they're Tuesday. A CSV that escapes them wrong doesn't fail; it
+shifts every column right, and the numbers that come out are another field read
+under this one's name.
+
+Python was correct: it uses the standard library. **The TypeScript one is
+hand-written**, which is exactly why it needed a test the other didn't — and it
+had a gap:
+
+    Python:      2026-01-01,"a\rb",73
+    TypeScript:  2026-01-01,a\rb,73
+
+A **lone carriage return**, with no newline after it. The escaping regex listed
+`"`, `,` and `\n` and not `\r`; Python quotes it because its `csv` module counts
+`\r` as part of a line terminator. Readers that end a row on a bare `\r` — Excel
+among them — split the row there and shift everything after it. Rare, silent, and
+wrong in the way this whole package is about.
+
+Both are now checked against a strict reader written for the test rather than the
+one under test, across six kinds of hostile value, asserting that a **number**
+stays in its own column — which is the thing that actually harms someone.
+
+And the CSV escaping is in `tools/mutate.py` now, because it earned its place.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

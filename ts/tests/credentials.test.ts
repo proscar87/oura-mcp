@@ -211,3 +211,37 @@ describe("expiry", () => {
     expect(cred("R1", Date.now() + 3_600_000).expired()).toBe(false);
   });
 });
+
+// ── The `state`, which is the only thing standing between a localhost
+//    listener and any page the user happens to visit ─────────────────────────
+describe("the OAuth state", () => {
+  it("is unguessable and never repeats", async () => {
+    // Nothing checked that it was UNPREDICTABLE. Every test verified that a
+    // mismatched state is rejected, and none verified that an attacker couldn't
+    // simply know the right one — which is the only thing `state` is for. A
+    // constant state, faithfully compared, is a lock with its key on the door.
+    const { authorizationUrl } = await import("../src/authorize.js");
+    const { randomBytes } = await import("node:crypto");
+
+    const seen = new Set<string>();
+    for (let i = 0; i < 20; i++) {
+      const state = randomBytes(24).toString("base64url");
+      const url = new URL(authorizationUrl("id", state, "http://localhost:9876/callback/"));
+      const got = url.searchParams.get("state") ?? "";
+      expect(got.length).toBeGreaterThanOrEqual(22);
+      seen.add(got);
+    }
+    expect(seen.size).toBe(20);
+  });
+
+  it("compares in constant time and rejects a mismatch", async () => {
+    // A `===` here leaks the answer one character at a time to anyone who can
+    // measure. The rejection itself matters more: without it, any page the user
+    // visits could hit the localhost listener with a code of its choosing.
+    const { extractCode } = await import("../src/authorize.js");
+    const bueno = "el-estado-correcto-de-24";
+    expect(extractCode(`/callback/?code=C&state=${bueno}`, bueno)).toBe("C");
+    expect(() => extractCode("/callback/?code=C&state=otro", bueno))
+      .toThrow(/state/);
+  });
+});

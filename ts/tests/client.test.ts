@@ -568,3 +568,64 @@ describe("warnings actually reach the response", () => {
     expect(s.reveal()).toBe("TOKEN-QUE-NO-DEBE-SALIR");
   });
 });
+
+// ── CSV with values that shift columns ─────────────────────────────────────
+describe("CSV and free text", () => {
+  // `tag` and `enhanced_tag` carry `comment`: text the person typed. Commas,
+  // quotes and newlines are not edge cases there, they are Tuesday. A CSV that
+  // escapes them wrong doesn't fail — it shifts every column right, and the
+  // numbers that come out are another field read under this one's name.
+  //
+  // Python gets this from the standard library. THIS ONE IS HAND-WRITTEN, which
+  // is exactly why it needs the test the other one doesn't.
+
+  /** A strict reader, deliberately not the code under test. */
+  function parse(text: string): string[][] {
+    const rows: string[][] = [];
+    let row: string[] = [], field = "", quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (quoted) {
+        if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+        else if (c === '"') quoted = false;
+        else field += c;
+      } else if (c === '"') quoted = true;
+      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === "\n") { row.push(field); rows.push(row); row = []; field = ""; }
+      else if (c === "\r") { /* bare CR outside quotes */ }
+      else field += c;
+    }
+    if (field || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  it.each([
+    ["a comma", "ran 5k, felt great"],
+    ["quotes", 'they said "excellent"'],
+    ["a newline", "line1\nline2"],
+    ["CRLF", "a\r\nb"],
+    ["a lone quote", '"'],
+    ["a semicolon and tab", "a;b\tc"],
+    // A LONE CARRIAGE RETURN, no newline after it. This one was a real bug:
+    // Python quoted it and this implementation did not, because the regex
+    // listed `\n` and not `\r`. Readers that end a row on a bare `\r` — Excel
+    // among them — split the row there and shift every later column.
+    ["a lone carriage return", "a\rb"],
+  ])("survives %s and reads back identical", (_name, valor) => {
+    const { text, columns } = toCsv([{ day: "2026-01-01", comment: valor, score: 73 }]);
+    const rows = parse(text);
+
+    expect(rows.length).toBe(2);                       // header + one row
+    expect(rows[1].length).toBe(columns.length);       // nothing shifted
+    const cell = Object.fromEntries(columns.map((c, i) => [c, rows[1][i]]));
+    expect(cell["comment"]).toBe(valor);
+    expect(cell["score"]).toBe("73");                  // a NUMBER stayed put
+  });
+
+  it("keeps nested structures in one cell", () => {
+    const { text, columns } = toCsv([{ day: "2026-01-01", contributors: { deep: 90 } }]);
+    const rows = parse(text);
+    expect(rows[1].length).toBe(columns.length);
+    expect(JSON.parse(rows[1][columns.indexOf("contributors")])).toEqual({ deep: 90 });
+  });
+});

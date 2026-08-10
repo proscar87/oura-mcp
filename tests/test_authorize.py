@@ -7,6 +7,7 @@ account and leave them connected to data that is not theirs, with nothing lookin
 wrong.
 """
 
+import io
 import urllib.parse
 
 import pytest
@@ -222,3 +223,36 @@ def test_the_summary_carries_no_tokens(monkeypatch):
     texto = repr(resumen)
     assert "EL-ACCESO" not in texto
     assert "EL-REFRESCO" not in texto
+
+
+def test_the_state_is_unguessable_and_never_repeats(monkeypatch):
+    """Nothing checked that the `state` was unpredictable.
+
+    Replacing `secrets.token_urlsafe(24)` with a constant passed the WHOLE suite.
+    Every existing test verified that a MISMATCHED state is rejected — and none
+    verified that an attacker could not simply know the right one, which is the
+    only thing `state` is for. A constant state, faithfully compared, is a lock
+    with its key printed on the door.
+
+    Checks the two ways it degrades in practice: a fixed value, and one short
+    enough to guess. It never reaches the network — `authorize` is stopped at the
+    first thing it does after generating the state.
+    """
+    vistos = set()
+    original = az.authorization_url
+
+    def espiar(cid, estado, *a, **k):
+        vistos.add(estado)
+        raise RuntimeError("basta")          # stop before anything else happens
+
+    monkeypatch.setattr(az, "authorization_url", espiar)
+    monkeypatch.setenv("OURA_CLIENT_ID", "id")
+    monkeypatch.setenv("OURA_CLIENT_SECRET", "secreto")
+
+    for _ in range(20):
+        with pytest.raises(RuntimeError):
+            az.authorize(manual=True, salida=io.StringIO())
+
+    assert len(vistos) == 20, "the state repeated: it is not random"
+    for estado in vistos:
+        assert len(estado) >= 22, f"only {len(estado)} characters: guessable"
