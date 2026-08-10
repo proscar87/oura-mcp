@@ -8,6 +8,12 @@ rename is a **breaking change** against 0.2.0 — `dia` → `day`, `inicio` →
 `format`, `coleccion` → `collection`. They now match Oura's own API names,
 which is one less translation layer for anyone reading both.
 
+The CLI flags were renamed with them: `--autorizar` → `--authorize`,
+`--revisar` → `--check`, `--olvidar` → `--forget`. The README, `llms.txt` and
+`AGENTS.md` went on citing the old ones for a while — twelve commands that
+answered `I don't know --revisar`. A test now checks every flag quoted in the
+documentation against the list the CLI actually accepts.
+
 TypeScript port, with parity verified against the Python implementation on the
 real API: the same 1,231 records in the same order for the two-page `heartrate`
 case that justifies the project. Node ships with Claude Desktop, which removes

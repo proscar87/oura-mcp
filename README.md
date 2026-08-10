@@ -66,7 +66,7 @@ under-deliver.
 
 ```bash
 pip install mcp-oura
-OURA_SANDBOX=1 oura-mcp --revisar
+OURA_SANDBOX=1 oura-mcp --check
 ```
 
 The sandbox is official — it's in Oura's OpenAPI spec, with 34 mirror routes —
@@ -90,23 +90,23 @@ required**, the portal rejects the other form with `invalid_redirect_uri`.
 ```bash
 export OURA_CLIENT_ID="…"
 export OURA_CLIENT_SECRET="…"
-oura-mcp --autorizar             # opens the browser, waits for the callback
-oura-mcp --autorizar --manual    # headless machines: you paste the URL back
+oura-mcp --authorize             # opens the browser, waits for the callback
+oura-mcp --authorize --manual    # headless machines: you paste the URL back
 ```
 
 The token is stored in `~/.config/oura-mcp/credenciales.json` with mode 600 — or
 in the system keychain if you happen to have `keyring` installed, which is not a
-dependency of this package — and refreshes itself. `oura-mcp --olvidar` erases
+dependency of this package — and refreshes itself. `oura-mcp --forget` erases
 it.
 
 **b) A personal token, if you already had one.**
 
 ```bash
 export OURA_PAT="your-token"
-oura-mcp --revisar
+oura-mcp --check
 ```
 
-`--revisar` is the self-check: it reports which credential you're using, which
+`--check` is the self-check: it reports which credential you're using, which
 scopes were granted and how long the access has left, **without returning the
 token or a single health value**. It reports the token's length, never the
 token. Error messages get copied and pasted into chats and issues; they have no
@@ -120,7 +120,7 @@ With the package installed (`pip install mcp-oura`):
 claude mcp add -s user oura --env OURA_SANDBOX=1 -- oura-mcp
 ```
 
-Drop `OURA_SANDBOX` once you've run `oura-mcp --autorizar`.
+Drop `OURA_SANDBOX` once you've run `oura-mcp --authorize`.
 
 **If you use [uv](https://docs.astral.sh/uv/)**, nothing needs to be installed
 permanently:
@@ -288,7 +288,7 @@ your data is governed by [their privacy
 policy](https://ouraring.com/privacy-policy), not by this one.
 
 **How long it is retained.** Credentials, until you delete them:
-`oura-mcp --olvidar`, or by removing the file. Health data isn't retained at all
+`oura-mcp --forget`, or by removing the file. Health data isn't retained at all
 — it lives in the response and that's it.
 
 **Diagnostics expose nothing.** `oura_check` reports the token's length, never

@@ -323,6 +323,14 @@ describe("authorization by elicitation", () => {
     expect(String(seen[0]!["url"])).toContain("cloud.ouraring.com/oauth/authorize");
   });
 
+  // NOTE: this test also guards an unhandled rejection. `cancel()` rejects a
+
+  // promise nobody awaits (the caller throws its own error), and in Node that
+
+  // kills the process — declining the prompt took the whole server down. No
+
+  // assertion catches it; vitest reporting unhandled rejections as errors did.
+
   it("a declined prompt stops the listener instead of hanging", async () => {
     // Left running, a declined prompt keeps the tool call waiting the full five
     // minutes for a callback that will never come.
@@ -344,5 +352,64 @@ describe("authorization by elicitation", () => {
     delete process.env.OURA_CLIENT_SECRET;
     await expect(authorizeByElicitation(async () => ({}), undefined))
       .rejects.toThrow(/oauth\/applications/);
+  });
+});
+
+// ── Sample data must never reach a model unlabeled ─────────────────────────
+describe("the sandbox marker", () => {
+  // This package's own thesis, turned on itself. `oura_check` said the sample
+  // data was synthetic and the queries did not — so a fresh install, in the
+  // DEFAULT configuration, answered "how did I sleep?" with a score out of
+  // Oura's fake data and nothing marking it.
+  //
+  // The checkbox in the manifest defaults to on, and that's deliberate: off, a
+  // stranger with no registered Oura application gets an error on their first
+  // question instead of a working demonstration. On is only defensible because
+  // of these tests.
+  beforeEach(() => {
+    process.env.OURA_SANDBOX = "1";
+    delete process.env.OURA_PAT;
+  });
+
+  it("marks every collection, not just the one tried by hand", async () => {
+    for (const c of ["daily_sleep", "sleep", "workout", "daily_activity"]) {
+      fakeOura([[{ day: "2026-01-15", score: 73 }]]);
+      const r = await fetchAll(c, { start: "2026-01-15", end: "2026-01-15" });
+      expect(r["synthetic"], c).toBeDefined();
+    }
+  });
+
+  it("marks it even when the answer is empty", async () => {
+    // The reading most likely to be taken as "you have no data".
+    fakeOura([[]]);
+    const r = await fetchAll("daily_sleep", { start: "2026-01-15", end: "2026-01-15" });
+    expect(r["synthetic"]).toBeDefined();
+  });
+
+  it("marks it in CSV too", async () => {
+    // A wall of numbers with nowhere to put a caveat.
+    fakeOura([[{ day: "2026-01-15", score: 73 }]]);
+    const r = await fetchAll("daily_sleep",
+      { start: "2026-01-15", end: "2026-01-15", format: "csv" });
+    expect(r["synthetic"]).toBeDefined();
+  });
+
+  it("says whose it is not, and names the next step", async () => {
+    // Wording, not just presence. "Sandbox mode" alone means nothing to a
+    // person, and a warning with no next step leaves them stuck.
+    fakeOura([[{ day: "2026-01-15" }]]);
+    const r = await fetchAll("daily_sleep", { start: "2026-01-15", end: "2026-01-15" });
+    const m = String(r["synthetic"]).toLowerCase();
+    expect(m).toContain("not this person's");
+    expect(m).toContain("connect");
+  });
+
+  it("is absent in real mode", async () => {
+    // Otherwise it rides on every answer and stops being read.
+    delete process.env.OURA_SANDBOX;
+    process.env.OURA_PAT = "token-de-prueba";
+    fakeOura([[{ day: "2026-01-15" }]]);
+    const r = await fetchAll("daily_sleep", { start: "2026-01-15", end: "2026-01-15" });
+    expect(r["synthetic"]).toBeUndefined();
   });
 });

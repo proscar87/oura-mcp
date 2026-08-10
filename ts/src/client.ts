@@ -94,6 +94,16 @@ export class Secret {
   }
 }
 
+/**
+ * On every sandbox response. Sample data that reads as real is the exact
+ * failure this server exists to correct, so it says so in band, where a
+ * model must see it — not in the documentation, where nobody reads it.
+ */
+export const SYNTHETIC =
+  "SANDBOX MODE: this is Oura's sample data, not this person's. Do not " +
+  "report these numbers as their own. To see real data, turn off the " +
+  "sample-data setting and connect an Oura account.";
+
 export function inSandbox(): boolean {
   const v = (process.env.OURA_SANDBOX ?? "").trim().toLowerCase();
   return v !== "" && !["0", "no", "false"].includes(v);
@@ -559,6 +569,14 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
   if (warning) out["large_response"] = warning;
   if (trimmed.discarded) out["discarded_out_of_range"] = trimmed.discarded;
   if (!data.length) out["empty"] = await whyEmpty(collection, start, end);
+  if (inSandbox()) {
+    // EVERY sandbox response says so. `oura_check` said it and the queries did
+    // not, so someone asking "how did I sleep?" got a score out of Oura's fake
+    // data with nothing marking it — this package's own thesis, committed by
+    // us, in the default configuration. A model reading this key cannot report
+    // synthetic numbers as the person's own, and it names the next step.
+    out["synthetic"] = SYNTHETIC;
+  }
   return out;
 }
 

@@ -94,6 +94,16 @@ class Secret:
     __str__ = __repr__
 
 
+SYNTHETIC = (
+    "SANDBOX MODE: this is Oura's sample data, not this person's. Do not "
+    "report these numbers as their own. To see real data, turn off the "
+    "sample-data setting and connect an Oura account."
+)
+"""On every sandbox response. Sample data that reads as real is the exact
+failure this server exists to correct, so it says so in band, where a model
+must see it — not in the documentation, where nobody reads it."""
+
+
 def in_sandbox() -> bool:
     """Is `OURA_SANDBOX` set? Any value except empty, `0`, `no`, `false`."""
     v = (os.environ.get("OURA_SANDBOX") or "").strip().lower()
@@ -640,4 +650,11 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
         out["discarded_out_of_range"] = discarded
     if not data:
         out["empty"] = _why_empty(collection, start, end)
+    if in_sandbox():
+        # EVERY sandbox response says so. `oura_check` said it and the queries
+        # did not, so someone asking "how did I sleep?" got a score of 73 out of
+        # Oura's fake data with nothing marking it — which is this package's own
+        # thesis committed by us, in the default configuration. A model reading
+        # this key cannot report synthetic numbers as the person's own.
+        out["synthetic"] = SYNTHETIC
     return out

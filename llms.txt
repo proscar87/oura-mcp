@@ -42,7 +42,7 @@ Parameter names are in Spanish because the codebase is.
 ## Environment variables
 
 - `OURA_SANDBOX=1` — Oura's official synthetic data, no credentials needed.
-- `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET` — for `oura-mcp --autorizar` (OAuth2).
+- `OURA_CLIENT_ID`, `OURA_CLIENT_SECRET` — for `oura-mcp --authorize` (OAuth2).
 - `OURA_PAT`, `OURA_PAT_FILE` — personal token, if you already had one. Oura
   stopped issuing them in December 2025.
 - `OURA_CREDENTIALS` — where the 0600 OAuth file lives.

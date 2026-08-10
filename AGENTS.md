@@ -184,7 +184,7 @@ its first run.
 To test against the real Oura, with Oscar's token in `~/.oura_pat`:
 
 ```
-OURA_PAT_FILE=~/.oura_pat python -m oura_mcp --revisar
+OURA_PAT_FILE=~/.oura_pat python -m oura_mcp --check
 ```
 
 **When measuring against the real API, print only counts and field names, never

@@ -167,7 +167,12 @@ export function waitForCallback(port: number, state: string,
 
     srv.listen(port, "127.0.0.1");
   });
-  return Object.assign(promise, { cancel });
+  // Nobody awaits this promise on the cancelled path — the caller throws its own
+  // error instead — and in Node an unhandled rejection kills the process. So
+  // declining the prompt took the whole MCP server down with it. Claiming the
+  // rejection here says out loud that cancellation is handled, not ignored.
+  const cancelAndSilence = () => { promise.catch(() => {}); cancel(); };
+  return Object.assign(promise, { cancel: cancelAndSilence });
 }
 
 export function portOf(redirect: string): number {

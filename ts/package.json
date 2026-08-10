@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "revisar": "node dist/main.js --revisar"
+    "check": "node dist/main.js --check"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
