@@ -1,22 +1,22 @@
 #!/usr/bin/env python3
-"""¿Sigue existiendo cada una de las 19 collections que declara `collections.py`?
+"""Does every one of the 19 collections declared in `collections.py` still exist?
 
-CORRE CONTRA EL SANDBOX DE OURA, QUE NO PIDE CREDENCIALES. Por eso puede vivir
-en CI sin depender del token de nadie — que es la regla de este repositorio: un
-CI que necesita el token de alguien para pasar no es un CI, es una dependencia
-de esa persona.
+IT RUNS AGAINST OURA'S SANDBOX, WHICH ASKS FOR NO CREDENTIALS. That's why it can
+live in CI without depending on anyone's token — which is this repository's rule:
+a CI that needs someone's token to pass isn't a CI, it's a dependency on that
+person.
 
-QUÉ ATRAPA Y QUÉ NO
-    Sí   una colección que Oura renombró, movió o retiró.
-    No   una colección NUEVA. El sandbox no se puede enumerar, así que descubrir
-         altas sigue siendo trabajo humano — hoy, leer las notas de versión.
+WHAT IT CATCHES AND WHAT IT DOESN'T
+    Yes  a collection Oura renamed, moved or retired.
+    No   a NEW collection. The sandbox can't be enumerated, so discovering
+         additions is still human work — today, reading the release notes.
 
-POR QUÉ NO SE COMPARA CONTRA EL OPENAPI
-Sería lo correcto y no se puede: Oura no publica su `openapi.json` en ninguna
-URL estable. Se probaron cinco rutas plausibles el 9-ago-2026 y las cinco dan
-404. La única copia pública que encontramos está vendorizada en el repositorio
-de un tercero (`spxrogers/oura-toolkit`), y colgar nuestro CI del repositorio de
-alguien más es cambiar una dependencia por otra peor.
+WHY IT DOESN'T COMPARE AGAINST THE OPENAPI SPEC
+That would be the right thing and it isn't possible: Oura doesn't publish its
+`openapi.json` at any stable URL. Five plausible paths were tried on 2026-08-09
+and all five return 404. The only public copy we found is vendored in a third
+party's repository (`spxrogers/oura-toolkit`), and hanging our CI off someone
+else's repo trades one dependency for a worse one.
 
     $ python tools/check_drift.py
 """
@@ -30,58 +30,57 @@ os.environ["OURA_SANDBOX"] = "1"
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from oura_mcp.client import OuraError, base, fetch          # noqa: E402
-from oura_mcp.collections import COLLECTIONS, WITHOUT_SANDBOX, shape   # noqa: E402
+from oura_mcp.client import OuraError, base, fetch                    # noqa: E402
+from oura_mcp.collections import COLLECTIONS, WITHOUT_SANDBOX, shape  # noqa: E402
 
-# El sandbox sirve 18 de las 19; la que falta se declara en `collections.py`,
-# que es de donde también la lee el client. Que falte no es deriva, así que se
-# espera explícitamente en vez de tolerarse en silencio.
+# The sandbox serves 18 of the 19; the missing one is declared in
+# `collections.py`, which is also where the client reads it from. Its absence
+# isn't drift, so it's expected explicitly rather than tolerated in silence.
 
-VENTANA = ("2026-01-01", "2026-01-05")
-VENTANA_HORA = ("2026-01-01T00:00:00", "2026-01-02T00:00:00")
+WINDOW = ("2026-01-01", "2026-01-05")
+WINDOW_TIME = ("2026-01-01T00:00:00", "2026-01-02T00:00:00")
 
 
-def revisar_una(nombre: str) -> tuple[bool, str]:
-    f = shape(nombre)
-    args = VENTANA if f == "date_range" else VENTANA_HORA if f == "datetime_range" else ()
+def check_one(name: str) -> tuple[bool, str]:
+    s = shape(name)
+    args = WINDOW if s == "date_range" else WINDOW_TIME if s == "datetime_range" else ()
 
-    if nombre in WITHOUT_SANDBOX:
-        # SE PREGUNTA A OURA DIRECTAMENTE, saltándose la guarda del client. Si
-        # se usara `fetch()`, esta comprobación estaría verificando nuestro
-        # propio mensaje de error en vez de la API — y el día que Oura agregue
-        # esta colección al sandbox, nadie se enteraría. Un chequeo que se
-        # comprueba a sí mismo no comprueba nada.
+    if name in WITHOUT_SANDBOX:
+        # ASK OURA DIRECTLY, bypassing the client's guard. Using `fetch()` here
+        # would mean this check verified our own error message instead of the
+        # API — and the day Oura adds this collection to the sandbox, nobody
+        # would notice. A check that checks itself checks nothing.
         from oura_mcp.client import _request, _token
         try:
-            _request(f"{base()}/{nombre}", _token())
+            _request(f"{base()}/{name}", _token())
         except OuraError as e:
             if "404" in str(e):
-                return True, "ausente del sandbox, como se espera"
+                return True, "absent from the sandbox, as expected"
             return False, str(e)[:90]
-        return False, "AHORA SÍ está en el sandbox: actualiza WITHOUT_SANDBOX"
+        return False, "it IS in the sandbox now: update WITHOUT_SANDBOX"
 
     try:
-        r = fetch(nombre, *args)
+        r = fetch(name, *args)
     except OuraError as e:
         return False, str(e)[:90]
-    return True, f"responde, n={r['n']}"
+    return True, f"responds, n={r['n']}"
 
 
 def main() -> int:
-    print(f"deriva de collections contra {base()}\n")
-    fallas = []
-    for nombre in COLLECTIONS:
-        ok, detalle = revisar_una(nombre)
-        print(f"  {'ok ' if ok else 'MAL'}  {nombre:<26} {detalle}")
+    print(f"collection drift against {base()}\n")
+    failures = []
+    for name in COLLECTIONS:
+        ok, detail = check_one(name)
+        print(f"  {'ok ' if ok else 'BAD'}  {name:<26} {detail}")
         if not ok:
-            fallas.append(nombre)
+            failures.append(name)
     print()
-    if fallas:
-        print(f"{len(fallas)} colección(es) derivaron: {', '.join(fallas)}")
-        print("Revisa collections.py contra las notas de versión de Oura.")
+    if failures:
+        print(f"{len(failures)} collection(s) drifted: {', '.join(failures)}")
+        print("Check collections.py against Oura's release notes.")
         return 1
-    print(f"Las {len(COLLECTIONS)} collections siguen donde dice collections.py.")
-    print("Recuerda: esto NO detecta collections nuevas.")
+    print(f"All {len(COLLECTIONS)} collections are still where collections.py says.")
+    print("Remember: this does NOT detect new collections.")
     return 0
 
 

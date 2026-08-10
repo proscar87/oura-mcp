@@ -30,9 +30,9 @@ def test_toda_coleccion_declara_una_forma_conocida():
         assert desc, nombre
 
 
-def test_una_coleccion_inventada_truena_al_resolverla():
-    """Tiene que fallar AQUÍ y no convertirse en una petición a una URL que no
-    existe, cuyo 404 después hay que interpretar."""
+def test_a_made_up_collection_blows_up_when_resolved():
+    """It has to fail HERE and not turn into a request to a URL that doesn't
+    exist, whose 404 then has to be interpreted."""
     with pytest.raises(KeyError):
         collections.shape("daily_vibraciones")
 
@@ -47,7 +47,7 @@ class _RespuestaFalsa(io.BytesIO):
 
 
 def _oura_falso(pages, monkeypatch, registrar=None):
-    """Sustituye la API por una que sirve `pages`, cada una con su next_token."""
+    """Replaces the API with one serving `pages`, each with its own next_token."""
     llamadas = []
 
     def urlopen(req, timeout=None):
@@ -67,7 +67,7 @@ def _oura_falso(pages, monkeypatch, registrar=None):
     return llamadas
 
 
-def test_sigue_el_next_token_hasta_el_final(monkeypatch):
+def test_follows_next_token_to_the_end(monkeypatch):
     """LA CICATRIZ QUE JUSTIFICA EL PAQUETE. Oura entrega `next_token` y quien no
     lo persigue recibe la primera página sin que nada se lo diga: la respuesta es
     un JSON válido, con data reales, que se ve completo.
@@ -81,9 +81,9 @@ def test_sigue_el_next_token_hasta_el_final(monkeypatch):
     assert "truncated" not in r
 
 
-def test_al_truncar_lo_dice(monkeypatch):
-    """Un resultado incompleto que no se declara incompleto es peor que un error:
-    se ve igual que uno completo."""
+def test_says_so_when_truncating(monkeypatch):
+    """An incomplete result that doesn't declare itself incomplete is worse than an
+    error: it looks exactly like a complete one."""
     pages = [[{"i": n}] for n in range(20)]
     _oura_falso(pages, monkeypatch)
     r = client.fetch("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z",
@@ -92,7 +92,7 @@ def test_al_truncar_lo_dice(monkeypatch):
     assert "truncated" in r and "shorten" in r["truncated"]
 
 
-def test_una_sola_pagina_no_pide_de_mas(monkeypatch):
+def test_a_single_page_asks_for_no_more(monkeypatch):
     llamadas = _oura_falso([[{"i": 1}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-01", "2026-08-02")
     assert r["n"] == 1 and r["pages"] == 1
@@ -106,9 +106,9 @@ def test_una_sola_pagina_no_pide_de_mas(monkeypatch):
 # reporta `day` en hora local, así que con -06:00 un entrenamiento de la tarde
 # se contaba en el día siguiente. Pedir [d..d] devolvía CERO registros sin un
 # solo aviso: la misma familia de falla que no paginar.
-def test_pide_dos_dias_de_mas_de_cada_lado(monkeypatch):
-    """No es margen de cortesía: `workout` es exclusiva Y va desfasada a UTC, y
-    las dos cosas se suman. Un día no alcanzaba."""
+def test_requests_two_extra_days_on_each_side(monkeypatch):
+    """Not a courtesy margin: `workout` is exclusive AND skewed to UTC, and the two
+    stack. One day was not enough."""
     urls = []
     _oura_falso([[{}]], monkeypatch, registrar=urls)
     client.fetch("daily_sleep", "2026-08-10", "2026-08-20")
@@ -116,18 +116,19 @@ def test_pide_dos_dias_de_mas_de_cada_lado(monkeypatch):
     assert "end_date=2026-08-22" in urls[-1]
 
 
-def test_el_rango_datetime_no_se_ensancha(monkeypatch):
-    """`heartrate` se pide con hora. Correrle dos días sería pedir mil veces más
-    muestras de las que se necesitan para arreglar un problema que no tiene."""
+def test_the_datetime_range_is_not_widened(monkeypatch):
+    """`heartrate` is requested with a time. Shifting it two days would ask for a
+    thousand times more samples than needed to fix a problem it doesn't have."""
     urls = []
     _oura_falso([[{}]], monkeypatch, registrar=urls)
     client.fetch("heartrate", "2026-08-10T00:00:00Z", "2026-08-10T06:00:00Z")
     assert "start_datetime=2026-08-10T00%3A00%3A00Z" in urls[-1]
 
 
-def test_recorta_los_dias_de_mas_y_lo_dice(monkeypatch):
-    """El día extra se pidió a propósito; descartarlo en silencio dejaría a quien
-    lee la respuesta sin poder distinguir «no hay dato» de «lo quitamos»."""
+def test_trims_the_extra_days_and_says_so(monkeypatch):
+    """The extra day was requested on purpose; dropping it silently would leave
+    whoever reads the response unable to tell "there is no data" from "we removed
+    it"."""
     pagina = [{"day": d} for d in ("2026-08-08", "2026-08-09", "2026-08-10",
                                    "2026-08-11", "2026-08-12")]
     _oura_falso([pagina], monkeypatch)
@@ -137,24 +138,24 @@ def test_recorta_los_dias_de_mas_y_lo_dice(monkeypatch):
     assert r["discarded_out_of_range"] == 2
 
 
-def test_un_solo_dia_devuelve_ese_dia(monkeypatch):
-    """El caso que estaba roto: pedir [d..d] devolvía cero en daily_activity,
-    sleep y workout."""
+def test_a_single_day_returns_that_day(monkeypatch):
+    """The case that was broken: asking for [d..d] returned zero on daily_activity,
+    sleep and workout."""
     pagina = [{"day": "2026-08-09"}, {"day": "2026-08-10"}, {"day": "2026-08-11"}]
     _oura_falso([pagina], monkeypatch)
     r = client.fetch("workout", "2026-08-10", "2026-08-10")
     assert r["n"] == 1 and r["data"][0]["day"] == "2026-08-10"
 
 
-def test_el_dia_sale_de_start_day_cuando_no_hay_day(monkeypatch):
-    """`rest_mode_period` y `enhanced_tag` no traen `day`: traen `start_day`."""
+def test_the_day_comes_from_start_day_when_there_is_no_day(monkeypatch):
+    """`rest_mode_period` and `enhanced_tag` carry no `day`: they carry `start_day`."""
     pagina = [{"start_day": "2026-08-09"}, {"start_day": "2026-08-30"}]
     _oura_falso([pagina], monkeypatch)
     r = client.fetch("enhanced_tag", "2026-08-09", "2026-08-09")
     assert r["n"] == 1
 
 
-def test_lo_que_no_se_puede_fechar_se_conserva(monkeypatch):
+def test_what_cannot_be_dated_is_kept(monkeypatch):
     """Descartar lo que no se entiende es la shape más rápida de entregar de
     menos, que es exactamente lo que este paquete existe para no hacer."""
     pagina = [{"day": "2026-08-09"}, {"sin_fecha": True}, {"day": "2026-09-30"}]
@@ -171,9 +172,9 @@ def test_dia_de_reconoce_las_claves_con_hora():
     assert client.day_of("no es un dict") is None
 
 
-def test_al_truncar_deja_el_cursor_para_continuar(monkeypatch):
-    """`truncated` avisaba pero no dejaba continuar: quien lo recibía sólo podía
-    reintentar a ciegas."""
+def test_truncating_leaves_a_cursor_to_continue_from(monkeypatch):
+    """`truncated` warned but didn't let you continue: whoever received it could
+    only retry blind."""
     pages = [[{"i": n}] for n in range(20)]
     _oura_falso(pages, monkeypatch)
     r = client.fetch("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z",
@@ -182,7 +183,7 @@ def test_al_truncar_deja_el_cursor_para_continuar(monkeypatch):
 
 
 # ── CSV: el mismo dato sin repetir las claves 37,000 veces ──────────────────
-def test_el_encabezado_sale_de_la_union_no_del_primero(monkeypatch):
+def test_the_header_comes_from_the_union_not_the_first_record(monkeypatch):
     """Sacar el encabezado del primer registro es la shape más fácil de perder
     data aquí: basta un registro con un campo extra para que ese campo
     desaparezca sin dejar rastro."""
@@ -211,14 +212,14 @@ def test_lo_anidado_va_como_json_en_su_celda(monkeypatch):
     assert '{""deep"":91}' in r["data"]
 
 
-def test_la_fecha_es_la_primera_columna(monkeypatch):
+def test_the_date_is_the_first_column(monkeypatch):
     """Es la columna con la que se cruza contra otra fuente."""
     _oura_falso([[{"score": 1, "day": "2026-08-10", "aaa": 2}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-10", format="csv")
     assert r["columns"][0] == "day"
 
 
-def test_el_csv_tambien_llega_cuando_se_trunca(monkeypatch):
+def test_the_csv_arrives_when_truncated_too(monkeypatch):
     """Con dos salidas, la truncada se iba sin format ni avisos — y es la que
     más necesita que se le crea todo lo que dice."""
     pages = [[{"day": "2026-08-10", "i": n}] for n in range(20)]
@@ -252,20 +253,20 @@ def _falla_n_veces(monkeypatch, veces, cabeceras=None, dormidas=None):
     return estado
 
 
-def test_reintenta_el_429_y_sale_adelante(monkeypatch):
+def test_retries_the_429_and_gets_through(monkeypatch):
     dormidas = []
     _falla_n_veces(monkeypatch, 2, dormidas=dormidas)
     assert client.fetch("personal_info")["n"] == 1
     assert dormidas == [1.0, 2.0]          # backoff exponencial
 
 
-def test_el_429_persistente_se_rinde_con_todo_dicho(monkeypatch):
+def test_a_persistent_429_gives_up_having_said_everything(monkeypatch):
     _falla_n_veces(monkeypatch, 99)
     with pytest.raises(client.OuraError, match="2 retries"):
         client.fetch("personal_info")
 
 
-def test_honra_retry_after_en_segundos(monkeypatch):
+def test_honors_retry_after_in_seconds(monkeypatch):
     cab = email.message.Message()
     cab["Retry-After"] = "3"
     dormidas = []
@@ -274,7 +275,7 @@ def test_honra_retry_after_en_segundos(monkeypatch):
     assert dormidas == [3.0]
 
 
-def test_el_retry_after_no_puede_colgar_la_conversacion(monkeypatch):
+def test_retry_after_cannot_hang_the_conversation(monkeypatch):
     """Una cabecera que pida media hora no puede dejar esperando a nadie."""
     cab = email.message.Message()
     cab["Retry-After"] = "1800"
@@ -284,7 +285,7 @@ def test_el_retry_after_no_puede_colgar_la_conversacion(monkeypatch):
     assert dormidas == [client.MAX_WAIT]
 
 
-def test_solo_el_429_se_reintenta(monkeypatch):
+def test_only_the_429_is_retried(monkeypatch):
     """Un 401 no mejora esperando: reintentarlo sólo tarda tres veces más en dar
     la misma mala noticia."""
     intentos = {"n": 0}
@@ -352,21 +353,21 @@ def test_ultimo_no_exige_rango(monkeypatch):
 # tiene cómo conseguir uno, así que «instálalo y luego consigue un token» dejó
 # de ser un camino. El sandbox es oficial —está en el OpenAPI, con 34 rutas
 # espejo— y acepta cualquier cadena como Authorization.
-def test_el_sandbox_no_pide_token(monkeypatch):
+def test_the_sandbox_asks_for_no_token(monkeypatch):
     monkeypatch.delenv("OURA_PAT", raising=False)
     monkeypatch.delenv("OURA_PAT_FILE", raising=False)
     monkeypatch.setenv("OURA_SANDBOX", "1")
     assert client._token().reveal() == "sandbox"
 
 
-def test_el_sandbox_cambia_la_base(monkeypatch):
+def test_the_sandbox_changes_the_base(monkeypatch):
     monkeypatch.setenv("OURA_SANDBOX", "1")
     assert client.base().endswith("/v2/sandbox/usercollection")
     monkeypatch.setenv("OURA_SANDBOX", "0")
     assert client.base().endswith("/v2/usercollection")
 
 
-def test_la_base_se_puede_forzar(monkeypatch):
+def test_the_base_can_be_forced(monkeypatch):
     """`OURA_API_BASE_URL` gana sobre todo: es lo que permite apuntar a un doble
     en una prueba sin monkeypatchear el módulo."""
     monkeypatch.setenv("OURA_SANDBOX", "1")
@@ -379,13 +380,13 @@ def test_apagado_el_sandbox_vuelven_a_hacer_falta_credenciales(monkeypatch, tmp_
     monkeypatch.delenv("OURA_PAT_FILE", raising=False)
     monkeypatch.delenv("OURA_SANDBOX", raising=False)
     monkeypatch.setenv("OURA_CREDENTIALS", str(tmp_path / "no-existe.json"))
-    monkeypatch.setenv("OURA_SIN_LLAVERO", "1")
+    monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
     with pytest.raises(client.OuraError, match="no credentials"):
         client._token()
 
 
 # ── Parámetros ──────────────────────────────────────────────────────────────
-def test_las_de_fecha_exigen_rango(monkeypatch):
+def test_date_collections_require_a_range(monkeypatch):
     monkeypatch.setenv("OURA_PAT", "x")
     with pytest.raises(client.OuraError, match="needs start and end"):
         client.fetch("daily_sleep")
@@ -412,7 +413,7 @@ def test_sin_credenciales_se_ofrecen_los_tres_caminos(monkeypatch, tmp_path):
     monkeypatch.delenv("OURA_PAT_FILE", raising=False)
     monkeypatch.delenv("OURA_SANDBOX", raising=False)
     monkeypatch.setenv("OURA_CREDENTIALS", str(tmp_path / "no-existe.json"))
-    monkeypatch.setenv("OURA_SIN_LLAVERO", "1")
+    monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
     with pytest.raises(client.OuraError) as exc:
         client.fetch("personal_info")
     mensaje = str(exc.value)
@@ -422,7 +423,7 @@ def test_sin_credenciales_se_ofrecen_los_tres_caminos(monkeypatch, tmp_path):
 
 
 # ── Entradas basura: que el error diga qué hacer ────────────────────────────
-def test_el_rango_al_reves_se_atrapa_aqui(monkeypatch):
+def test_the_backwards_range_is_caught_here(monkeypatch):
     """Se atrapa antes de salir a la red porque el margen de EXTRA_DAYS cambia
     las fechas: Oura devolvería un 400 citando dos fechas que quien preguntó
     nunca escribió, y diagnosticar eso cuesta más que el error mismo."""
@@ -431,7 +432,7 @@ def test_el_rango_al_reves_se_atrapa_aqui(monkeypatch):
         client.fetch("daily_sleep", "2026-08-10", "2026-08-01")
 
 
-def test_el_error_del_rango_cita_las_fechas_que_se_escribieron(monkeypatch):
+def test_the_range_error_quotes_the_dates_that_were_written(monkeypatch):
     _oura_falso([[{}]], monkeypatch)
     with pytest.raises(client.OuraError) as exc:
         client.fetch("daily_sleep", "2026-08-10", "2026-08-01")
@@ -439,7 +440,7 @@ def test_el_error_del_rango_cita_las_fechas_que_se_escribieron(monkeypatch):
     assert "2026-08-08" not in str(exc.value)      # la de adentro, no
 
 
-def test_el_422_de_oura_se_traduce_a_algo_legible(monkeypatch):
+def test_ouras_422_is_translated_into_something_readable(monkeypatch):
     """Oura contesta `detail` como el arreglo de errores de pydantic, cuyo JSON
     pasa de 200 characters antes de llegar a lo único que importa. Recortado en
     crudo dejaba `{"detail":[{"type":"datetime_from_date_pars` y nada más."""
@@ -464,7 +465,7 @@ def test_el_422_de_oura_se_traduce_a_algo_legible(monkeypatch):
     assert "datetime_from_date_parsing" not in m   # el ruido, fuera
 
 
-def test_el_detail_de_cadena_tambien_se_lee(monkeypatch):
+def test_the_string_form_of_detail_is_read_too(monkeypatch):
     cuerpo = json.dumps({"detail": "Start time is greater than end time"}).encode()
 
     def urlopen(req, timeout=None):
@@ -477,7 +478,7 @@ def test_el_detail_de_cadena_tambien_se_lee(monkeypatch):
         client.fetch("personal_info")
 
 
-def test_un_cuerpo_de_error_ilegible_no_tumba_nada(monkeypatch):
+def test_an_unreadable_error_body_breaks_nothing(monkeypatch):
     def urlopen(req, timeout=None):
         raise urllib.error.HTTPError(req.full_url, 500, "Server Error",
                                      email.message.Message(), io.BytesIO(b"<html>"))
@@ -508,7 +509,7 @@ def test_dia_y_rango_juntos_es_un_error(monkeypatch):
 
 
 # ── Anotaciones: lo que el client MCP necesita saber sin preguntar ─────────
-def test_las_tres_se_declaran_de_solo_lectura():
+def test_all_three_declare_themselves_read_only():
     """No es una promesa: no hay un POST, ni un PUT, ni un DELETE en todo el
     paquete. Declararlo evita que el client confirme en cada llamada, y el
     directorio de conectores de Claude lo exige."""
@@ -526,7 +527,7 @@ def test_las_tres_se_declaran_de_solo_lectura():
         assert t.annotations.open_world_hint is True, t.name
 
 
-def test_no_hay_una_sola_escritura_en_el_paquete():
+def test_there_is_not_a_single_write_in_the_package():
     """La anotación de sólo lectura tiene que seguir siendo verdad cuando alguien
     agregue código. Esta prueba es la que se entera."""
     import pathlib
@@ -539,7 +540,7 @@ def test_no_hay_una_sola_escritura_en_el_paquete():
 
 
 # ── Que nada se lleve el token ──────────────────────────────────────────────
-def test_el_token_no_se_imprime_por_accidente():
+def test_the_token_is_not_printed_by_accident():
     """Un str con el token adentro sale solo por demasiados lados: el repr de las
     locales en una traza, un print de depuración que se quedó, un f-string
     escrito de prisa. Aquí ya costó un token una vez."""
@@ -558,7 +559,7 @@ def test_el_secreto_sabe_cuanto_mide():
 
 
 
-def test_el_error_nunca_lleva_el_token(monkeypatch):
+def test_the_error_never_carries_the_token(monkeypatch):
     """Los mensajes de error son lo que más se copia y se pega. El token va en un
     encabezado y no tiene por qué salir de ahí jamás."""
     monkeypatch.setenv("OURA_PAT", "token-secretisimo-12345")
@@ -647,7 +648,7 @@ def test_el_ciclo_no_estorba_a_la_paginacion_normal(monkeypatch):
 
 
 # ── Formas de respuesta que Oura no debería mandar, pero por si acaso ──────
-def test_data_que_no_es_lista_se_denuncia(monkeypatch):
+def test_data_that_is_not_a_list_is_reported(monkeypatch):
     """Envolver el sobre entero convertiría eso en «un registro» con shape
     `{"data": …}` que se ve legítimo. Callarlo sería la falla de siempre,
     cometida por nosotros."""
@@ -672,7 +673,7 @@ def test_las_colecciones_sin_sobre_siguen_funcionando(monkeypatch):
     assert r["n"] == 1 and r["data"][0]["age"] == 1
 
 
-def test_una_respuesta_vacia_son_cero_registros_no_uno(monkeypatch):
+def test_an_empty_response_is_zero_records_not_one(monkeypatch):
     def urlopen(req, timeout=None):
         return _RespuestaFalsa(b"{}")
 
@@ -682,7 +683,7 @@ def test_una_respuesta_vacia_son_cero_registros_no_uno(monkeypatch):
 
 
 # ── El tamaño de la respuesta, que nadie estaba mirando ────────────────────
-def test_una_respuesta_enorme_se_comenta_a_si_misma(monkeypatch):
+def test_an_enormous_response_comments_on_itself(monkeypatch):
     """Medido: 30 días de `daily_activity` son 252,000 characters, y el 87% es un
     solo campo (`met`, una serie de MET por minuto). Un server que entrega un
     cuarto de millón de characters sin comentarlo gasta el contexto de quien
@@ -696,7 +697,7 @@ def test_una_respuesta_enorme_se_comenta_a_si_misma(monkeypatch):
     assert "fields" in aviso["suggestion"]
 
 
-def test_no_se_recorta_nada_por_cuenta_propia(monkeypatch):
+def test_nothing_is_trimmed_on_its_own_initiative(monkeypatch):
     """El aviso NO viene con una poda. Recortar sin que lo pidan sería entregar
     de menos, que es justo lo que este paquete existe para no hacer."""
     gordo = {"day": "2026-08-01", "met": list(range(6000))}
@@ -720,7 +721,7 @@ def test_una_respuesta_normal_no_lleva_aviso(monkeypatch):
 
 
 # ── `n: 0`: la respuesta más común a las preguntas más comunes ─────────────
-def test_una_consulta_vacia_explica_lo_que_se_sabe(monkeypatch):
+def test_an_empty_query_explains_what_is_known(monkeypatch):
     """«¿cómo dormí ayer?» y «¿estoy recuperado?» devuelven n=0 con frecuencia, y
     eso no distingue entre no llevar el anillo, que no haya sincronizado, pedir
     una fecha futura, o no tener el permiso. Un modelo que reciba `{"n": 0}` va a
@@ -731,7 +732,7 @@ def test_una_consulta_vacia_explica_lo_que_se_sabe(monkeypatch):
     assert "you didn't sleep" in r["empty"]["do_not_confuse"]
 
 
-def test_un_rango_futuro_se_dice(monkeypatch):
+def test_a_future_range_is_reported(monkeypatch):
     import datetime
     manana = (datetime.date.today() + datetime.timedelta(days=30)).isoformat()
     _oura_falso([[]], monkeypatch)
@@ -739,7 +740,7 @@ def test_un_rango_futuro_se_dice(monkeypatch):
     assert any("future" in x for x in r["empty"]["what_we_know"])
 
 
-def test_pedir_hasta_hoy_avisa_de_la_sincronizacion(monkeypatch):
+def test_asking_up_to_today_warns_about_syncing(monkeypatch):
     """La causa número uno de un vacío legítimo: el anillo no ha sincronizado."""
     import datetime
     hoy = datetime.date.today().isoformat()
@@ -762,7 +763,7 @@ def test_toda_coleccion_declara_su_alcance():
     assert set(SCOPE_OF.values()) <= set(SCOPES)
 
 
-def test_las_instrucciones_traen_lo_que_no_se_puede_adivinar():
+def test_the_instructions_carry_what_cannot_be_guessed():
     """Viajan en cada sesión: sólo va lo que cambia una respuesta."""
     from oura_mcp.server import server
     ins = server.instructions
@@ -772,7 +773,7 @@ def test_las_instrucciones_traen_lo_que_no_se_puede_adivinar():
 
 
 # ── El sandbox como primera experiencia de alguien que acaba de instalar ───
-def test_el_perfil_en_sandbox_explica_en_vez_de_devolver_404(monkeypatch):
+def test_the_profile_in_sandbox_explains_instead_of_returning_404(monkeypatch):
     """El sandbox contesta 404 a secas para `personal_info`. Un «404: Not Found»
     a quien acaba de instalar le dice que el server está roto, cuando lo que
     pasa es que Oura no pone data falsos de la única colección con correo,
@@ -786,13 +787,13 @@ def test_el_perfil_en_sandbox_explica_en_vez_de_devolver_404(monkeypatch):
     assert "--authorize" in m                     # y a dónde ir después
 
 
-def test_fuera_del_sandbox_el_perfil_se_pide_normal(monkeypatch):
+def test_outside_the_sandbox_the_profile_is_requested_normally(monkeypatch):
     monkeypatch.delenv("OURA_SANDBOX", raising=False)
     _oura_falso([[{"email": "x"}]], monkeypatch)
     assert client.fetch("personal_info")["n"] == 1
 
 
-def test_solo_personal_info_falta_del_sandbox():
+def test_only_personal_info_is_missing_from_the_sandbox():
     """Si Oura agrega o quita alguna, el job semanal de deriva lo dice."""
     from oura_mcp.collections import COLLECTIONS, WITHOUT_SANDBOX
     assert WITHOUT_SANDBOX == {"personal_info"}

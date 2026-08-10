@@ -16,7 +16,7 @@ from oura_mcp.client import OuraError
 
 
 # ── La URL que se le da al navegador ────────────────────────────────────────
-def test_la_url_lleva_todo_lo_que_oura_pide():
+def test_the_url_carries_everything_oura_asks_for():
     url = az.authorization_url("mi-id", "el-estado")
     q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
     assert q["response_type"] == ["code"]
@@ -26,14 +26,14 @@ def test_la_url_lleva_todo_lo_que_oura_pide():
     assert set(q["scope"][0].split()) == set(az.SCOPES)
 
 
-def test_sin_client_id_se_dice_dónde_registrar_la_app(monkeypatch):
+def test_without_client_id_it_says_where_to_register_the_app(monkeypatch):
     monkeypatch.delenv("OURA_CLIENT_ID", raising=False)
     monkeypatch.delenv("OURA_CLIENT_SECRET", raising=False)
     with pytest.raises(OuraError, match="oauth/applications"):
         az.app_credentials()
 
 
-def test_el_error_de_la_app_recuerda_la_diagonal(monkeypatch):
+def test_the_app_error_recalls_the_trailing_slash(monkeypatch):
     """El portal rechaza `…/callback` con invalid_redirect_uri. Que el mensaje lo
     diga ahorra la media hora que le costó a quien lo documentó."""
     monkeypatch.delenv("OURA_CLIENT_ID", raising=False)
@@ -43,23 +43,23 @@ def test_el_error_de_la_app_recuerda_la_diagonal(monkeypatch):
 
 
 # ── El `state`: lo que impide que te conecten a la cuenta de otro ───────────
-def test_un_state_que_no_coincide_no_canjea_nada():
+def test_a_mismatched_state_exchanges_nothing():
     with pytest.raises(OuraError, match="did not come from this session"):
         az.extract_code("http://localhost:9876/callback/?code=abc&state=ajeno",
                           "el-mio")
 
 
-def test_un_callback_sin_state_tampoco_pasa():
+def test_a_callback_without_state_does_not_pass_either():
     with pytest.raises(OuraError, match="did not come from this session"):
         az.extract_code("http://localhost:9876/callback/?code=abc", "el-mio")
 
 
-def test_el_state_correcto_deja_pasar():
+def test_the_correct_state_gets_through():
     assert az.extract_code(
         "http://localhost:9876/callback/?code=abc&state=el-mio", "el-mio") == "abc"
 
 
-def test_el_state_se_compara_en_tiempo_constante():
+def test_the_state_is_compared_in_constant_time():
     """`secrets.compare_digest`, no `==`. Es barato y quita una clase entera de
     ataque de la mesa sin tener que razonar si aquí aplica."""
     import inspect
@@ -67,16 +67,16 @@ def test_el_state_se_compara_en_tiempo_constante():
 
 
 # ── Lo que el usuario pega ──────────────────────────────────────────────────
-def test_acepta_la_url_completa_que_es_lo_que_uno_copia():
+def test_accepts_the_full_url_which_is_what_one_copies():
     assert az.extract_code(
         "http://localhost:9876/callback/?code=xyz&state=s", "s") == "xyz"
 
 
-def test_acepta_el_codigo_pelado():
+def test_accepts_the_bare_code():
     assert az.extract_code("xyz123") == "xyz123"
 
 
-def test_un_callback_de_error_se_lee_y_se_explica():
+def test_an_error_callback_is_read_and_explained():
     """Oura devuelve `error` y `error_description` en el propio callback cuando
     el usuario cancela. Tratarlo como «falta code» diría lo que no es."""
     with pytest.raises(OuraError, match="the user said no"):
@@ -85,17 +85,17 @@ def test_un_callback_de_error_se_lee_y_se_explica():
             "&error_description=the+user+said+no")
 
 
-def test_una_url_sin_code_lo_dice():
+def test_a_url_without_code_says_so():
     with pytest.raises(OuraError, match="carries no `code`"):
         az.extract_code("http://localhost:9876/callback/?otra_cosa=1")
 
 
-def test_una_url_sin_parametros_lo_dice():
+def test_a_url_without_parameters_says_so():
     with pytest.raises(OuraError, match="has no parameters"):
         az.extract_code("http://localhost:9876/callback/")
 
 
-def test_un_codigo_base64url_pelado_se_acepta():
+def test_a_bare_base64url_code_is_accepted():
     """Los códigos de OAuth son base64url: traen `-`, `_` y `=` de relleno con
     toda normalidad. La heurística vieja miraba si el texto tenía `=` o `/` y
     rechazaba `abc=` como «eso no trae un code» — de las cosas más
@@ -104,7 +104,7 @@ def test_un_codigo_base64url_pelado_se_acepta():
         assert az.extract_code(codigo) == codigo
 
 
-def test_el_callback_sobrevive_a_las_otras_peticiones_del_navegador():
+def test_the_callback_survives_the_browsers_other_requests():
     """UN FAVICON MATABA EL FLUJO ENTERO. Un navegador de verdad no manda una
     sola petición: pide /favicon.ico por su cuenta. Atendiendo sólo la primera,
     el favicon se llevaba el turno, el server se cerraba, y el callback bueno
@@ -134,12 +134,12 @@ def test_el_callback_sobrevive_a_las_otras_peticiones_del_navegador():
 
 
 # ── El puerto ───────────────────────────────────────────────────────────────
-def test_el_puerto_sale_del_redirect():
+def test_the_port_comes_from_the_redirect():
     assert az._puerto_de("http://localhost:9876/callback/") == 9876
     assert az._puerto_de("http://127.0.0.1:3000/callback/") == 3000
 
 
-def test_el_puerto_ocupado_sugiere_el_modo_manual(monkeypatch):
+def test_a_busy_port_suggests_manual_mode(monkeypatch):
     """Es el fallo más probable de todo el flujo: dos autorizaciones a la vez, o
     un proceso viejo que no murió."""
     def ocupado(*a, **k):
@@ -151,7 +151,7 @@ def test_el_puerto_ocupado_sugiere_el_modo_manual(monkeypatch):
 
 
 # ── El mode manual, para máquinas sin navegador ─────────────────────────────
-def test_el_modo_manual_no_levanta_ningun_servidor(monkeypatch, capsys):
+def test_manual_mode_starts_no_server(monkeypatch, capsys):
     """En una máquina sin navegador no hay a dónde redirigir: el punto del mode
     manual es que el usuario abra la URL donde sea y pegue de vuelta."""
     import io
@@ -206,7 +206,7 @@ def test_el_modo_manual_no_levanta_ningun_servidor(monkeypatch, capsys):
     assert "cloud.ouraring.com/oauth/authorize" in salida.getvalue()
 
 
-def test_el_resumen_no_lleva_tokens(monkeypatch):
+def test_the_summary_carries_no_tokens(monkeypatch):
     """Lo que se imprime al terminar acaba pegado en chats y en issues."""
     import io, time
     from oura_mcp.credentials import Credentials
