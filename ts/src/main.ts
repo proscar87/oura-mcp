@@ -14,7 +14,7 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { OuraError } from "./client.js";
-import { createServer, check } from "./server.js";
+import { createServer, check, enableElicitation } from "./server.js";
 
 // In order of precedence. The first one present wins, regardless of the order
 // they're typed in: `--check --authorize` runs the self-check. Deterministic on
@@ -83,7 +83,12 @@ export async function cli(argv: string[] = process.argv.slice(2)): Promise<numbe
     process.stderr.write(`oura-mcp: \`--manual\` only accompanies \`--authorize\`\n\n${HELP}`);
     return 2;
   }
-  await createServer().connect(new StdioServerTransport());
+  const server = createServer();
+  await server.connect(new StdioServerTransport());
+  // After connecting: the client's capabilities are only known once the
+  // handshake is done, and asking a client that can't show a URL to show one
+  // turns a clear message into a protocol error.
+  enableElicitation(server);
   return 0;
 }
 

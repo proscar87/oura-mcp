@@ -147,10 +147,16 @@ claude plugin install oura@oura-mcp
 it. Claude Desktop installs it — no terminal, no JSON, no Python. It ships with
 sample data turned on, so it works before you have any credential at all.
 
-One caveat worth stating plainly: **the OAuth2 flow needs a terminal.** A server
-that speaks over stdin/stdout can't open a browser or ask you anything, so
-`oura-mcp --authorize` is a command you run once, elsewhere. From the extension
-you get either the sample data or a personal token you already had.
+When you want your own data, just ask it for something: it opens Oura's
+authorization page through Claude, waits for the callback, and retries what you
+asked. No terminal. That works because MCP has a mode for precisely this — URL
+elicitation — and the client does the opening.
+
+The one thing Oura still requires is that every application be registered, so you
+need a client ID and secret from
+[cloud.ouraring.com/oauth/applications](https://cloud.ouraring.com/oauth/applications)
+once. That's Oura's rule, not this server's. `oura-mcp --authorize` remains for
+terminal users and for clients that can't show a URL.
 
 **Or by hand,** in `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
