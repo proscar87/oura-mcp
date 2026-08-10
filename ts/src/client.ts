@@ -463,19 +463,8 @@ async function whyEmpty(collection: string, start?: string, end?: string) {
         "syncs with the app; the current day is usually missing or incomplete");
     }
   }
-  const scope = SCOPE_OF[collection];
-  const withPat = process.env.OURA_PAT || process.env.OURA_PAT_FILE;
-  if (scope && !inSandbox() && !withPat) {
-    try {
-      const { load } = await import("./credentials.js");
-      const cred = await load();
-      if (cred && !cred.scopes.includes(scope)) {
-        reasons.push(
-          `this collection needs the \`${scope}\` scope and your credentials ` +
-          `don't have it: run \`oura-mcp --authorize\` again and grant it`);
-      }
-    } catch { /* if they can't be read, no reason is invented */ }
-  }
+  const missing = await missingScope(collection);
+  if (missing) reasons.push(missing);
   return {
     no_data: "the query succeeded; Oura has no records in that range",
     what_we_know: reasons.length ? reasons : ["nothing further to report without hitting the network"],
@@ -492,6 +481,36 @@ export interface Options {
   latest?: boolean;
   format?: "json" | "csv";
   pageLimit?: number;
+}
+
+/**
+ * The sentence to say when this collection needs a scope that wasn't granted.
+ *
+ * Extracted so the 403 path can use the knowledge the empty path already had.
+ * `SCOPE_OF` exists to tell "there is no data" apart from "you didn't grant that
+ * permission" — and a 403 is Oura ANSWERING that question, which was the one
+ * moment the table went unconsulted. It replied `Oura responded 403: Forbidden`:
+ * the status code, restated.
+ *
+ * Returns undefined when it cannot know. The sandbox grants everything and a
+ * personal token carries no readable scope list, and saying nothing beats
+ * guessing at somebody's permissions.
+ */
+export async function missingScope(collection: string): Promise<string | undefined> {
+  const scope = SCOPE_OF[collection];
+  if (!scope || inSandbox()) return undefined;
+  if (process.env.OURA_PAT || process.env.OURA_PAT_FILE) return undefined;
+  try {
+    const { load } = await import("./credentials.js");
+    const cred = await load();
+    if (cred && !cred.scopes.includes(scope)) {
+      const granted = cred.scopes.join(", ") || "none";
+      return `this collection needs the \`${scope}\` scope and your credentials ` +
+             `don't have it (you granted: ${granted}). Run ` +
+             `\`oura-mcp --authorize\` again and approve it.`;
+    }
+  } catch { /* unreadable credentials invent no reason */ }
+  return undefined;
 }
 
 export async function fetchAll(collection: string, o: Options = {}): Promise<Row> {
@@ -561,8 +580,24 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
     const q = new URLSearchParams(params);
     if (nextToken) q.set("next_token", nextToken);
     const qs = q.toString();
-    const body = await request(`${root}/${collection}${qs ? `?${qs}` : ""}`, tok,
-                               RETRIES_429, waits);
+    let body: Record<string, unknown>;
+    try {
+      body = await request(`${root}/${collection}${qs ? `?${qs}` : ""}`, tok,
+                           RETRIES_429, waits);
+    } catch (e) {
+      // A 403 IS OURA ANSWERING «did you grant that permission?», and the reply
+      // used to be the status code restated.
+      if (e instanceof OuraError && String(e.message).includes("403")) {
+        const hint = await missingScope(collection);
+        throw new OuraError(
+          hint
+            ? `Oura refused \`${collection}\` with 403. ${hint}`
+            : `Oura refused \`${collection}\` with 403. That usually means the ` +
+              `credential lacks the \`${SCOPE_OF[collection] ?? "?"}\` scope for ` +
+              `it — not that there is no data.`);
+      }
+      throw e;
+    }
     pages++;
 
     // `personal_info` y `ring_configuration` no vienen envueltos en `data`: el

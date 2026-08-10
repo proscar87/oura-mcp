@@ -11,11 +11,13 @@ person.
 import email.message
 import io
 import json
+import time
 import urllib.error
 
 import pytest
 
 from oura_mcp import client, collections
+from oura_mcp.client import OuraError
 
 
 # ── The catalog ────────────────────────────────────────────────────────────
@@ -1011,3 +1013,71 @@ def test_csv_keeps_nested_structures_in_one_cell():
     fila = list(_csv.DictReader(_io.StringIO(texto)))[0]
     assert set(fila) == set(columnas)
     assert json.loads(fila["contributors"]) == {"deep": 90, "rem": 70}
+
+
+# ── 403: Oura answering «did you grant that permission?» ───────────────────
+def test_a_403_names_the_scope_instead_of_restating_the_status(monkeypatch):
+    """It used to answer `Oura responded 403: Forbidden`.
+
+    `SCOPE_OF` exists in this package for exactly one purpose — telling «there is
+    no data» apart from «you didn't grant that permission» — and a 403 is Oura
+    ANSWERING that question. It was the one moment the table wasn't consulted.
+    """
+    def urlopen(req, timeout=None):  # noqa: ARG001
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden",
+                                     email.message.Message(),
+                                     io.BytesIO(b'{"detail":"Forbidden"}'))
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x" * 32)
+    monkeypatch.delenv("OURA_SANDBOX", raising=False)
+
+    with pytest.raises(OuraError) as e:
+        client.fetch("workout", "2026-01-01", "2026-01-05")
+    msg = str(e.value)
+    assert "`workout` scope" in msg, msg
+    assert "not that there is no data" in msg, "the two must not be confusable"
+
+
+def test_a_403_with_oauth_says_which_scopes_you_actually_have(monkeypatch, tmp_path):
+    """With OAuth the granted list is readable, so the answer can be exact
+    instead of probable. Someone staring at an empty result needs to know which
+    of the two worlds they're in, and «you granted: daily» settles it."""
+    monkeypatch.setenv("OURA_CREDENTIALS", str(tmp_path / "c.json"))
+    monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
+    monkeypatch.delenv("OURA_PAT", raising=False)
+    monkeypatch.delenv("OURA_PAT_FILE", raising=False)
+    monkeypatch.delenv("OURA_SANDBOX", raising=False)
+
+    from oura_mcp import credentials as cr
+    cr.save(cr.Credentials(client.Secret("A"), client.Secret("R"),
+                           time.time() + 3600, ("daily",)))
+
+    def urlopen(req, timeout=None):  # noqa: ARG001
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden",
+                                     email.message.Message(), io.BytesIO(b"{}"))
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", urlopen)
+
+    with pytest.raises(OuraError) as e:
+        client.fetch("workout", "2026-01-01", "2026-01-05")
+    msg = str(e.value)
+    assert "`workout` scope" in msg
+    assert "you granted: daily" in msg, msg
+    assert "--authorize" in msg, "it has to say what to do next"
+
+
+def test_a_401_still_talks_about_the_token_not_about_scopes(monkeypatch):
+    """Expired and unauthorized are different problems with different fixes;
+    blurring them sends someone to re-approve permissions they already have."""
+    def urlopen(req, timeout=None):  # noqa: ARG001
+        raise urllib.error.HTTPError(req.full_url, 401, "Unauthorized",
+                                     email.message.Message(), io.BytesIO(b"{}"))
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x" * 32)
+    monkeypatch.delenv("OURA_SANDBOX", raising=False)
+
+    with pytest.raises(OuraError) as e:
+        client.fetch("workout", "2026-01-01", "2026-01-05")
+    assert "401" in str(e.value) and "scope" not in str(e.value)
