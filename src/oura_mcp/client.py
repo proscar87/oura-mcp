@@ -240,7 +240,8 @@ def _detail_of(e: urllib.error.HTTPError) -> str:
     return ": " + json.dumps(body, ensure_ascii=False)[:200]
 
 
-def _request(url: str, token: Secret, retries: int = RETRIES_429) -> dict:
+def _request(url: str, token: Secret, retries: int = RETRIES_429,
+             waits: list | None = None) -> dict:
     """One request to Oura, with a bounded retry for the 429 only.
 
     ONLY the 429 is retried. A 401 doesn't improve by waiting and neither does a
@@ -252,6 +253,10 @@ def _request(url: str, token: Secret, retries: int = RETRIES_429) -> dict:
     how close it is to the ceiling. It only finds out once it's been refused. For
     a query that can chain 50 pages, giving up on the first 429 throws away
     everything already fetched.
+
+    `waits` collects the pauses actually taken, so a retry that SUCCEEDS gets
+    reported instead of vanishing. Optional because `tools/check_drift.py` calls
+    this directly and has no use for it.
     """
     req = urllib.request.Request(
         url, headers={"Authorization": f"Bearer {token.reveal()}",
@@ -263,7 +268,13 @@ def _request(url: str, token: Secret, retries: int = RETRIES_429) -> dict:
                 return json.load(r)
         except urllib.error.HTTPError as e:
             if e.code == 429 and attempt < retries:
-                time.sleep(_requested_wait(e, attempt))
+                pause = _requested_wait(e, attempt)
+                # RECORD IT. A retry that SUCCEEDS left no trace: the caller
+                # waited, the answer came back clean, and nothing said Oura had
+                # refused.
+                if waits is not None:
+                    waits.append(pause)
+                time.sleep(pause)
                 continue
             detail = _detail_of(e)
             if e.code == 401:
@@ -561,6 +572,7 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
 
     root = base()
     data, pages, next_token = [], 0, None
+    waits: list = []
     truncated, cursor, cycle = None, None, None
     seen: set[str] = set()
     while True:
@@ -568,7 +580,7 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
         if next_token:
             q["next_token"] = next_token
         url = f"{root}/{collection}" + (f"?{urllib.parse.urlencode(q)}" if q else "")
-        body = _request(url, token)
+        body = _request(url, token, waits=waits)
         pages += 1
 
         # `personal_info` and `ring_configuration` don't come wrapped in `data`:
@@ -640,6 +652,16 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
             out["continue_from"] = cursor
     if cycle:
         out["pagination_cycle"] = cycle
+    if waits:
+        # A SUCCESSFUL retry used to leave no trace: the caller waited, the
+        # answer came back clean, and nothing said Oura had refused. The data is
+        # correct, so this is not the same bug as the other four — but being
+        # throttled means the NEXT query may fail, and a model that doesn't know
+        # it was just refused will happily fire off another fifty pages.
+        out["rate_limited"] = (
+            f"Oura refused {len(waits)} time(s) with 429 and this recovered "
+            f"after waiting {sum(waits):.0f}s in total. The data is complete. "
+            f"You are near Oura's limit: make the next range smaller, or wait.")
     if format == "csv":
         text, columns, uneven = to_csv(data)
         out["data"] = text
