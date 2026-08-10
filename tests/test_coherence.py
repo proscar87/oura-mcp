@@ -274,3 +274,59 @@ def test_both_clis_accept_the_same_flags():
     ts = (ROOT / "ts" / "src" / "main.ts").read_text(encoding="utf-8")
     declared = set(re.findall(r'"(--?[a-z][a-z-]*)"', ts))
     assert set(ACTIONS) | set(MODIFIERS) == declared
+
+
+def test_every_workflow_needs_a_job_that_exists():
+    """A `needs:` pointing at a job that isn't there makes GitHub reject the
+    WHOLE workflow, and the run fails in zero seconds with no log — which looks
+    exactly like nothing happened.
+
+    That is how v0.3.0 was tagged and not published: translating the repository
+    renamed the job `pruebas` to `tests` and left `needs: pruebas` behind. The
+    tag pushed, CI went green, and the publish workflow was never valid enough
+    to run. Nobody was looking, because a failure with no output is easy not to
+    see.
+
+    Parsed with a regular expression rather than PyYAML: this test runs in the
+    mandatory CI, and PyYAML is not a dependency of this package. Adding one so a
+    coherence test can run would trade the problem for a bigger one.
+    """
+    workflows = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
+    assert workflows, "no workflows found — did the directory move?"
+
+    for wf in workflows:
+        lines = wf.read_text(encoding="utf-8").splitlines()
+        # Job keys sit at exactly two spaces of indentation under `jobs:`.
+        jobs, in_jobs = set(), False
+        for line in lines:
+            if re.match(r"^jobs:\s*$", line):
+                in_jobs = True
+                continue
+            if in_jobs and re.match(r"^\S", line):
+                in_jobs = False
+            m = re.match(r"^  ([A-Za-z0-9_-]+):\s*$", line)
+            if in_jobs and m:
+                jobs.add(m.group(1))
+
+        for line in lines:
+            m = re.match(r"^\s*needs:\s*(.+)$", line)
+            if not m:
+                continue
+            raw = m.group(1).strip().strip("[]")
+            for dep in (d.strip().strip("\"'") for d in raw.split(",")):
+                if dep:
+                    assert dep in jobs, \
+                        f"{wf.name}: `needs: {dep}` but the jobs are {sorted(jobs)}"
+
+
+def test_the_publish_workflow_keeps_the_name_pypi_trusts():
+    """PyPI's trusted publisher matches on the workflow's FILENAME. Renaming this
+    file invalidates the publisher and the upload is rejected as untrusted —
+    which is what the translation did when `publicar.yml` became `publish.yml`.
+
+    Pinning the name here means the next rename is a deliberate act with a note
+    attached, not a side effect of tidying."""
+    assert (ROOT / ".github" / "workflows" / "publish.yml").exists()
+    header = (ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
+    assert "workflow  publish.yml" in header, \
+        "the header must document the exact filename PyPI is configured for"

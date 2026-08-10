@@ -1,21 +1,27 @@
 name: Publish
 
-# Se dispara al empujar una etiqueta `v*`. Publicar es entonces:
+# Fires when a `v*` tag is pushed. Publishing is then:
 #
 #     git tag v0.1.0 && git push origin v0.1.0
 #
-# SIN UN SOLO SECRETO. Ni token de PyPI ni token del registro de MCP: las dos
-# publications use OIDC, meaning GitHub proves to each service who it is,
-# con una credencial de un solo uso que dura minutos y que nadie tiene que
-# store, rotate or look after. A PyPI token in `secrets` would be a permanent
-# key with publish rights, living in one more place.
+# WITHOUT A SINGLE SECRET. No PyPI token, no MCP registry token: both
+# publications use OIDC, meaning GitHub proves to each service who it is, with a
+# single-use credential that lasts minutes and that nobody has to store, rotate
+# or look after. A PyPI token in `secrets` would be a permanent key with publish
+# rights, living in one more place.
 #
-# Requisito de una sola vez, en la web de PyPI (Publishing → Add a new pending
+# One-time requirement on the PyPI website (Publishing → Add a new pending
 # publisher), without generating any token:
-#     proyecto  mcp-oura
+#     project   mcp-oura
 #     owner     proscar87
 #     repo      oura-mcp
-#     workflow  publicar.yml
+#     workflow  publish.yml
+#
+# THE FILENAME IS PART OF THE IDENTITY. This file was `publicar.yml` when 0.2.0
+# was published, and translating the repository renamed it — which silently
+# invalidates the trusted publisher, because PyPI matches on the workflow's
+# filename. Renaming this file means updating that entry on PyPI first, or the
+# upload is rejected as an untrusted publisher.
 
 on:
   push:
@@ -24,7 +30,7 @@ on:
 
 jobs:
   tests:
-    name: Tests antes de publicar
+    name: Tests before publishing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,7 +42,7 @@ jobs:
 
   pypi:
     name: PyPI
-    needs: pruebas
+    needs: tests
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
@@ -89,9 +95,9 @@ jobs:
           # the real cause five times over. A retry that can't tell "not yet"
           # from "never like this" turns a clear error into a mystery.
           for i in 1 2 3 4 5; do
-            salida=$(./mcp-publisher publish 2>&1) && { echo "$salida"; exit 0; }
-            echo "$salida"
-            if echo "$salida" | grep -q '"status":422'; then
+            output=$(./mcp-publisher publish 2>&1) && { echo "$output"; exit 0; }
+            echo "$output"
+            if echo "$output" | grep -q '"status":422'; then
               echo "::error::the registry rejected server.json; waiting will not fix it"
               exit 1
             fi
