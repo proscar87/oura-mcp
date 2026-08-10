@@ -6,19 +6,19 @@
  * response. These are the four we found by measuring against the real API, and
  * that are corrected here:
  *
- *   1. `next_token` sin seguir → recibes una fracción. Un día local de
- *      `heartrate` son 1,231 muestras en 2 páginas; quien no page recibe
- *      1,000 —el 81%— con aspecto de estar completo.
+ *   1. Not following `next_token` returns a fraction. One local day of
+ *      `heartrate` is 1,231 samples across 2 pages; a client that doesn't
+ *      paginate gets 1,000 — 81% — looking complete.
  *   2. `end_date` is INCONSISTENT ACROSS COLLECTIONS, and `workout` filters by
  *      UTC date while reporting `day` in local time. Asking for a single day
  *      returned ZERO records.
  *   3. `latest=true` where it doesn't apply → Oura returns the whole collection.
  *   4. `fields=made_up` → returns the complete record, no projection.
  *
- * Y un tercer final del bucle que casi se escapa: si Oura repite el mismo
- * `next_token`, eso es un cycle. Sin detectarlo se hacían 50 peticiones
- * idénticas con un warning que aconsejaba acortar el rango — consejo inútil,
- * porque acortar no arregla que la API se repita.
+ * And a third exit from the loop that nearly got away: if Oura repeats the same
+ * `next_token`, that's a cycle. Without detecting it the client made 50
+ * identical requests with a warning advising you to shorten the range — useless
+ * advice, because shortening doesn't stop the API from repeating itself.
  */
 
 import {
@@ -29,7 +29,7 @@ import {
 export const TIMEOUT = 30_000;
 export const PAGE_LIMIT = 50;   // ~50k records; more than that is a usage error
 export const RETRIES_429 = 2;    // bounded: this runs inside a conversation
-export const MAX_WAIT = 8_000; // ms; ni el `Retry-After` de Oura manda más
+export const MAX_WAIT = 8_000; // ms; not even Oura's `Retry-After` gets more
 
 /**
  * How many characters before the response comments on itself. 50,000 is roughly
@@ -100,10 +100,10 @@ export function inSandbox(): boolean {
 }
 
 /**
- * A dónde se pide. Sandbox, override explícito, o Oura de verdad.
+ * Where requests go. Sandbox, explicit override, or the real Oura.
  *
- * EL SANDBOX ES OFICIAL, no un truco: está en el OpenAPI de Oura con 34 rutas
- * espejo, y acepta CUALQUIER cadena como `Authorization`. Permite instalar el
+ * THE SANDBOX IS OFFICIAL, not a trick: it's in Oura's OpenAPI spec with 34
+ * mirror routes, and it accepts ANY string as `Authorization`. It lets you install the
  * server and watch it work BEFORE fighting with authentication — which stopped
  * being a one-minute errand when Oura deprecated personal tokens in December
  * 2025.
@@ -151,7 +151,7 @@ export function shiftDays(fecha: string, dias: number): string {
 // ── El token ────────────────────────────────────────────────────────────────
 export async function token(): Promise<Secret> {
   if (inSandbox()) {
-    // El sandbox acepta cualquier cadena. Pedir un token aquí sería inventar un
+    // The sandbox accepts any string. Demanding a token here would invent a
     // requirement the API doesn't have, and that requirement loses exactly the
     // person who has no way to get one yet.
     return new Secret("sandbox");
@@ -166,7 +166,7 @@ export async function token(): Promise<Secret> {
     } catch (e) {
       throw new OuraError(`no se pudo leer OURA_PAT_FILE: ${(e as Error).message}`);
     }
-    if (!t) throw new OuraError(`OURA_PAT_FILE apunta a un archivo vacío: ${path}`);
+    if (!t) throw new OuraError(`OURA_PAT_FILE points at an empty file: ${path}`);
     return new Secret(t);
   }
   const t = (process.env.OURA_PAT ?? "").trim();
@@ -178,17 +178,17 @@ async function oauthToken(): Promise<Secret> {
   const { load, refresh } = await import("./credentials.js");
   const cred = await load();
   if (!cred) {
-    // EL MENSAJE IMPORTA. Antes mandaba a la página de tokens personales, y
-    // desde diciembre de 2025 esa página ya no deja crear ninguno: quien
-    // llegara ahí se quedaba atorado sin saber por qué. Ahora la primera opción
-    // es la que funciona, y el sandbox va antes que nada porque permite ver el
+    // THE MESSAGE MATTERS. It used to point at the personal-tokens page,
+    // and since December 2025 that page issues none: whoever
+    // landed there got stuck without knowing why. Now the first option
+    // is the one that works, and the sandbox comes first because it lets you
     // srv andar sin conseguir credencial alguna.
     throw new OuraError(
-      "no hay credenciales. Tres caminos, de menos a más trámite:\n" +
-      "  1. OURA_SANDBOX=1 — data de ejemplo, sin registrarte en nada\n" +
-      "  2. oura-mcp --authorize — OAuth2, una vez, en el navegador\n" +
-      "  3. OURA_PAT / OURA_PAT_FILE — sólo si ya tenías un token personal: " +
-      "Oura dejó de emitirlos en diciembre de 2025",
+      "no credentials. Three paths, from least to most paperwork:\n" +
+      "  1. OURA_SANDBOX=1 — sample data, no signup of any kind\n" +
+      "  2. oura-mcp --authorize — OAuth2, once, in the browser\n" +
+      "  3. OURA_PAT / OURA_PAT_FILE — only if you already had a personal token: " +
+      "Oura stopped issuing them in December 2025",
     );
   }
   if (!cred.expired()) return cred.access;
@@ -198,12 +198,12 @@ async function oauthToken(): Promise<Secret> {
 }
 
 // ── One request, with a bounded retry for the 429 only ─────────────────────
-/** Lo legible del body de error de Oura, o el crudo recortado.
+/** Lo legible del body de error de Oura, o el raw recortado.
  *
- * Oura contesta `detail` de dos formas y ninguna se lee en crudo. Una es una
- * cadena; la otra es el arreglo de errores de validación de pydantic, cuyo JSON
- * pasa de los 200 characters antes de llegar a lo único que importa —qué campo
- * y por qué—, así que recortarlo dejaba
+ * Oura answers `detail` in two shapes and neither reads well raw. One is a
+ * string; the other is pydantic's validation-error array, whose JSON
+ * runs past 200 characters before reaching the only thing that matters — which
+ * field and why — so trimming it left
  * `{"detail":[{"type":"datetime_from_date_parsing","loc":["query","star` y
  * and nothing else.
  */
@@ -229,7 +229,7 @@ export function detailOf(body: string): string {
   return ": " + body.slice(0, 200);
 }
 
-/** Cuánto esperar tras un 429: lo que diga `Retry-After`, o backoff. */
+/** How long to wait after a 429: whatever `Retry-After` says, or backoff. */
 export function requestedWait(retryAfter: string | null, intento: number): number {
   if (retryAfter) {
     const segundos = Number(retryAfter.trim());
@@ -245,17 +245,18 @@ export function requestedWait(retryAfter: string | null, intento: number): numbe
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /**
- * SÓLO el 429 se reintenta. Un 401 no mejora esperando y un 422 tampoco: lo
+ * ONLY the 429 is retried. A 401 doesn't improve by waiting and neither does a
+ * 422:
  * all retrying them achieves is taking three times as long to deliver the same
  * bad news.
  *
- * Oura NO manda cabeceras de límite de tasa en las respuestas buenas
- * —verificado el 9-ago-2026— así que un cliente no puede saber qué tan cerca
+ * Oura sends NO rate-limit headers on successful responses
+ * — verified 2026-08-09 — so a client can't know how close it
  * is to the ceiling. It only finds out once it's been refused, and by then it may
  * have 30 pages fetched that would be thrown away.
  */
 export async function request(url: string, tok: Secret,
-                            reintentos = RETRIES_429): Promise<Record<string, unknown>> {
+                            retries = RETRIES_429): Promise<Record<string, unknown>> {
   for (let intento = 0; ; intento++) {
     let r: Response;
     try {
@@ -268,20 +269,20 @@ export async function request(url: string, tok: Secret,
     }
     if (r.ok) return (await r.json()) as Record<string, unknown>;
 
-    if (r.status === 429 && intento < reintentos) {
+    if (r.status === 429 && intento < retries) {
       await sleep(requestedWait(r.headers.get("Retry-After"), intento));
       continue;
     }
     const body = await r.text().catch(() => "");
     if (r.status === 401) {
-      throw new OuraError("Oura rechazó el token (401). ¿Expiró la credencial?");
+      throw new OuraError("Oura rejected the token (401). Did the credential expire?");
     }
     if (r.status === 429) {
       throw new OuraError(
-        `Oura está limitando la tasa (429) y siguió limitándola tras ` +
-        `${reintentos} reintentos. Espera un poco y acorta el rango.`);
+        `Oura is rate limiting (429) and kept doing so after ` +
+        `${retries} retries. Wait a bit and shorten the range.`);
     }
-    throw new OuraError(`Oura respondió ${r.status}${detailOf(body)}`);
+    throw new OuraError(`Oura responded ${r.status}${detailOf(body)}`);
   }
 }
 
@@ -332,10 +333,10 @@ export function ignoredFields(fields: string[] | undefined, data: Row[]): string
 
 /** If the response is enormous, say so and point at the field inflating it.
  *
- * Medido: 30 días de `daily_activity` son 252,000 characters, y el 92% de cada
- * registro es `met` —una serie de MET por minuto—. Pedir tres columns baja eso
- * a 5,000: 99% menos. No se recorta nada por cuenta propia —eso sería entregar
- * de menos— pero sí se dice qué pesa y cómo request menos.
+ * Measured: 30 days of `daily_activity` is 252,000 characters, and 92% of each
+ * record is `met` — a per-minute MET series. Asking for three columns brings
+ * that down to 5,000: 99% less. Nothing is trimmed on our own initiative — that
+ * would be under-delivering — but what's heavy is named, and how to ask for less.
  */
 export function sizeWarning(data: Row[], fields: string[] | undefined) {
   if (fields?.length || data.length < 2) return null;
@@ -440,25 +441,25 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
   const params = new URLSearchParams();
 
   if (inSandbox() && WITHOUT_SANDBOX.has(collection)) {
-    // Se atrapa ANTES de la petición. El sandbox contesta 404 a secas, y un
-    // «404: Not Found» a quien acaba de instalar le dice que el srv está
-    // roto — cuando lo que pasa es que Oura no pone data falsos de la única
-    // colección con correo, edad, weight y estatura.
+    // Caught BEFORE the request. The sandbox answers a bare 404, and a
+    // "404: Not Found" tells someone who just installed that the server is
+    // broken — when what's actually happening is that Oura publishes no fake
+    // data for the one collection carrying email, age, weight and height.
     throw new OuraError(
-      `\`${collection}\` no existe en el sandbox de Oura: es la única de las 19 ` +
-      `que no sirve, porque es la que devuelve data personales. Todo lo demás ` +
-      `sí funciona aquí. Para ver la tuya de verdad, quita OURA_SANDBOX y corre ` +
-      `\`oura-mcp --authorize\`.`);
+      `\`${collection}\` does not exist in Oura's sandbox: it is the only one of ` +
+      `the 19 not served there, because it is the one returning personal data. ` +
+      `Everything else works here. To see your real one, drop OURA_SANDBOX and ` +
+      `run \`oura-mcp --authorize\`.`);
   }
 
   if (latest) {
-    // Oura NO se queja si se le manda `latest` a una colección que no lo
-    // soporta: devuelve la colección entera. Pedir el último registro y recibir
-    // diez creyendo que es uno es peor que un error.
+    // Oura does NOT complain when `latest` is sent to a collection that doesn't
+    // support it: it returns the entire collection. Asking for the latest record
+    // and receiving ten while believing it's one is worse than an error.
     if (!WITH_LATEST.has(collection)) {
       throw new OuraError(
-        `\`latest\` sólo lo respeta Oura en ${[...WITH_LATEST].sort().join(", ")}; ` +
-        `en ${collection} lo ignora y devuelve la colección entera`);
+        `\`latest\` is only honored by Oura on ${[...WITH_LATEST].sort().join(", ")}; ` +
+        `on ${collection} it is ignored and the whole collection comes back`);
     }
     params.set("latest", "true");
   }
@@ -467,10 +468,10 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
   if (WITH_DATE.has(f) && !latest) {
     if (!start || !end) throw new OuraError(`${collection} necesita start y end`);
     if (start > end) {
-      // Se atrapa AQUÍ y no en Oura porque el margen cambia las fechas: Oura
-      // devolvería un 400 citando dos fechas que quien preguntó nunca escribió.
+      // Caught HERE and not at Oura because the margin changes the dates: Oura
+      // would return a 400 quoting two dates the asker never wrote.
       throw new OuraError(
-        `el rango va al revés: start (${start}) es posterior a end (${end})`);
+        `the range runs backwards: start (${start}) is after end (${end})`);
     }
     if (f === "dateRange") {
       params.set("start_date", shiftDays(start, -EXTRA_DAYS));
@@ -497,17 +498,18 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
 
     // `personal_info` y `ring_configuration` no vienen envueltos en `data`: el
     // body ENTERO es el registro. Se distingue por la AUSENCIA de la clave.
-    // Si `data` viene y no es lista, algo cambió en la API, y envolver el sobre
-    // convertiría eso en «un registro» con shape `{data: …}` que se ve legítimo.
+    // If `data` arrives and isn't a list, something changed in the API, and
+    // wrapping the envelope would turn that into "one record" shaped like
+    // `{data: …}` that looks legitimate.
     if ("data" in body) {
-      const crudo = body["data"];
-      if (!Array.isArray(crudo)) {
+      const raw = body["data"];
+      if (!Array.isArray(raw)) {
         throw new OuraError(
-          `Oura devolvió \`data\` como ${crudo === null ? "null" : typeof crudo} y no ` +
-          `como lista en ${collection}. La shape de la respuesta cambió; no se ` +
-          `inventa una interpretación.`);
+          `Oura returned \`data\` as ${raw === null ? "null" : typeof raw} rather ` +
+          `than a list on ${collection}. The response shape changed; no ` +
+          `interpretation is being invented.`);
       }
-      data.push(...(crudo as Row[]));
+      data.push(...(raw as Row[]));
     } else if (Object.keys(body).length) {
       data.push(body);
     }
@@ -515,19 +517,20 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
     nextToken = body["next_token"] as string | undefined;
     if (!nextToken) break;
     if (seen.has(nextToken)) {
-      // UN `next_token` QUE SE REPITE ES UN CICLO. Sin esto se hacían 50
-      // peticiones idénticas, se devolvían 50 copias del mismo registro, y el
-      // warning decía «acorta el rango» — consejo inútil, porque acortar no
-      // arregla que la API se repita. No es truncamiento y no debe llamarse así.
-      cycle = "Oura repitió el mismo `next_token`: eso es un cycle, y se paró " +
-              "para no request lo mismo sin end. Lo que sigue llega hasta donde se " +
-              "pudo avanzar y puede estar incompleto.";
+      // A REPEATED `next_token` IS A CYCLE. Without this the client made 50
+      // identical requests, returned 50 copies of the same record, and the
+      // warning said "shorten the range" — useless advice, because shortening
+      // doesn't stop the API from repeating itself. This isn't truncation and
+      // mustn't be called that.
+      cycle = "Oura repeated the same `next_token`: that is a cycle, and it " +
+              "stopped rather than ask for the same thing forever. What follows " +
+              "reaches as far as it got and may be incomplete.";
       break;
     }
     seen.add(nextToken);
     if (pages >= pageLimit) {
-      truncated = `se detuvo en ${pageLimit} páginas y Oura ofrecía más; ` +
-                 `acorta el rango o sigue desde \`continuar_desde\``;
+      truncated = `stopped at ${pageLimit} pages and Oura was offering more; ` +
+                 `shorten the range or continue from \`continue_from\``;
       cursor = nextToken;
       break;
     }
