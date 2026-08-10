@@ -65,6 +65,17 @@ server = MCPServer(
     # session, so only what changes an answer goes in.
     instructions=(
         "Raw data from the Oura ring, via its v2 API.\n\n"
+        # AHEAD OF THE FOUR, not among them. The other four are about whether
+        # the data is complete; this one is about WHOSE it is, which is a
+        # different question and a worse mistake. Sample data is on by default
+        # in the desktop bundle, and the instructions named `empty`, `truncated`
+        # and `large_response` while never mentioning `synthetic` — so the most
+        # consequential key in the default configuration was the one a model was
+        # never told to look for.
+        "BEFORE ANYTHING ELSE: if a response carries `synthetic`, the numbers in "
+        "it are Oura's sample data and NOT this person's. Say so plainly and "
+        "never report them as their own. Sample data is on by default so the "
+        "server works before anyone has an account.\n\n"
         "FOUR THINGS THAT CHANGE THE ANSWER:\n\n"
         "1. `n: 0` does NOT mean the person didn't sleep, didn't move or didn't "
         "recover. It means Oura has no records in that range, and the most common "
@@ -197,7 +208,7 @@ def oura_check() -> dict:
     return check()
 
 
-def _modo_de_autenticacion() -> str:
+def _auth_mode() -> str:
     """Which credential is in use, in the same order `_token()` decides."""
     if os.environ.get("OURA_PAT_FILE"):
         return "personal token (OURA_PAT_FILE)"
@@ -206,8 +217,8 @@ def _modo_de_autenticacion() -> str:
     return "OAuth2"
 
 
-def _estado_de_oauth() -> dict:
-    """Alcances y caducidad, SIN un solo token.
+def _oauth_state() -> dict:
+    """Scopes and expiry, WITHOUT a single token.
 
     The scopes answer the question people ask most when something comes back
     empty: "is there no data, or did I not grant permission?". Oura answers that
@@ -220,7 +231,7 @@ def _estado_de_oauth() -> dict:
         from .credentials import SCOPES, load
         cred = load()
     except OuraError as e:
-        return {"credenciales": f"unreadable: {e}"}
+        return {"credentials": f"unreadable: {e}"}
     if cred is None:
         return {}
     import time
@@ -265,9 +276,9 @@ def check() -> dict:
     out: dict = {
         "token_present": True,
         "token_length": len(t),
-        "mode": _modo_de_autenticacion(),
+        "mode": _auth_mode(),
     }
-    out.update(_estado_de_oauth())
+    out.update(_oauth_state())
     try:
         r = fetch("personal_info")
         out["oura_responds"] = True

@@ -72,6 +72,23 @@ def _keys_in(path: str) -> set[str]:
     return set(re.findall(r'out\["([a-z_]+)"\]', (ROOT / path).read_text(encoding="utf-8")))
 
 
+def _literal_keys_in(path: str) -> set[str]:
+    """Keys written straight into a returned dict literal.
+
+    THE LOCK HAD A BLIND SPOT. Written to be general, it only read `out[...]`
+    assignments — and `_oauth_state` returned `{"credenciales": ...}` from a
+    literal, so a Spanish key sat in a user-facing diagnostic one round after
+    the guard that was supposed to make that impossible.
+
+    A guard is only as general as the shapes it knows how to look at.
+    """
+    src = (ROOT / path).read_text(encoding="utf-8")
+    keys: set[str] = set()
+    for block in re.findall(r"return \{(.*?)\}", src, re.S):
+        keys |= set(re.findall(r'"([a-z_]{3,})":', block))
+    return keys
+
+
 # ── The locks ──────────────────────────────────────────────────────────────
 def test_the_tools_are_exactly_these_three():
     exposed = {n for n in dir(S) if n.startswith("oura_")}
@@ -172,3 +189,25 @@ def test_the_keychain_account_name_is_not_renamed():
     from oura_mcp.credentials import _KEYCHAIN_ACCOUNT, _KEYCHAIN_SERVICE
     assert _KEYCHAIN_ACCOUNT == "credenciales"
     assert _KEYCHAIN_SERVICE == "oura-mcp"
+
+
+def test_both_implementations_say_the_same_thing_first():
+    """The instructions travel in every session and are the only text a model
+    reads before deciding what to do. They drifted once already — `synthetic`
+    was absent from both — so the lead line is pinned in both languages."""
+    lead = "BEFORE ANYTHING ELSE"
+    for f in ("src/oura_mcp/server.py", "ts/src/server.ts"):
+        text = (ROOT / f).read_text(encoding="utf-8")
+        assert lead in text, f
+        assert "NOT this person's" in text, f
+
+
+def test_no_dict_literal_returns_a_spanish_key():
+    """The blind spot in the lock itself: `{"credenciales": ...}` in a returned
+    literal, one round after the guard meant to make that impossible."""
+    for path in ("src/oura_mcp/server.py", "src/oura_mcp/client.py",
+                 "src/oura_mcp/credentials.py", "src/oura_mcp/authorize.py"):
+        for key in _literal_keys_in(path):
+            for marker in ("credenciales", "coleccion", "paginas", "campos",
+                           "modo", "alcances", "caducidad", "vacio", "archivo"):
+                assert key != marker, f"{path} returns a key named `{key}`"

@@ -1095,6 +1095,59 @@ file that was, on disk, correct — and `git diff` showed nothing.
 Every instinct said "the code is fine, the tests are wrong". The code *was* fine.
 What ran wasn't the code.
 
+### Round 5: the instructions never mentioned whose data it was
+
+The server's instructions travel in every session and are the only text a model
+reads before deciding anything. They told it to read `empty`, `truncated` and
+`large_response` — and **never mentioned `synthetic`**, in the configuration
+that ships turned on.
+
+The marker landed in every response two rounds ago. Nothing told a model it
+outranked the rest. So it now goes AHEAD of the four rather than among them,
+because those four are about whether the data is complete and this one is about
+whose it is. A wrong answer about completeness is incomplete. A wrong answer
+about ownership is fiction presented as someone's health.
+
+### The lock built to be general already had a blind spot
+
+Round 4 pinned the public surface so no name could change unnoticed. One round
+later, `_oauth_state` was found returning `{"credenciales": ...}` — a Spanish key
+in a user-facing diagnostic — because the lock only read `out[...]` assignments
+and this one was written straight into a returned dict literal.
+
+**A guard is only as general as the shapes it knows how to look at.** The lock
+now reads literals too, and the test that closes the hole says in its own
+docstring that the hole existed.
+
+### Coverage: 78% → 88%, and what it was hiding
+
+The number was never the point; where it was thin was.
+
+`credentials.py` (69% → 92%). The untested code was the keychain path and the
+token-exchange error handler — where someone's OAuth secret is written, read and
+erased. The tests that close it check the two things that actually cost
+something: that a keychain save **deletes the file**, because `load()` prefers
+the keychain and an orphaned file is a consumed refresh token sitting readable on
+disk forever; and that a keyring which imports but has no backend falls back to
+the file instead of taking the session down.
+
+`__main__.py` (21% → 88%). The branch that mattered is `--forget`: a dispatch bug
+would print `{"forgotten": true}` over an untouched refresh token — this
+package's own thesis aimed at the one command whose whole job is to be believed.
+
+`server.py` (55% → 64%). `oura_check` is what someone runs when they are already
+stuck, and it now has tests proving it leaks neither the token nor a single
+health value. The rest of the gap is network paths, and the rule that CI never
+touches the network is worth more than the percentage.
+
+### A comment that argued against a feature we shipped
+
+`__main__.py` asserted that OAuth "belongs in the terminal, NEVER inside the
+server", because a server speaking over stdin/stdout can't open a browser. That
+was true when written and stopped being true in 0.3.0, when URL elicitation made
+the server do precisely what the comment called impossible. Comments age like
+READMEs, with the difference that nobody rereads them.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

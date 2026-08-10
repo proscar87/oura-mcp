@@ -61,10 +61,16 @@ def cli(argv: list[str] | None = None) -> int:
         return 0
 
     if "--authorize" in args:
-        # The OAuth flow belongs in the terminal, NEVER inside the server: one
-        # that speaks over stdin/stdout can't open a browser or ask anyone
-        # anything, and pretending otherwise is how you hang an MCP client
-        # forever.
+        # THIS COMMENT USED TO SAY the OAuth flow belongs in the terminal and
+        # NEVER inside the server, because a server speaking over stdin/stdout
+        # can't open a browser or ask anyone anything. That was true when it was
+        # written and stopped being true in 0.3.0: MCP's URL elicitation lets the
+        # server hand the authorization page to the client, which opens it. The
+        # server does exactly what this comment said was impossible.
+        #
+        # Kept as the terminal path for the cases elicitation can't cover — a
+        # client that doesn't declare the capability, and headless machines,
+        # which is what `--manual` is for.
         from .authorize import authorize
         from .client import OuraError
         try:

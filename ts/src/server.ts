@@ -43,6 +43,16 @@ const READ_ONLY = {
  */
 export const INSTRUCTIONS =
   "Raw data from the Oura ring, via its v2 API.\n\n" +
+  // AHEAD OF THE FOUR, not among them. The other four are about whether the
+  // data is complete; this one is about WHOSE it is, a different question and a
+  // worse mistake. Sample data is on by default in the desktop bundle, and the
+  // instructions named `empty`, `truncated` and `large_response` while never
+  // mentioning `synthetic` — so the most consequential key in the default
+  // configuration was the one a model was never told to look for.
+  "BEFORE ANYTHING ELSE: if a response carries `synthetic`, the numbers in it " +
+  "are Oura's sample data and NOT this person's. Say so plainly and never " +
+  "report them as their own. Sample data is on by default so the server works " +
+  "before anyone has an account.\n\n" +
   "FOUR THINGS THAT CHANGE THE ANSWER:\n\n" +
   "1. `n: 0` does NOT mean the person didn't sleep, didn't move or didn't " +
   "recover. It means Oura has no records in that range, and the most common " +

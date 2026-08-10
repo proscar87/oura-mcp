@@ -792,6 +792,27 @@ def test_the_instructions_carry_what_cannot_be_guessed():
         assert imprescindible in ins, imprescindible
 
 
+def test_the_instructions_lead_with_whose_data_it_is():
+    """`synthetic` was missing from the instructions entirely.
+
+    They told a model to read `empty`, `truncated` and `large_response` and never
+    mentioned the one key that says the numbers are not this person's — in the
+    configuration that ships turned ON. The marker was in the response; nothing
+    told the model it outranked everything else.
+
+    It goes AHEAD of the four rather than among them: those are about whether the
+    data is complete, this one is about whose it is. A wrong answer about
+    completeness is incomplete. A wrong answer about ownership is fiction
+    presented as someone's health.
+    """
+    from oura_mcp.server import server
+    ins = server.instructions
+    assert "synthetic" in ins
+    # Ahead of the list, not buried in it.
+    assert ins.index("synthetic") < ins.index("FOUR THINGS")
+    assert "NOT this person's" in ins
+
+
 # ── The sandbox as the first experience of someone who just installed ──────
 def test_the_profile_in_sandbox_explains_instead_of_returning_404(monkeypatch):
     """The sandbox answers a bare 404 for `personal_info`. A "404: Not Found"
