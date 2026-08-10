@@ -1321,6 +1321,52 @@ write in a form that can never fail. So it was verified the same way everything
 else has been this week: the word `scope` was inserted into the 401 message on
 purpose, and the test caught it.
 
+### Round 10: two queries at once could lock you out of your own account
+
+The most dangerous bug found so far, and it was **reproduced before it was
+fixed**.
+
+Oura's refresh token is single-use: the moment it is exchanged, the one you held
+is dead. MCP tools run concurrently. So two queries arriving after the access
+token expired started two exchanges of the **same** token:
+
+    token endpoint calls: 2
+    query 1: fulfilled
+    query 2: rejected -> Oura rejected the exchange (400): Refresh token already used.
+
+One of two identical, correct queries fails with a message the person cannot act
+on, that reads like corruption, about a query that had nothing wrong with it.
+
+**A recovery already existed** — on failure, reload and use whatever another
+refresher saved — and its docstring even names this scenario, "two MCP tools
+called in parallel". But that recovery is **itself a race**: it only works if the
+winner finished writing before the loser finished reading. Knowing about a race
+is not the same as closing it.
+
+Both halves now do one refresh at a time — a lock in Python, a shared promise in
+TypeScript. Same reproduction afterwards: **one** call to the token endpoint,
+both queries answered.
+
+Three things that took care to get right:
+
+**The re-read under the lock has to be narrow.** The first attempt short-circuited
+on "what's on disk looks valid", which turned `refresh()` into a no-op for every
+ordinary caller — seven tests caught it. The correct test is *different from the
+one I am holding*: that means somebody else refreshed, and exchanging mine would
+spend a token that is already dead.
+
+**Sharing the failure is deliberate.** If the exchange genuinely cannot succeed,
+both callers hear the real reason — `Invalid client_id.` — rather than one of
+them hearing "already used", which points at the wrong problem entirely.
+
+**It must not wedge.** A shared promise that is never cleared would poison every
+refresh for the life of the process; there is a test that one failure is followed
+by a working refresh.
+
+The cross-process case — the CLI and the server at once — still relies on the
+recovery, because no lock in one process can see another. That limit is stated in
+the code rather than left to be discovered.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

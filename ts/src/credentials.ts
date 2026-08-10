@@ -211,8 +211,41 @@ export async function exchangeCode(code: string, clientId: string, clientSecret:
  * in parallel — and the one that loses the race would see a 400 even though the
  * session is perfectly alive, already renewed by the other.
  */
+/**
+ * One refresh at a time IN THIS PROCESS.
+ *
+ * Oura's refresh token is single-use, and MCP tools run concurrently. Two
+ * queries arriving after the access token expired started two exchanges of the
+ * SAME token: the first won and the second came back
+ *
+ *     Oura rejected the exchange (400): Refresh token already used.
+ *
+ * A failure the person cannot act on, reading like corruption, on a query that
+ * had nothing wrong with it. Reproduced with two concurrent refreshes: two calls
+ * to the token endpoint, one rejection.
+ *
+ * A recovery already existed — on failure, reload and use whatever another
+ * refresher saved — but that recovery is ITSELF a race: it only works if the
+ * winner finished writing before the loser finished reading.
+ *
+ * Sharing one promise removes the in-process case entirely, including the
+ * failure: if the exchange genuinely fails, both callers get the real reason
+ * rather than one of them getting "already used". The cross-process case (the
+ * CLI and the server at once) still needs the recovery below, because nothing
+ * here can see another process.
+ */
+let inFlight: Promise<Credentials> | undefined;
+
 export async function refresh(cred: Credentials, clientId: string,
                                 clientSecret: string): Promise<Credentials> {
+  if (inFlight) return inFlight;
+  inFlight = refreshOnce(cred, clientId, clientSecret)
+    .finally(() => { inFlight = undefined; });
+  return inFlight;
+}
+
+async function refreshOnce(cred: Credentials, clientId: string,
+                             clientSecret: string): Promise<Credentials> {
   if (!cred.refreshToken) {
     throw new OuraError(
       "the stored credentials carry no refresh token, so they cannot be " +
