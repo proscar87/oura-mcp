@@ -136,7 +136,13 @@ def test_trims_the_extra_days_and_says_so(monkeypatch):
     r = client.fetch("daily_sleep", "2026-08-09", "2026-08-11")
     assert [x["day"] for x in r["data"]] == ["2026-08-09", "2026-08-10", "2026-08-11"]
     assert r["n"] == 3
-    assert r["discarded_out_of_range"] == 2
+    # A SENTENCE, NOT A BARE NUMBER. This key fires on essentially every dated
+    # query — the margin is always requested and always trimmed — and
+    # `discarded_out_of_range: 2` reads as "2 of your records were thrown away",
+    # which is the opposite of true.
+    aviso = r["discarded_out_of_range"]
+    assert aviso.startswith("2 record")
+    assert "normal" in aviso and "nothing you asked for is missing" in aviso
 
 
 def test_a_single_day_returns_that_day(monkeypatch):
@@ -840,3 +846,32 @@ def test_a_clean_request_carries_no_rate_limit_notice(monkeypatch):
     _fake_oura([[{"i": 1}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-01-01", "2026-01-02")
     assert "rate_limited" not in r
+
+
+def test_fields_accepts_a_comma_separated_string(monkeypatch):
+    """THE MOST LIKELY MISTAKE ON THIS TOOL.
+
+    Declared as `list[str]`, a model sending `"day,score"` got back:
+
+        Input should be a valid list [type=list_type, input_value='day,score']
+        For further information visit https://errors.pydantic.dev/2.13/v/list_type
+
+    Technically correct, and a link to pydantic's website is not an answer — it
+    is exactly the kind of response this package exists to stop shipping. No Oura
+    field name contains a comma, so splitting is unambiguous and costs nothing.
+    """
+    llamadas = _fake_oura([[{"day": "2026-01-01", "score": 70}]], monkeypatch)
+    r = client.fetch("daily_sleep", "2026-01-01", "2026-01-02", fields="day, score")
+
+    assert "fields=day%2Cscore" in llamadas[0], "both fields must reach Oura"
+    assert "ignored_fields" not in r, "splitting must not invent missing fields"
+    assert "fields_split" in r, "reinterpreting input has to be said out loud"
+
+
+def test_a_list_of_fields_is_not_announced_as_split(monkeypatch):
+    """The notice is for the case that was reinterpreted. On the correct call it
+    would just be noise."""
+    _fake_oura([[{"day": "2026-01-01", "score": 70}]], monkeypatch)
+    r = client.fetch("daily_sleep", "2026-01-01", "2026-01-02",
+                     fields=["day", "score"])
+    assert "fields_split" not in r

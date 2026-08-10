@@ -110,7 +110,7 @@ def oura_query(
     end: Annotated[str | None, Field(description="YYYY-MM-DD, or ISO 8601 with time")] = None,
     day: Annotated[str | None, Field(
         description="Shorthand for a single day: equivalent to start=end=day.")] = None,
-    fields: Annotated[list[str] | None, Field(
+    fields: Annotated[list[str] | str | None, Field(
         description="Only these fields. Oura trims on its side, so less comes "
                     "down: use it on long heartrate ranges. `day` and `id` "
                     "always come back.")] = None,

@@ -492,15 +492,48 @@ def _trim(data: list, start: str | None, end: str | None,
     return inside, len(data) - len(inside)
 
 
+FIELDS_NOTE = (
+    "`fields` arrived as a comma-separated string and was split. Models send "
+    "\"day,score\" far more often than [\"day\", \"score\"], and the raw "
+    "schema error for that is a pydantic dump — the opposite of what this "
+    "server is for. No Oura field name contains a comma, so splitting is "
+    "unambiguous."
+)
+
+
+def _as_fields(fields) -> list[str] | None:
+    """Accept a list OR a comma-separated string.
+
+    THE MOST LIKELY MISTAKE ON THIS TOOL. Declared as `list[str]`, a model
+    sending `"day,score"` got:
+
+        Input should be a valid list [type=list_type, input_value='day,score']
+        For further information visit https://errors.pydantic.dev/2.13/v/list_type
+
+    Technically correct, and a link to pydantic's website is not an answer. No
+    Oura field name contains a comma, so splitting is unambiguous and costs
+    nothing.
+    """
+    if fields is None:
+        return None
+    if isinstance(fields, str):
+        return [f.strip() for f in fields.split(",") if f.strip()] or None
+    return list(fields) or None
+
+
 def fetch(collection: str, start: str | None = None, end: str | None = None,
-          fields: list[str] | None = None, latest: bool = False,
+          fields: list[str] | str | None = None, latest: bool = False,
           format: str = "json", page_limit: int = PAGE_LIMIT) -> dict:
     """Fetch a COMPLETE collection over the requested range.
 
     Returns `{"collection", "n", "pages", "data", …}` plus whichever warnings
     apply. An incomplete result that doesn't declare itself incomplete is the
     worst of both worlds: it looks exactly like a complete one.
+
+    `fields` accepts a list or a comma-separated string; see `_as_fields`.
     """
+    was_string = isinstance(fields, str)
+    fields = _as_fields(fields)
     s = shape(collection)
     token = _token()
     params: dict[str, str] = {}
@@ -676,6 +709,8 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
                 "not every record carries the same keys; an empty cell may be an "
                 "absent field or a null value"
             )
+    if was_string:
+        out["fields_split"] = FIELDS_NOTE
     if (ignored := _ignored_fields(fields, data)):
         out["ignored_fields"] = ignored
     if (warning := _size_warning(data, fields)):
@@ -684,7 +719,18 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
         # The extra days were requested on purpose; this is what got dropped.
         # Said out loud rather than swallowed: whoever reads the response has to
         # be able to tell "there is no data" from "we removed it".
-        out["discarded_out_of_range"] = discarded
+        #
+        # AS A BARE NUMBER IT READ AS DATA LOSS. It fires on essentially every
+        # dated query — two extra days are always asked for on each side and
+        # always trimmed — so it reports the safety margin working, not a
+        # problem. `discarded_out_of_range: 3` invites "3 of your records were
+        # thrown away", which is the opposite of true, and a warning that fires
+        # every single time stops being read anyway.
+        out["discarded_out_of_range"] = (
+            f"{discarded} record(s) from the ±{EXTRA_DAYS}-day safety margin were "
+            f"trimmed. This is normal and nothing you asked for is missing: the "
+            f"margin exists because Oura's `end_date` is inconsistent across "
+            f"collections.")
     if not data:
         out["empty"] = _why_empty(collection, start, end)
     if in_sandbox():
