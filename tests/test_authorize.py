@@ -15,7 +15,7 @@ from oura_mcp import authorize as az
 from oura_mcp.client import OuraError
 
 
-# ── La URL que se le da al navegador ────────────────────────────────────────
+# ── The URL handed to the browser ──────────────────────────────────────────
 def test_the_url_carries_everything_oura_asks_for():
     url = az.authorization_url("mi-id", "el-estado")
     q = urllib.parse.parse_qs(urllib.parse.urlparse(url).query)
@@ -34,15 +34,15 @@ def test_without_client_id_it_says_where_to_register_the_app(monkeypatch):
 
 
 def test_the_app_error_recalls_the_trailing_slash(monkeypatch):
-    """El portal rechaza `…/callback` con invalid_redirect_uri. Que el mensaje lo
-    diga ahorra la media hora que le costó a quien lo documentó."""
+    """The portal rejects `…/callback` with invalid_redirect_uri. Having the message
+    say so saves the half hour it cost whoever documented it."""
     monkeypatch.delenv("OURA_CLIENT_ID", raising=False)
     monkeypatch.delenv("OURA_CLIENT_SECRET", raising=False)
     with pytest.raises(OuraError, match="trailing slash is required"):
         az.app_credentials()
 
 
-# ── El `state`: lo que impide que te conecten a la cuenta de otro ───────────
+# ── The `state`: what stops you being connected to someone else's account ──
 def test_a_mismatched_state_exchanges_nothing():
     with pytest.raises(OuraError, match="did not come from this session"):
         az.extract_code("http://localhost:9876/callback/?code=abc&state=ajeno",
@@ -60,13 +60,13 @@ def test_the_correct_state_gets_through():
 
 
 def test_the_state_is_compared_in_constant_time():
-    """`secrets.compare_digest`, no `==`. Es barato y quita una clase entera de
-    ataque de la mesa sin tener que razonar si aquí aplica."""
+    """`secrets.compare_digest`, not `==`. It is cheap and takes an entire class of
+    attack off the table without having to reason about whether it applies."""
     import inspect
     assert "compare_digest" in inspect.getsource(az.extract_code)
 
 
-# ── Lo que el usuario pega ──────────────────────────────────────────────────
+# ── What the user pastes ───────────────────────────────────────────────────
 def test_accepts_the_full_url_which_is_what_one_copies():
     assert az.extract_code(
         "http://localhost:9876/callback/?code=xyz&state=s", "s") == "xyz"
@@ -77,8 +77,8 @@ def test_accepts_the_bare_code():
 
 
 def test_an_error_callback_is_read_and_explained():
-    """Oura devuelve `error` y `error_description` en el propio callback cuando
-    el usuario cancela. Tratarlo como «falta code» diría lo que no es."""
+    """Oura returns `error` and `error_description` in the callback itself when the
+    user cancels. Treating it as "code is missing" would say what it is not."""
     with pytest.raises(OuraError, match="the user said no"):
         az.extract_code(
             "http://localhost:9876/callback/?error=access_denied"
@@ -96,20 +96,19 @@ def test_a_url_without_parameters_says_so():
 
 
 def test_a_bare_base64url_code_is_accepted():
-    """Los códigos de OAuth son base64url: traen `-`, `_` y `=` de relleno con
-    toda normalidad. La heurística vieja miraba si el texto tenía `=` o `/` y
-    rechazaba `abc=` como «eso no trae un code» — de las cosas más
-    desconcertantes que le pueden pasar a quien pegó justo lo que se le pidió."""
+    """OAuth codes are base64url: they carry `-`, `_` and `=` padding perfectly
+    normally. The old heuristic looked for `=` or `/` and rejected `abc=` as
+    "that carries no code" — one of the most baffling things that can happen to
+    someone who pasted exactly what they were asked for."""
     for codigo in ("abc-123_XYZ", "abc=", "AQABAAIAAAA=", "a/b"):
         assert az.extract_code(codigo) == codigo
 
 
 def test_the_callback_survives_the_browsers_other_requests():
-    """UN FAVICON MATABA EL FLUJO ENTERO. Un navegador de verdad no manda una
-    sola petición: pide /favicon.ico por su cuenta. Atendiendo sólo la primera,
-    el favicon se llevaba el turno, el server se cerraba, y el callback bueno
-    recibía connection refused. Desde afuera se veía «no llegó ningún callback»,
-    sin ninguna pista."""
+    """A FAVICON KILLED THE ENTIRE FLOW. A real browser does not send one request:
+    it asks for /favicon.ico on its own. Serving only the first, the favicon took
+    the turn, the server closed, and the good callback got connection refused.
+    From outside it looked like "no callback arrived", with no clue at all."""
     import threading, time, urllib.request, urllib.error
 
     resultado = {}
@@ -133,15 +132,15 @@ def test_the_callback_survives_the_browsers_other_requests():
     assert resultado.get("codigo") == "EL-BUENO", resultado
 
 
-# ── El puerto ───────────────────────────────────────────────────────────────
+# ── The port ───────────────────────────────────────────────────────────────
 def test_the_port_comes_from_the_redirect():
     assert az._puerto_de("http://localhost:9876/callback/") == 9876
     assert az._puerto_de("http://127.0.0.1:3000/callback/") == 3000
 
 
 def test_a_busy_port_suggests_manual_mode(monkeypatch):
-    """Es el fallo más probable de todo el flujo: dos autorizaciones a la vez, o
-    un proceso viejo que no murió."""
+    """The most likely failure in the whole flow: two authorizations at once, or an
+    old process that never died."""
     def ocupado(*a, **k):
         raise OSError(48, "Address already in use")
 
@@ -207,7 +206,7 @@ def test_manual_mode_starts_no_server(monkeypatch, capsys):
 
 
 def test_the_summary_carries_no_tokens(monkeypatch):
-    """Lo que se imprime al terminar acaba pegado en chats y en issues."""
+    """What gets printed at the end ends up pasted into chats and issues."""
     import io, time
     from oura_mcp.credentials import Credentials
     from oura_mcp.client import Secret

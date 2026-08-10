@@ -18,7 +18,7 @@ import pytest
 from oura_mcp import client, collections
 
 
-# ── El catálogo ─────────────────────────────────────────────────────────────
+# ── The catalog ────────────────────────────────────────────────────────────
 def test_las_diecinueve_colecciones():
     assert len(collections.COLLECTIONS) == 19
 
@@ -37,7 +37,7 @@ def test_a_made_up_collection_blows_up_when_resolved():
         collections.shape("daily_vibraciones")
 
 
-# ── Paginación: la razón de existir del paquete ─────────────────────────────
+# ── Pagination: the package's reason to exist ──────────────────────────────
 class _RespuestaFalsa(io.BytesIO):
     def __enter__(self):
         return self
@@ -99,7 +99,7 @@ def test_a_single_page_asks_for_no_more(monkeypatch):
     assert len(llamadas) == 1
 
 
-# ── El rango de fechas: la segunda cicatriz ─────────────────────────────────
+# ── The date range: the second scar ────────────────────────────────────────
 # Medido contra la API de verdad el 9-ago-2026. `end_date` es INCONSISTENTE
 # entre collections —daily_activity, sleep y workout pierden el último día
 # pedido; las demás no— y encima `workout` se filtra por la fecha UTC mientras
@@ -229,7 +229,7 @@ def test_the_csv_arrives_when_truncated_too(monkeypatch):
     assert r["format"] == "csv" and "truncated" in r and r["continue_from"] == "3"
 
 
-# ── El 429: reintento acotado ───────────────────────────────────────────────
+# ── The 429: a bounded retry ───────────────────────────────────────────────
 # Oura NO manda cabeceras de límite de tasa en las respuestas buenas —verificado
 # el 9-ago-2026— así que un client no puede saber qué tan cerca está del tope.
 # Sólo se entera cuando ya se lo negaron, y para entonces puede llevar 30
@@ -348,7 +348,7 @@ def test_ultimo_no_exige_rango(monkeypatch):
     assert client.fetch("ring_battery_level", latest=True)["n"] == 1
 
 
-# ── El sandbox: probarlo sin tener con qué autenticarse ─────────────────────
+# ── The sandbox: trying it with nothing to authenticate with ───────────────
 # Oura deprecó los tokens personales en diciembre de 2025. Quien llega hoy no
 # tiene cómo conseguir uno, así que «instálalo y luego consigue un token» dejó
 # de ser un camino. El sandbox es oficial —está en el OpenAPI, con 34 rutas
@@ -385,7 +385,7 @@ def test_apagado_el_sandbox_vuelven_a_hacer_falta_credenciales(monkeypatch, tmp_
         client._token()
 
 
-# ── Parámetros ──────────────────────────────────────────────────────────────
+# ── Parameters ─────────────────────────────────────────────────────────────
 def test_date_collections_require_a_range(monkeypatch):
     monkeypatch.setenv("OURA_PAT", "x")
     with pytest.raises(client.OuraError, match="needs start and end"):
@@ -422,7 +422,7 @@ def test_sin_credenciales_se_ofrecen_los_tres_caminos(monkeypatch, tmp_path):
     assert "December 2025" in mensaje       # por qué el PAT ya no es opción
 
 
-# ── Entradas basura: que el error diga qué hacer ────────────────────────────
+# ── Garbage input: the error should say what to do ─────────────────────────
 def test_the_backwards_range_is_caught_here(monkeypatch):
     """Se atrapa antes de salir a la red porque el margen de EXTRA_DAYS cambia
     las fechas: Oura devolvería un 400 citando dos fechas que quien preguntó
@@ -489,7 +489,7 @@ def test_an_unreadable_error_body_breaks_nothing(monkeypatch):
         client.fetch("personal_info")
 
 
-# ── `day`: que la consulta más común no obligue a escribir un rango ─────────
+# ── `day`: the most common query shouldn't require writing a range ─────────
 def test_dia_equivale_a_inicio_igual_a_fin(monkeypatch):
     _oura_falso([[{"day": "2026-08-09"}, {"day": "2026-08-10"}]], monkeypatch)
     from oura_mcp.server import oura_query
@@ -508,7 +508,7 @@ def test_dia_y_rango_juntos_es_un_error(monkeypatch):
                            start="2026-08-01")["error"]
 
 
-# ── Anotaciones: lo que el client MCP necesita saber sin preguntar ─────────
+# ── Annotations: what the MCP client needs to know without asking ──────────
 def test_all_three_declare_themselves_read_only():
     """No es una promesa: no hay un POST, ni un PUT, ni un DELETE en todo el
     paquete. Declararlo evita que el client confirme en cada llamada, y el
@@ -539,7 +539,7 @@ def test_there_is_not_a_single_write_in_the_package():
             assert verbo not in texto, f"{file.name} trae {verbo}"
 
 
-# ── Que nada se lleve el token ──────────────────────────────────────────────
+# ── Nothing may carry the token away ───────────────────────────────────────
 def test_the_token_is_not_printed_by_accident():
     """Un str con el token adentro sale solo por demasiados lados: el repr de las
     locales en una traza, un print de depuración que se quedó, un f-string
@@ -615,7 +615,7 @@ def test_un_archivo_vacio_no_pasa_por_token(monkeypatch, tmp_path):
         client._token()
 
 
-# ── El tercer final del bucle: un `next_token` que se repite ───────────────
+# ── The loop's third exit: a repeated `next_token` ─────────────────────────
 def test_un_next_token_repetido_se_detecta_como_ciclo(monkeypatch):
     """Sería irónico tenerlo aquí. Sin detectarlo se hacían 50 peticiones
     idénticas, se devolvían 50 copias del mismo registro, y el aviso decía
@@ -647,7 +647,7 @@ def test_el_ciclo_no_estorba_a_la_paginacion_normal(monkeypatch):
     assert "pagination_cycle" not in r
 
 
-# ── Formas de respuesta que Oura no debería mandar, pero por si acaso ──────
+# ── Response shapes Oura shouldn't send, but just in case ──────────────────
 def test_data_that_is_not_a_list_is_reported(monkeypatch):
     """Envolver el sobre entero convertiría eso en «un registro» con shape
     `{"data": …}` que se ve legítimo. Callarlo sería la falla de siempre,
@@ -682,7 +682,7 @@ def test_an_empty_response_is_zero_records_not_one(monkeypatch):
     assert client.fetch("personal_info")["n"] == 0
 
 
-# ── El tamaño de la respuesta, que nadie estaba mirando ────────────────────
+# ── Response size, which nobody was looking at ─────────────────────────────
 def test_an_enormous_response_comments_on_itself(monkeypatch):
     """Medido: 30 días de `daily_activity` son 252,000 characters, y el 87% es un
     solo campo (`met`, una serie de MET por minuto). Un server que entrega un
@@ -720,7 +720,7 @@ def test_una_respuesta_normal_no_lleva_aviso(monkeypatch):
     assert "large_response" not in r
 
 
-# ── `n: 0`: la respuesta más común a las preguntas más comunes ─────────────
+# ── `n: 0`: the most common answer to the most common questions ────────────
 def test_an_empty_query_explains_what_is_known(monkeypatch):
     """«¿cómo dormí ayer?» y «¿estoy recuperado?» devuelven n=0 con frecuencia, y
     eso no distingue entre no llevar el anillo, que no haya sincronizado, pedir
@@ -772,7 +772,7 @@ def test_the_instructions_carry_what_cannot_be_guessed():
         assert imprescindible in ins, imprescindible
 
 
-# ── El sandbox como primera experiencia de alguien que acaba de instalar ───
+# ── The sandbox as the first experience of someone who just installed ──────
 def test_the_profile_in_sandbox_explains_instead_of_returning_404(monkeypatch):
     """El sandbox contesta 404 a secas para `personal_info`. Un «404: Not Found»
     a quien acaba de instalar le dice que el server está roto, cuando lo que

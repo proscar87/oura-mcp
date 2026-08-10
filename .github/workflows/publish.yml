@@ -5,22 +5,22 @@ name: Publish
 #     git tag v0.1.0 && git push origin v0.1.0
 #
 # SIN UN SOLO SECRETO. Ni token de PyPI ni token del registro de MCP: las dos
-# publicaciones usan OIDC, o sea GitHub le demuestra a cada servicio quién es,
+# publications use OIDC, meaning GitHub proves to each service who it is,
 # con una credencial de un solo uso que dura minutos y que nadie tiene que
-# guardar, rotar ni cuidar. Un token de PyPI en `secrets` sería una llave
-# permanente con permiso de publicar, viviendo en un lugar más.
+# store, rotate or look after. A PyPI token in `secrets` would be a permanent
+# key with publish rights, living in one more place.
 #
 # Requisito de una sola vez, en la web de PyPI (Publishing → Add a new pending
-# publisher), sin generar ningún token:
+# publisher), without generating any token:
 #     proyecto  mcp-oura
-#     dueño     proscar87
+#     owner     proscar87
 #     repo      oura-mcp
 #     workflow  publicar.yml
 
 on:
   push:
     tags: ["v*"]
-  workflow_dispatch:        # para volver a intentar el registro sin inventar una versión
+  workflow_dispatch:        # to retry the registry without inventing a version
 
 jobs:
   tests:
@@ -40,7 +40,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      id-token: write        # lo único que hace falta para OIDC
+      id-token: write        # the only thing OIDC needs
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -50,10 +50,10 @@ jobs:
       - run: python -m build
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          # Idempotente a propósito. La v0.1.0 se subió a mano antes de que
-          # existiera este flujo; sin esto, volver a etiquetarla tronaría y se
-          # llevaría por delante el paso del registro, que va después. Un flujo
-          # de publicación que sólo funciona la primera vez no es un flujo.
+          # Idempotent on purpose. v0.1.0 was uploaded by hand before this
+          # workflow existed; without this, re-tagging it would blow up and
+          # take the registry step —which runs after— down with it. A publish
+          # flow that only works the first time isn't a flow.
           skip-existing: true
 
   registry:
