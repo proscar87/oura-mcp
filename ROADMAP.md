@@ -995,6 +995,57 @@ problem. `discarded_out_of_range: 3` invites "3 of your records were thrown
 away", which is the opposite of true, and a warning that fires every single time
 stops being read regardless. It is now a sentence that says it is normal.
 
+### Round 3: reading the errors as a model would
+
+Sent the server the mistakes a model actually makes and read every reply. Most
+were good — the invented collection name comes back with all nineteen listed,
+`latest` where it doesn't apply explains why, a backwards range says so. Two
+were not.
+
+**«What was my heart rate on January 1st» returned nothing.** `heartrate` and
+`ring_battery_level` take `start_datetime`/`end_datetime`, and a bare
+`YYYY-MM-DD` went through untouched:
+
+    start_datetime=2026-01-01&end_datetime=2026-01-01
+
+An interval of no duration. Oura returned zero records, and the empty-reason
+said *"the query succeeded; Oura has no records in that range"* — blaming Oura
+for a window this client had emptied itself. The most natural question anyone
+would ask of a heart-rate collection, answered with a confident lie.
+
+This package's own thesis, committed by this package, with the explanation
+pointing away from the cause. A bare date now means the whole day.
+
+One thing deliberately NOT claimed: whether Oura's `end_datetime` is inclusive.
+It wasn't measured — the sandbox is a generator, not a filter, and measuring it
+against a real account means handling someone's health data to settle a detail
+the conservative choice already covers. So the end is `T23:59:59`, and the
+comment says it's a hedge rather than a finding. Being wrong that way costs one
+second; the other way contaminates a day.
+
+**The catalog returned a key called `que_trae`,** and the two implementations
+described themselves differently — Python `date_range`, TypeScript `dateRange`,
+both leaking their internal spelling into public output. The same server
+answered differently depending on which one you installed.
+
+That is a **fourth vocabulary**: after CLI flags, response keys and tool
+parameters, the tool *return* values had nobody watching them either. Each guard
+was written for the class of reference that had just broken, and none of them
+generalized. The new tests cover both the Spanish leak and the catalog parity.
+
+### The empty capabilities: checked, not a problem
+
+We advertise `prompts` and `resources` and expose none. Verified directly:
+`prompts/list`, `resources/list` and `resources/templates/list` all return clean
+empty arrays — the capability says "I implement this method", and we do.
+
+But there was something worth taking. `oura://collections` is now a **resource**
+carrying the same catalog: static, no network, no credentials, no health values.
+The most likely mistake on this server is inventing a collection name — the
+error for it exists and lists all nineteen, which is an admission that it was
+expected. A resource puts the list in front of the model *before* the mistake
+rather than after it, without a round trip.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

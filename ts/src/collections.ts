@@ -92,6 +92,20 @@ export const SCOPE_OF: Record<string, string> = {
  * A made-up name has to blow up HERE and not turn into a request to a URL that
  * doesn't exist, whose 404 then has to be interpreted.
  */
+/**
+ * The shape name as it appears in PUBLIC OUTPUT.
+ *
+ * TypeScript spells its internal type `dateRange` and Python spells it
+ * `date_range`, and the catalog leaked that difference: the same server
+ * described itself two different ways depending on which implementation someone
+ * installed. Oura's own parameters are `start_date` and `start_datetime`, so
+ * snake_case is the side that matches the API these names describe.
+ */
+export function shapeName(s: Shape): string {
+  return { dateRange: "date_range", datetimeRange: "datetime_range",
+           single: "single", tokenOnly: "token_only" }[s];
+}
+
 export function shape(collection: string): Shape {
   const c = COLLECTIONS[collection];
   if (!c) throw new Error(`«${collection}» is not an Oura collection`);

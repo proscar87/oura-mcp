@@ -16,7 +16,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 
 import { OuraError, base, inSandbox, fetchAll, token } from "./client.js";
-import { SCOPE_OF, COLLECTIONS, WITH_DATE, shape } from "./collections.js";
+import { SCOPE_OF, COLLECTIONS, WITH_DATE, shape, shapeName } from "./collections.js";
 
 export const VERSION = "0.3.0";
 
@@ -108,9 +108,27 @@ export function createServer(): McpServer {
     annotations: { title: "Oura collection catalog", ...READ_ONLY },
   }, async () => {
     const catalog = Object.fromEntries(
-      Object.entries(COLLECTIONS).map(([n, c]) => [n, { shape: c.shape, que_trae: c.carries }]),
+      Object.entries(COLLECTIONS).map(([n, c]) => [n, { shape: shapeName(c.shape), carries: c.carries }]),
     );
     return { content: [{ type: "text", text: JSON.stringify(catalog, null, 2) }] };
+  });
+
+  // THE SAME CATALOG AS A RESOURCE. The most likely mistake on this server is
+  // inventing a collection name — the error for it exists and lists all
+  // nineteen, which is an admission that it was expected. A resource puts the
+  // list in front of the model BEFORE the mistake instead of after it, and
+  // costs no round trip. Static: no network, no credentials, no health data.
+  srv.registerResource("oura-collections", "oura://collections", {
+    title: "Oura collection catalog",
+    description: "The 19 collections, what each carries and which parameters " +
+                 "it takes. Static: no network, no credentials, no health data.",
+    mimeType: "application/json",
+  }, async (uri) => {
+    const catalog = Object.fromEntries(
+      Object.entries(COLLECTIONS).map(([n, c]) => [n, { shape: shapeName(c.shape), carries: c.carries }]),
+    );
+    return { contents: [{ uri: uri.href, mimeType: "application/json",
+                          text: JSON.stringify(catalog, null, 2) }] };
   });
 
   srv.registerTool("oura_query", {
