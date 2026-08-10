@@ -211,3 +211,43 @@ def test_no_dict_literal_returns_a_spanish_key():
             for marker in ("credenciales", "coleccion", "paginas", "campos",
                            "modo", "alcances", "caducidad", "vacio", "archivo"):
                 assert key != marker, f"{path} returns a key named `{key}`"
+
+
+def test_the_credentials_filename_is_documented_correctly():
+    """`credenciales.json` is a STORAGE PATH, and it stays.
+
+    Same reasoning as the keychain account name: anyone who authorized before
+    the translation has their refresh token in that exact file, and renaming it
+    orphans them silently. What must be true is that the documentation names the
+    real file.
+
+    It didn't. The README got it right and two places got it wrong: the `.mcpb`
+    manifest — the text someone reads in Claude Desktop's settings while
+    configuring this very path — and SUBMISSION.md, which is a factual claim
+    about where credentials live, written for a directory reviewer. A privacy
+    statement naming a file that does not exist is worse than a stale README.
+    """
+    from oura_mcp.credentials import credentials_path
+    import os
+    os.environ.pop("OURA_CREDENTIALS", None)
+    real = os.path.basename(credentials_path())
+    assert real == "credenciales.json"
+
+    for f in ("README.md", "SUBMISSION.md", "ts/manifest.json"):
+        path = ROOT / f
+        if not path.exists():
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "oura-mcp/" in text and ".json" in text:
+            assert "oura-mcp/credentials.json" not in text, \
+                f"{f} names a credentials file that does not exist"
+
+
+def test_both_implementations_write_to_the_same_file():
+    """If they diverged, `oura-mcp --authorize` from PyPI would leave the
+    `.mcpb` saying «no credentials» — two halves of one product refusing to see
+    each other's work."""
+    ts = (ROOT / "ts" / "src" / "credentials.ts").read_text(encoding="utf-8")
+    py = (ROOT / "src" / "oura_mcp" / "credentials.py").read_text(encoding="utf-8")
+    assert '"oura-mcp", "credenciales.json"' in ts
+    assert '"oura-mcp", "credenciales.json"' in py

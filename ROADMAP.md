@@ -1148,6 +1148,60 @@ was true when written and stopped being true in 0.3.0, when URL elicitation made
 the server do precisely what the comment called impossible. Comments age like
 READMEs, with the difference that nobody rereads them.
 
+### Round 6: the least-tested copy was the one most people will run
+
+Python had 187 tests, TypeScript 48. Most of that gap is legitimate — document
+coherence doesn't need testing twice — but one part of it was not:
+
+**`credentials.ts` had no tests at all.** Python had 28 for the same job. That
+is the code which writes, reads, rotates and erases someone's OAuth refresh
+token, and TypeScript is what goes inside the `.mcpb` — the install path being
+pushed hardest. The least-tested copy was the one most people would run, of the
+most dangerous code in the package.
+
+Seventeen tests now cover it, and they were checked by **breaking the thing they
+claim to protect**:
+
+| broken on purpose | noticed |
+|---|---|
+| file mode 0600 → 0644 | no — and correctly: an explicit `chmod` after the write makes it redundant. Removing *both* is caught. |
+| `save()` before returning, in `refresh()` | yes |
+| the "somebody else already refreshed" race | yes |
+| temp-file cleanup on failure | **no** |
+
+That last one was a hole in the test, not the code. The first version broke
+`asJson()`, which throws **before** anything is written — so there was never any
+debris to look for and it passed without exercising the cleanup at all. A test
+that looks like it checks something and doesn't, inside the suite of a package
+whose entire subject is answers that look right.
+
+Python's equivalent was written correctly — it fails `os.replace`, after the
+temp file exists. I ported the intent and not the mechanism.
+
+### A credentials file the documentation named wrongly
+
+Both implementations store at `~/.config/oura-mcp/credenciales.json`, and they
+agree, which matters: if they had drifted, `oura-mcp --authorize` from PyPI would
+leave the `.mcpb` reporting «no credentials» — two halves of one product refusing
+to see each other's work. There's a test for that now.
+
+The name stays in Spanish for the same reason the keychain account does: it's a
+storage path, and renaming it orphans anyone who authorized earlier.
+
+What was wrong is that two places **named a file that doesn't exist**. The
+`.mcpb` manifest — the text someone reads in Claude Desktop's settings while
+configuring this exact path — and `SUBMISSION.md`, which is a factual claim about
+where credentials live, written for a directory reviewer. A privacy statement
+naming the wrong file is worse than a stale README.
+
+### Three warnings the README never mentioned
+
+`synthetic`, `rate_limited` and `fields_split` were all added by this audit, and
+all three reached `llms.txt` while none reached the README. llms.txt is read by
+models; the README is read by people deciding whether to install. Documenting a
+warning in only one means half the audience meets it for the first time in a
+live response.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

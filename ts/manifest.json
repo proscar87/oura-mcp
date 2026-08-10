@@ -74,7 +74,7 @@
     "credentials_file": {
       "type": "string",
       "title": "OAuth2 credentials file",
-      "description": "Path to the file written by `oura-mcp --authorize`. Leave empty to use the default location (~/.config/oura-mcp/credentials.json).",
+      "description": "Path to the file written by `oura-mcp --authorize`. Leave empty to use the default location (~/.config/oura-mcp/credenciales.json).",
       "required": false
     },
     "client_id": {

@@ -49,7 +49,7 @@ terminal.
 
 **Data handling:** no telemetry, no analytics, no third-party services. Health
 data is never written to disk. Credentials are stored locally at
-`~/.config/oura-mcp/credentials.json` with `0600` permissions and can be erased
+`~/.config/oura-mcp/credenciales.json` with `0600` permissions and can be erased
 with `oura-mcp --forget`.
 
 **Tools:** `oura_collections`, `oura_query`, `oura_check` — all read-only.
