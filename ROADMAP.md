@@ -957,14 +957,14 @@ listing is the cost of entry, not a differentiator, and any plan whose payoff is
 What is scarce is the **Claude desktop extension directory** — a separate, much
 smaller door, and the only one that ends in a double-click.
 
-### 1. Attach the `.mcpb` to a GitHub release · the README is lying right now
+### 1. Attach the `.mcpb` to a GitHub release · **done, 10 August 2026**
 
 The README sends people to a releases page that is **empty** — verified, zero
 releases. The most visible install path in the most-read file leads nowhere.
 Everything below is worth less than fixing a broken promise that is already in
 front of people. Costs one command.
 
-### 2. Make the first screen of the README say the difference
+### 2. Make the first screen of the README say the difference · **done**
 
 The ecosystem scan showed the differentiator is real and invisible.
 `jonnyhaynes/whoop-mcp-server` ships `nextToken` **as a tool parameter** — the
@@ -976,15 +976,46 @@ spends choosing: *one local day of heart rate is 1,231 samples across 2 pages; a
 client that doesn't paginate returns 81% of them and says nothing.* Measured,
 quotable, and nobody else in the field publishes a number like it.
 
-### 3. Submit to the Claude desktop extension directory
+### 3. Submit to the Claude desktop extension directory · **blocked on Oscar**
 
 Now genuinely the highest-leverage listing, precisely because the registry is
-crowded and this door is not. Depends on 1.
+crowded and this door is not.
 
-### 4. `awesome-mcp-servers` and mcp.so
+The submission is a Google Form behind a sign-in, so it needs Oscar's account.
+Everything it asks for is written and ready; this is the only item on the
+roadmap that cannot be finished from here.
 
-Still free, still not done, now correctly ranked **below** the two above rather
-than alongside them.
+### 4. `awesome-mcp-servers` and mcp.so · **done**
+
+- `awesome-mcp-servers` (92k stars): PR
+  [#11833](https://github.com/punkpeye/awesome-mcp-servers/pull/11833), filed
+  under **Health & Wellness**, which had exactly one entry. Being second in the
+  semantically right category beats being the third Oura server buried in a
+  400-line Biology section — and their CONTRIBUTING.md fast-tracks agent PRs
+  that say so in the title, so it does.
+- mcp.so: submitted as [issue
+  #3503](https://github.com/chatmcp/mcpso/issues/3503), which is the route their
+  form actually feeds.
+- glama.ai already indexes the repository — verified, no submission needed.
+
+### What the release itself turned up
+
+Shipping 1 and 2 produced 0.3.1 rather than a doc change, because writing the
+README lead honestly meant reading what the code did, and it didn't match.
+
+The lead now poses a test — *does it take `next_token`, a `cursor`, or a `limit`
+as a tool parameter?* — and applies it to this server too. Checking that, it
+turned out `continue_from` handed back Oura's opaque token while **no parameter
+accepted one**. The response told the model to continue from a value it had
+nowhere to put. It is now the last day reached, which works with `start`.
+
+And eight retired Spanish key names were still documented — `campos_ignorados`,
+`ciclo_de_paginacion`, `descartados_fuera_de_rango`, `respuesta_grande`. Worse
+than the dead CLI flags found earlier: a flag fails loudly, while a key that
+never arrives just looks like the condition never happened.
+
+Both were found by writing a claim aimed at strangers and then checking whether
+it was true. That is worth more than the marketing.
 
 ### Settled — removed from the roadmap, not deferred
 
