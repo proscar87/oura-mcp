@@ -539,9 +539,20 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
     }
     seen.add(nextToken);
     if (pages >= pageLimit) {
-      truncated = `stopped at ${pageLimit} pages and Oura was offering more; ` +
-                 `shorten the range or continue from \`continue_from\``;
-      cursor = nextToken;
+      // `continue_from` USED TO BE nextToken, and no parameter accepts a
+      // token back — deliberately, since taking a cursor would make
+      // pagination the model's job, which is what this package exists to
+      // prevent. So the response told the model to continue from something
+      // it could not use: an instruction that reads as actionable and is not.
+      //
+      // A day is usable with the parameters that already exist.
+      cursor = (data.length ? dayOf(data[data.length - 1]) : undefined) ?? undefined;
+      truncated = cursor
+        ? `stopped at ${pageLimit} pages and Oura was offering more. The ` +
+          `data reaches through ${cursor}; ask again with \`start\` set to ` +
+          `the following day.`
+        : `stopped at ${pageLimit} pages and Oura was offering more; ` +
+          `narrow the range and ask again.`;
       break;
     }
   }
@@ -550,7 +561,12 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
   data = trimmed.data;
 
   const out: Row = { collection, n: data.length, pages, data };
-  if (truncated) { out["truncated"] = truncated; out["continue_from"] = cursor; }
+  if (truncated) {
+    out["truncated"] = truncated;
+    // Only when there IS a day. `continue_from: null` reads as "resuming is
+    // possible and the value is missing", worse than not offering it at all.
+    if (cursor) out["continue_from"] = cursor;
+  }
   if (cycle) out["pagination_cycle"] = cycle;
   if (format === "csv") {
     const { text, columns, uneven } = toCsv(data);

@@ -53,8 +53,23 @@ describe("pagination", () => {
     const r = await fetchAll("heartrate", {
       start: "2026-08-01T00:00:00Z", end: "2026-08-02T00:00:00Z", pageLimit: 3 });
     expect(r["pages"]).toBe(3);
-    expect(String(r["truncated"])).toContain("shorten");
-    expect(r["continue_from"]).toBe("3");
+    // These records carry no `day`, so there is nothing usable to continue from
+    // and the message asks for a narrower range instead.
+    expect(String(r["truncated"])).toContain("narrow the range");
+    expect(r["continue_from"]).toBeUndefined();
+  });
+
+  it("names a day you can actually ask for when truncating", async () => {
+    // `continue_from` was Oura's nextToken, and NO parameter accepts a token
+    // back — deliberately, since a cursor parameter hands pagination to the
+    // model, the failure this package exists to prevent. So the response told
+    // the model to continue from a value it had nowhere to put.
+    fakeOura(Array.from({ length: 20 }, (_, d) =>
+      [{ day: `2026-01-${String(d + 1).padStart(2, "0")}`, score: 70 }]));
+    const r = await fetchAll("daily_sleep",
+      { start: "2026-01-01", end: "2026-12-31", pageLimit: 3 });
+    expect(r["continue_from"]).toBe("2026-01-03");
+    expect(String(r["truncated"])).toContain("start");
   });
 
   it("detects a repeated next_token as a cycle, not as truncation", async () => {

@@ -1,11 +1,31 @@
 # Changelog
 
+## 0.3.1 — 10 August 2026
+
+`continue_from` pointed at something you could not use. It carried Oura's
+`next_token`, and **no tool parameter accepts a token back** — deliberately,
+because a cursor parameter hands pagination to the model, which is the failure
+this package exists to prevent. So a truncated response told the model to
+"continue from `continue_from`" and gave it nowhere to put the value.
+
+It is now the last day actually reached, which works with the `start` parameter
+that already exists. When the records carry no day at all, the key is omitted
+rather than sent as null — `continue_from: null` reads as "resuming is possible
+and the value is missing", which is worse than not offering it.
+
+Eight retired Spanish key names were still documented in the README and
+`llms.txt`: `campos_ignorados`, `ciclo_de_paginacion`,
+`descartados_fuera_de_rango`, `respuesta_grande`. Worse than a dead CLI flag,
+which fails loudly — a key that never arrives just looks like the condition never
+happened. Tests now check the documented keys against the ones the code emits,
+and check the two implementations against each other.
+
 ## 0.3.0 — unreleased
 
 Everything in English: docs, comments, and the tool parameters. The parameter
 rename is a **breaking change** against 0.2.0 — `dia` → `day`, `inicio` →
 `start`, `fin` → `end`, `campos` → `fields`, `ultimo` → `latest`, `formato` →
-`format`, `coleccion` → `collection`. They now match Oura's own API names,
+`format`, `collection` → `collection`. They now match Oura's own API names,
 which is one less translation layer for anyone reading both.
 
 The CLI flags were renamed with them: `--autorizar` → `--authorize`,
@@ -30,7 +50,7 @@ Everything below was measured against the real API, not assumed.
 ### The date range was wrong
 
 Asking for a single day returned **zero records** in `daily_activity`, `sleep`
-and `workout`. No error, no `truncado`, and `paginas: 1` asserting the page was
+and `workout`. No error, no `truncated`, and `paginas: 1` asserting the page was
 complete. Two failures that stack:
 
 - **`end_date` is inconsistent across collections.** Three exclude the last day;
@@ -53,7 +73,7 @@ Both fail silently when misused: `fields=made_up` returns the complete record
 without projecting, and `latest=true` on a collection that doesn't support it
 returns the entire collection. So `latest` is rejected here for the 17 that
 don't honor it, and fields that were never applied are reported under
-`campos_ignorados`.
+`ignored_fields`.
 
 ### Sandbox mode
 
@@ -81,7 +101,7 @@ still work and win when present.
 - **`format="csv"`** — savings vary by collection: 55% on `heartrate`, 10% on
   `daily_sleep`. The header comes from the union of all keys, not the first
   record.
-- **`truncado` now carries `continuar_desde`** so you can resume instead of
+- **`truncated` now carries `continue_from`** so you can resume instead of
   retrying blind.
 - **429 with bounded retry**, honoring `Retry-After` in both its forms. Oura
   sends no rate-limit headers, so reacting well is all that's left.

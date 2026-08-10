@@ -31,13 +31,15 @@ Parameter names are in Spanish because the codebase is.
 
 ## Warning keys in the response
 
-- `truncado` + `continuar_desde` — data is missing; the cursor lets you resume.
-- `ciclo_de_paginacion` — Oura repeated a token; what's there may be incomplete.
-- `campos_ignorados` — you asked for fields Oura didn't apply.
-- `descartados_fuera_de_rango` — records from the safety margin that were cut.
-- `columnas_desiguales` — in CSV, not every record has the same keys.
-- `vacio` — the query came back empty; explains what's knowable about why.
-- `respuesta_grande` — the payload is heavy; names the field that dominates it.
+- `truncated` + `continue_from` — data is missing; `continue_from` is the last
+  day reached, so you ask again with `start` set to the day after. There is no
+  cursor parameter on purpose: a cursor makes pagination the model's job.
+- `pagination_cycle` — Oura repeated a token; what's there may be incomplete.
+- `ignored_fields` — you asked for fields Oura didn't apply.
+- `discarded_out_of_range` — records from the safety margin that were cut.
+- `uneven_columns` — in CSV, not every record has the same keys.
+- `empty` — the query came back empty; explains what's knowable about why.
+- `large_response` — the payload is heavy; names the field that dominates it.
 
 ## Environment variables
 

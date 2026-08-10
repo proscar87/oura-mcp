@@ -330,3 +330,57 @@ def test_the_publish_workflow_keeps_the_name_pypi_trusts():
     header = (ROOT / ".github" / "workflows" / "publish.yml").read_text(encoding="utf-8")
     assert "workflow  publish.yml" in header, \
         "the header must document the exact filename PyPI is configured for"
+
+
+def _emitted_keys() -> set[str]:
+    """Every key the client can put in a response, read from the source."""
+    text = (ROOT / "src" / "oura_mcp" / "client.py").read_text(encoding="utf-8")
+    return set(re.findall(r'out\["([a-z_]+)"\]', text)) | {
+        "data", "collection", "n", "pages"}
+
+
+def test_the_docs_do_not_name_response_keys_that_no_longer_exist():
+    """Eight retired Spanish key names survived the translation in README and
+    llms.txt — `campos_ignorados`, `ciclo_de_paginacion`,
+    `descartados_fuera_de_rango`, `respuesta_grande`. The documentation told
+    people to look for keys the server had stopped emitting.
+
+    Worse than a dead CLI flag: a flag fails loudly, while a key that never
+    arrives just looks like the condition never happened. Someone waiting for
+    `campos_ignorados` concludes their field names were fine.
+
+    Pinned by name rather than inferred, because the docs legitimately quote
+    Oura's own vocabulary (`next_token`, `start_date`) and a general rule would
+    fire on those.
+    """
+    retired = ("campos_ignorados", "ciclo_de_paginacion",
+               "descartados_fuera_de_rango", "respuesta_grande",
+               "continuar_desde", "columnas_desiguales")
+    for name in ("README.md", "llms.txt", "AGENTS.md", "ROADMAP.md"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        for key in retired:
+            assert f"`{key}`" not in text, f"{name} still documents `{key}`"
+
+
+def test_the_keys_the_readme_promises_are_keys_the_server_emits():
+    """The other direction: the README names keys as things you will see, and
+    every one has to be reachable from the code that builds a response."""
+    emitted = _emitted_keys()
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    promised = {"ignored_fields", "pagination_cycle", "discarded_out_of_range",
+                "large_response", "pages", "truncated", "empty", "synthetic"}
+    for key in promised:
+        if f"`{key}`" in readme:
+            assert key in emitted, f"README promises `{key}`, which is never set"
+
+
+def test_both_clients_emit_the_same_keys():
+    """The `.mcpb` ships the TypeScript client and PyPI ships the Python one. A
+    key present in only one makes the documentation right for half the users."""
+    ts = (ROOT / "ts" / "src" / "client.ts").read_text(encoding="utf-8")
+    ts_keys = set(re.findall(r'out\["([a-z_]+)"\]', ts))
+    py_keys = set(re.findall(
+        r'out\["([a-z_]+)"\]',
+        (ROOT / "src" / "oura_mcp" / "client.py").read_text(encoding="utf-8")))
+    assert py_keys == ts_keys, \
+        f"only in Python: {py_keys - ts_keys}; only in TypeScript: {ts_keys - py_keys}"

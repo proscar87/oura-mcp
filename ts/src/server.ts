@@ -50,9 +50,11 @@ export const INSTRUCTIONS =
   "missing. When that happens the response carries `empty` with what is known. " +
   "Read it before concluding anything, and say there is no data, not that it " +
   "didn't happen.\n\n" +
-  "2. If `truncated` appears, data is MISSING: continue from `continue_from`. " +
-  "If `pagination_cycle` appears, Oura repeated itself and what you have may " +
-  "be incomplete. Neither one gets ignored.\n\n" +
+  "2. If `truncated` appears, data is MISSING: `continue_from` is the last day " +
+  "reached, and you ask again with `start` set to the day after. If " +
+  "`pagination_cycle` " +
+  "appears, Oura repeated itself and what you have may be incomplete. Neither " +
+  "one gets ignored.\n\n" +
   "3. The range is inclusive on both ends, and `day` is the shorthand for a " +
   "single one. To join a workout with the heart rate during it: request " +
   "`workout`, take `start_datetime` and `end_datetime` from the one you care " +

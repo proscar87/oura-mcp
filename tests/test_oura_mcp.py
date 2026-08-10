@@ -87,7 +87,10 @@ def test_says_so_when_truncating(monkeypatch):
     r = client.fetch("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z",
                         page_limit=3)
     assert r["pages"] == 3
-    assert "truncated" in r and "shorten" in r["truncated"]
+    # These records carry no `day`, so there is no day to name — the message
+    # falls back to asking for a narrower range.
+    assert "truncated" in r and "narrow the range" in r["truncated"]
+    assert "continue_from" not in r, "nothing to continue from without a day"
 
 
 def test_a_single_page_asks_for_no_more(monkeypatch):
@@ -172,12 +175,22 @@ def test_dia_de_reconoce_las_claves_con_hora():
 
 def test_truncating_leaves_a_cursor_to_continue_from(monkeypatch):
     """`truncated` warned but didn't let you continue: whoever received it could
-    only retry blind."""
-    pages = [[{"i": n}] for n in range(20)]
+    only retry blind.
+
+    And then it pointed at something unusable. `continue_from` was Oura's
+    `next_token`, and no parameter accepts a token back — deliberately, because
+    a cursor parameter hands pagination to the model, which is the failure this
+    package exists to prevent. The response told the model to continue from a
+    value it had nowhere to put.
+
+    It is the last day actually reached, which works with `start`.
+    """
+    pages = [[{"day": f"2026-01-{d:02d}", "score": 70}] for d in range(1, 21)]
     _fake_oura(pages, monkeypatch)
-    r = client.fetch("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z",
-                        page_limit=3)
-    assert r["continue_from"] == "3"
+    r = client.fetch("daily_sleep", "2026-01-01", "2026-12-31", page_limit=3)
+    assert r["continue_from"] == "2026-01-03"
+    assert "start" in r["truncated"]
+    assert "next_token" not in str(r), "the opaque token must not leak"
 
 
 # ── CSV: el mismo dato sin repetir las claves 37,000 veces ──────────────────
@@ -224,7 +237,8 @@ def test_the_csv_arrives_when_truncated_too(monkeypatch):
     _fake_oura(pages, monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-10",
                         format="csv", page_limit=3)
-    assert r["format"] == "csv" and "truncated" in r and r["continue_from"] == "3"
+    assert r["format"] == "csv" and "truncated" in r
+    assert r["continue_from"] == "2026-08-10"
 
 
 # ── The 429: a bounded retry ───────────────────────────────────────────────
@@ -798,3 +812,4 @@ def test_only_personal_info_is_missing_from_the_sandbox():
     from oura_mcp.collections import COLLECTIONS, WITHOUT_SANDBOX
     assert WITHOUT_SANDBOX == {"personal_info"}
     assert WITHOUT_SANDBOX <= set(COLLECTIONS)
+
