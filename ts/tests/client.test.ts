@@ -302,3 +302,47 @@ describe("sandbox", () => {
       .rejects.toThrow(/is not an Oura collection/);
   });
 });
+
+// ── Authorizing without a terminal ─────────────────────────────────────────
+// A `.mcpb` installed with a double click must not end with "now open a
+// terminal". MCP has a mode for exactly this — URL elicitation — and the flow
+// runs from inside the conversation: the client opens Oura's page, the server
+// listens for the callback it already knows how to listen for.
+describe("authorization by elicitation", () => {
+  it("asks the client to open Oura's page, not the user to open a terminal", async () => {
+    const { authorizeByElicitation } = await import("../src/authorize.js");
+    process.env.OURA_CLIENT_ID = "an-id";
+    process.env.OURA_CLIENT_SECRET = "a-secret";
+    const seen: Record<string, unknown>[] = [];
+    await expect(authorizeByElicitation(
+      async (p) => { seen.push(p); return { action: "decline" }; },
+      undefined,
+      "http://localhost:9873/callback/",
+    )).rejects.toThrow(/was not completed/);
+    expect(seen[0]!["mode"]).toBe("url");
+    expect(String(seen[0]!["url"])).toContain("cloud.ouraring.com/oauth/authorize");
+  });
+
+  it("a declined prompt stops the listener instead of hanging", async () => {
+    // Left running, a declined prompt keeps the tool call waiting the full five
+    // minutes for a callback that will never come.
+    const { authorizeByElicitation } = await import("../src/authorize.js");
+    process.env.OURA_CLIENT_ID = "an-id";
+    process.env.OURA_CLIENT_SECRET = "a-secret";
+    const started = Date.now();
+    await expect(authorizeByElicitation(
+      async () => ({ action: "cancel" }),
+      undefined,
+      "http://localhost:9874/callback/",
+    )).rejects.toThrow(/was not completed/);
+    expect(Date.now() - started).toBeLessThan(3000);
+  });
+
+  it("without app credentials it says where to register them", async () => {
+    const { authorizeByElicitation } = await import("../src/authorize.js");
+    delete process.env.OURA_CLIENT_ID;
+    delete process.env.OURA_CLIENT_SECRET;
+    await expect(authorizeByElicitation(async () => ({}), undefined))
+      .rejects.toThrow(/oauth\/applications/);
+  });
+});

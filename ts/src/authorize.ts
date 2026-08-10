@@ -107,8 +107,9 @@ export function extractCode(urlOCodigo: string, estadoEsperado?: string): string
  * outside it looked like "no callback arrived", with no clue why.
  */
 export function waitForCallback(port: number, state: string,
-                                wait = CALLBACK_WAIT): Promise<string> {
-  return new Promise((resolver, rechazar) => {
+                                wait = CALLBACK_WAIT): Promise<string> & { cancel: () => void } {
+  let cancel = () => {};
+  const promise = new Promise<string>((resolve, reject) => {
     let done = false;
     const srv = createServer((req, res) => {
       const path = new URL(req.url ?? "/", "http://localhost").pathname.replace(/\/+$/, "");
@@ -119,10 +120,10 @@ export function waitForCallback(port: number, state: string,
       let title: string, body: string, code: string | null = null;
       try {
         code = extractCode(req.url ?? "", state);
-        title = "Listo";
-        body = "You can close this tab and go back to the terminal.";
+        title = "Done";
+        body = "You can close this tab and go back to Claude.";
       } catch (e) {
-        title = "No se pudo";
+        title = "It did not work";
         body = (e as Error).message;
       }
       const page = PAGE(title, body);
@@ -135,27 +136,38 @@ export function waitForCallback(port: number, state: string,
       done = true;
       clearTimeout(timer);
       srv.close();
-      if (code) resolver(code);
-      else rechazar(new OuraError(body));
+      if (code) resolve(code);
+      else reject(new OuraError(body));
     });
 
     srv.on("error", (e: NodeJS.ErrnoException) => {
-      rechazar(new OuraError(
-        `no se pudo escuchar en el port ${port} (${e.code}). ` +
-        `Is another authorization running? Try --manual`));
+      reject(new OuraError(
+        `could not listen on port ${port} (${e.code}). ` +
+        `Is another authorization running?`));
     });
 
     const timer = setTimeout(() => {
       if (done) return;
       done = true;
       srv.close();
-      rechazar(new OuraError(
-        `no callback arrived within ${Math.round(wait / 1000)}s. ` +
-        `If the machine has no browser, use --manual`));
+      reject(new OuraError(
+        `no callback arrived within ${Math.round(wait / 1000)}s.`));
     }, wait);
+
+    // Cancelling matters: if the user declines the prompt, waiting five more
+    // minutes for a callback that will never come turns a "no thanks" into a
+    // hung tool call.
+    cancel = () => {
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      srv.close();
+      reject(new OuraError("authorization cancelled"));
+    };
 
     srv.listen(port, "127.0.0.1");
   });
+  return Object.assign(promise, { cancel });
 }
 
 export function portOf(redirect: string): number {
@@ -213,4 +225,56 @@ export async function authorize(manual = false,
     expires_in_seconds: Math.round((cred.expiresAt - Date.now()) / 1000),
     next_step: "you can use the server now; the token refreshes itself",
   };
+}
+
+/**
+ * The OAuth2 flow driven from inside the MCP client, with no terminal.
+ *
+ * THE POINT OF THIS FUNCTION. `--authorize` works, but it asks the user to open
+ * a terminal — which for someone who installed a `.mcpb` with a double click is
+ * the whole promise broken. The MCP protocol has a mode for exactly this: URL
+ * elicitation. The server hands the client a URL, the client shows or opens it,
+ * and the server waits for the callback it is already able to listen for.
+ *
+ * What this does NOT solve is Oura's side: Oura requires every application to be
+ * registered, so a client_id and client_secret have to come from somewhere. That
+ * is a registration decision, not a technical one.
+ */
+export async function authorizeByElicitation(
+  elicit: (params: { mode: "url"; message: string; elicitationId: string; url: string }) => Promise<unknown>,
+  notifyDone: ((id: string) => Promise<void>) | undefined,
+  redirect = DEFAULT_REDIRECT,
+): Promise<void> {
+  const [clientId, clientSecret] = appCredentials();
+  const state = randomBytes(24).toString("base64url");
+  const url = authorizationUrl(clientId, state, redirect);
+  const elicitationId = `oura-oauth-${state.slice(0, 8)}`;
+
+  // The listener starts BEFORE the client is told to open anything. Told first,
+  // a fast user reaches the callback before there is anything listening — and
+  // the failure looks like Oura's, not ours.
+  const waiting = waitForCallback(portOf(redirect), state);
+
+  const answer = await elicit({
+    mode: "url",
+    elicitationId,
+    url,
+    message:
+      "Connect your Oura account. The page is Oura's own; this server never " +
+      "sees your password, only the code Oura hands back afterwards.",
+  }) as { action?: string } | undefined;
+
+  // "decline" and "cancel" are answers, not failures — and they have to stop the
+  // listener. Left running, a declined prompt keeps the tool call hanging for
+  // the full five minutes.
+  if (answer?.action && answer.action !== "accept") {
+    waiting.cancel();
+    throw new OuraError(
+      "authorization was not completed. Run it again when you are ready, or " +
+      "set OURA_SANDBOX=1 to work with sample data.");
+  }
+
+  const code = await waiting;
+  await exchangeCode(code, clientId, clientSecret, redirect);
+  if (notifyDone) await notifyDone(elicitationId);
 }

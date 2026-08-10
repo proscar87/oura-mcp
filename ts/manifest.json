@@ -4,7 +4,7 @@
   "display_name": "Oura",
   "version": "0.3.0",
   "description": "The Oura v2 API as an MCP server. Paginates, fixes the date range, warns when data is missing.",
-  "long_description": "Oura's API does not return errors when it can't give you what you asked for. It returns something different, shaped like a correct response. This server corrects the four ways that happens, all measured against the real API:\n\n1. Not following `next_token` returns a fraction — one local day of heart rate is 1,231 samples across 2 pages, and a client that doesn't paginate gets 81% of them with no warning.\n2. `end_date` is inconsistent across collections, and `workout` filters by UTC date while reporting its day in local time. Asking for a single day used to return zero records.\n3. `latest=true` on a collection that doesn't support it returns the entire collection, with no error.\n4. A field name that doesn't exist is silently ignored, and the projection never happens.\n\nIt deliberately performs no analysis: no correlations, no anomaly detection, no period comparison. An average computed inside the server reaches the model as a number without its method.\n\nCREDENTIALS: Oura stopped issuing Personal Access Tokens in December 2025. Out of the box this extension runs in sandbox mode, which serves Oura's official synthetic data and needs no account at all — good for seeing what the tools return. To read your own data you either paste a personal token you already had, or run `oura-mcp --authorize` once in a terminal, which is the OAuth2 flow. That last step cannot happen from this window: a server that speaks over stdin/stdout cannot ask you anything.",
+  "long_description": "Oura's API does not return errors when it can't give you what you asked for. It returns something different, shaped like a correct response. This server corrects the four ways that happens, all measured against the real API:\n\n1. Not following `next_token` returns a fraction — one local day of heart rate is 1,231 samples across 2 pages, and a client that doesn't paginate gets 81% of them with no warning.\n2. `end_date` is inconsistent across collections, and `workout` filters by UTC date while reporting its day in local time. Asking for a single day used to return zero records.\n3. `latest=true` on a collection that doesn't support it returns the entire collection, with no error.\n4. A field name that doesn't exist is silently ignored, and the projection never happens.\n\nIt deliberately performs no analysis: no correlations, no anomaly detection, no period comparison. An average computed inside the server reaches the model as a number without its method.\n\nCREDENTIALS: Oura stopped issuing Personal Access Tokens in December 2025, so OAuth2 is the path. Out of the box this extension runs on Oura's official sample data and needs no account at all. When you want your own data, ask it for something and it will open Oura's authorization page for you — no terminal involved. Oura does require every application to be registered, so you need a client ID and secret from cloud.ouraring.com/oauth/applications once; paste them below.",
   "author": {
     "name": "Oscar Pacheco",
     "url": "https://github.com/proscar87"
@@ -14,7 +14,13 @@
   "support": "https://github.com/proscar87/oura-mcp/issues",
   "icon": "icon.png",
   "license": "MIT",
-  "keywords": ["oura", "health", "sleep", "wearables", "heart rate"],
+  "keywords": [
+    "oura",
+    "health",
+    "sleep",
+    "wearables",
+    "heart rate"
+  ],
   "privacy_policies": [
     "https://github.com/proscar87/oura-mcp#privacy-policy"
   ],
@@ -23,11 +29,15 @@
     "entry_point": "server/dist/main.js",
     "mcp_config": {
       "command": "node",
-      "args": ["${__dirname}/server/dist/main.js"],
+      "args": [
+        "${__dirname}/server/dist/main.js"
+      ],
       "env": {
         "OURA_SANDBOX": "${user_config.sandbox}",
         "OURA_PAT": "${user_config.personal_token}",
-        "OURA_CREDENTIALS": "${user_config.credentials_file}"
+        "OURA_CREDENTIALS": "${user_config.credentials_file}",
+        "OURA_CLIENT_ID": "${user_config.client_id}",
+        "OURA_CLIENT_SECRET": "${user_config.client_secret}"
       }
     }
   },
@@ -66,11 +76,28 @@
       "title": "OAuth2 credentials file",
       "description": "Path to the file written by `oura-mcp --authorize`. Leave empty to use the default location (~/.config/oura-mcp/credentials.json).",
       "required": false
+    },
+    "client_id": {
+      "type": "string",
+      "title": "Oura application client ID",
+      "description": "From cloud.ouraring.com/oauth/applications. Register the redirect http://localhost:9876/callback/ — the trailing slash is required. Needed once, so the extension can open the authorization page for you.",
+      "required": false
+    },
+    "client_secret": {
+      "type": "string",
+      "title": "Oura application client secret",
+      "description": "From the same page as the client ID.",
+      "sensitive": true,
+      "required": false
     }
   },
   "compatibility": {
     "claude_desktop": ">=0.10.0",
-    "platforms": ["darwin", "win32", "linux"],
+    "platforms": [
+      "darwin",
+      "win32",
+      "linux"
+    ],
     "runtimes": {
       "node": ">=20.0.0"
     }

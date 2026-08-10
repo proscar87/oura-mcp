@@ -63,6 +63,34 @@ export const INSTRUCTIONS =
   "This server deliberately computes no averages and no trends: it hands over " +
   "the data so the analysis happens where the method can be cited.";
 
+// The connected server, kept so the tool handlers can reach the client.
+let live: McpServer | undefined;
+
+export function enableElicitation(server: McpServer): void {
+  live = server;
+}
+
+/**
+ * The client's URL-elicitation channel, or undefined if it hasn't got one.
+ *
+ * RESOLVED AT CALL TIME, not at startup. `connect()` returns once the transport
+ * is wired, and the client's capabilities aren't known until its `initialize`
+ * arrives — so asking at startup always saw nothing and the flow silently never
+ * ran. Asked here, at the moment credentials turn out to be missing, the answer
+ * is real.
+ */
+function elicitationChannel() {
+  const low = live?.server;
+  // Only when the client says it can: asking one that cannot show a URL turns a
+  // clear "no credentials" message into a protocol error.
+  if (!low?.getClientCapabilities?.()?.elicitation) return undefined;
+  return {
+    elicit: (p: { mode: "url"; message: string; elicitationId: string; url: string }) =>
+      low.elicitInput(p),
+    done: async (id: string) => { await low.createElicitationCompletionNotifier(id)(); },
+  };
+}
+
 export function createServer(): McpServer {
   const srv = new McpServer(
     { name: "oura", version: VERSION },
@@ -165,6 +193,26 @@ export async function query(a: QueryArgs): Promise<Record<string, unknown>> {
       start, end, fields: a.fields, latest: a.latest, format: a.format,
     });
   } catch (e) {
+    // NO CREDENTIALS IS NOT AN ERROR THE USER SHOULD HAVE TO FIX BY HAND. If the
+    // client can show a URL and this machine has app credentials, the OAuth flow
+    // runs from inside the conversation: the client opens Oura's page, the
+    // server listens for the callback it already knows how to listen for, and
+    // the original request is retried. A `.mcpb` installed with a double click
+    // must not end in a terminal.
+    const channel = e instanceof OuraError && /no credentials/.test(e.message)
+      ? elicitationChannel() : undefined;
+    if (channel) {
+      try {
+        const { authorizeByElicitation } = await import("./authorize.js");
+        await authorizeByElicitation(channel.elicit, channel.done);
+        return await fetchAll(a.collection, {
+          start, end, fields: a.fields, latest: a.latest, format: a.format,
+        });
+      } catch (e2) {
+        if (e2 instanceof OuraError) return { error: e2.message };
+        throw e2;
+      }
+    }
     // Returned as data, not thrown: an exception cuts the whole conversation
     // short over what is almost always a malformed date or an expired token.
     if (e instanceof OuraError) return { error: e.message };
