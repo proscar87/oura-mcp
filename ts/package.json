@@ -5,7 +5,7 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "oura-mcp": "dist/principal.js"
+    "oura-mcp": "dist/main.js"
   },
   "files": [
     "dist"
@@ -16,7 +16,7 @@
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
-    "revisar": "node dist/principal.js --revisar"
+    "revisar": "node dist/main.js --revisar"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
