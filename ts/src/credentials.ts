@@ -127,9 +127,25 @@ export async function load(): Promise<Credentials | null> {
   try {
     raw = await readFile(path, "utf8");
   } catch (e) {
-    if ((e as NodeJS.ErrnoException).code === "ENOENT") return null;
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === "ENOENT") return null;
+    if (code === "EACCES" || code === "EPERM") {
+      // «Delete it and authorize again» is the WRONG advice here: deleting needs
+      // permission too. Someone whose file is unreadable would try the suggested
+      // fix, fail at that as well, and end up further from an answer than when
+      // they started. Python names the cause; this half did not.
+      throw new OuraError(
+        `the credentials file exists but cannot be read: permission denied. ` +
+        `Check who owns it — it should be yours and mode 600: ${path}`);
+    }
+    if (code === "EISDIR") {
+      throw new OuraError(
+        `the credentials path is a DIRECTORY, not a file. Something else ` +
+        `created it; remove the directory and authorize again: ${path}`);
+    }
     throw new OuraError(
-      `the credentials file could not be read. Delete it and authorize again: ${path}`);
+      `the credentials file could not be read (${code ?? "unknown"}). ` +
+      `Delete it and authorize again: ${path}`);
   }
   try {
     return Credentials.fromJson(JSON.parse(raw) as Record<string, unknown>);

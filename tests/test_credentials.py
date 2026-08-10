@@ -425,3 +425,48 @@ def test_a_refresh_of_a_credential_nobody_replaced_still_happens(monkeypatch):
     nueva = cr.refresh(vigente, "id", "secreto")
     assert llamadas == ["R1"], "it skipped an exchange it was asked to make"
     assert nueva.refresh_token.reveal() == "R2"
+
+
+# ── The cold start: what someone meets when the file is not what we expect ──
+def test_an_unreadable_file_does_not_tell_you_to_delete_it(_isolate):
+    """«Delete it and authorize again» is the WRONG advice for a permission
+    problem: deleting needs permission too. Someone whose file is unreadable
+    would try the suggested fix, fail at that as well, and end up further from
+    an answer than when they started."""
+    ruta = cr.credentials_path()
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with open(ruta, "w", encoding="utf-8") as f:
+        f.write("{}")
+    os.chmod(ruta, 0o000)
+    try:
+        with pytest.raises(OuraError) as e:
+            cr.load()
+        msg = str(e.value)
+        assert "permission denied" in msg
+        assert "Delete it" not in msg, "advice that cannot be followed"
+        assert "600" in msg, "it has to say what the mode should be"
+    finally:
+        os.chmod(ruta, 0o600)
+
+
+def test_a_directory_where_the_file_should_be_says_so(_isolate):
+    """Something else created it. `rm` without `-r` won't remove it, so the
+    generic advice sends someone in a circle."""
+    ruta = cr.credentials_path()
+    os.makedirs(ruta, exist_ok=True)
+    with pytest.raises(OuraError) as e:
+        cr.load()
+    assert "DIRECTORY" in str(e.value)
+
+
+@pytest.mark.parametrize("contenido", ["", "   \n", '{"hola":1}', "{not json"])
+def test_a_broken_file_never_reaches_the_caller_as_a_traceback(_isolate, contenido):
+    """Empty, blank, valid-JSON-wrong-shape and malformed all arrive as one
+    readable error rather than four different Python exception names."""
+    ruta = cr.credentials_path()
+    os.makedirs(os.path.dirname(ruta), exist_ok=True)
+    with open(ruta, "w", encoding="utf-8") as f:
+        f.write(contenido)
+    with pytest.raises(OuraError) as e:
+        cr.load()
+    assert "authorize again" in str(e.value)

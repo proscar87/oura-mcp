@@ -478,3 +478,40 @@ def test_the_readme_documents_every_warning_key():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     missing = [k for k in sorted(emitted) if f"`{k}`" not in readme]
     assert not missing, f"README documents no warning called: {missing}"
+
+
+def test_the_headline_arithmetic_checks_out():
+    """The lead claim is three numbers that have to agree with each other:
+    1,231 samples, 1,000 returned without pagination, 81%.
+
+    They're quoted in five places. Someone correcting one of them and not the
+    others produces a paragraph that argues against itself — and this claim is
+    the first thing a stranger reads, the one asking them to trust the rest.
+
+    The measurement itself can't be re-run here: it needs a real account, and
+    handling someone's heart rate to re-check a README isn't a trade worth
+    making. What CAN be checked is that the numbers still describe each other.
+    """
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "1,231" in readme and "1,000" in readme
+
+    # Oura's page size is 1,000 records, so one page of a 1,231-sample day is
+    # 81% of it. If any of the three moves, this stops holding.
+    assert round(1000 / 1231 * 100) == 81
+    assert "81%" in readme
+
+    # And 1,231 must need exactly two pages, which is the other half of the claim.
+    import math
+    assert math.ceil(1231 / 1000) == 2
+    assert "2 pages" in readme
+
+
+def test_the_month_estimate_is_marked_as_one():
+    """«A month is ~37,000» is extrapolation, not measurement: 1,231 × 30 is
+    36,930. The tilde is doing real work and must not be tidied away, because
+    every other number in that paragraph WAS measured and the reader has no way
+    to tell them apart otherwise."""
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    if "37,000" in readme:
+        i = readme.index("37,000")
+        assert readme[i - 1] == "~", "an extrapolation is presented as a measurement"

@@ -1367,6 +1367,45 @@ The cross-process case — the CLI and the server at once — still relies on th
 recovery, because no lock in one process can see another. That limit is stated in
 the code rather than left to be discovered.
 
+### Round 11: advice that cannot be followed
+
+The cold start — what someone meets when the credentials file isn't what we
+expect — was probed with five broken states in both implementations: empty,
+blank, valid-JSON-wrong-shape, a directory in its place, and unreadable.
+
+Nothing crashed. Every one arrived as a readable error rather than a traceback,
+which is what the earlier rounds were for. But two of them gave **advice that
+cannot be followed**:
+
+    the credentials file could not be read (PermissionError).
+    Delete it and authorize again: …
+
+Deleting needs permission too. Someone whose file is unreadable tries the
+suggested fix, fails at that as well, and ends up further from an answer than
+when they started. Same for a directory sitting where the file should be: `rm`
+without `-r` won't remove it.
+
+Both now say what's actually wrong and what would actually help — check the
+ownership and mode for a permission problem, remove the directory for the other.
+And TypeScript now names the cause the way Python already did; it was throwing
+the same sentence for every failure.
+
+### Every number, re-checked
+
+The numeric claims are this package's argument, and nobody had re-read them in a
+week of changes. Everything checkable offline still holds: 19 collections,
+1,000 of 1,231 is 81%, 1,231 needs exactly two pages, the bundle is 3.1 MB.
+
+The measurement itself can't be re-run here — it needs a real account, and
+handling someone's heart rate to re-check a README is not a trade worth making.
+What *can* be checked is that the three numbers still describe each other, and
+that is now a test: the headline is quoted in five places, and someone correcting
+one of them and not the others would produce a paragraph arguing against itself.
+
+There's also a test that `~37,000` keeps its tilde. It's extrapolation —
+1,231 × 30 is 36,930 — and every other number in that paragraph was measured. A
+reader has no way to tell them apart if the mark that says so gets tidied away.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

@@ -194,6 +194,21 @@ def load() -> Credentials | None:
             return Credentials.from_json(json.load(f))
     except FileNotFoundError:
         return None
+    except PermissionError:
+        # «Delete it and authorize again» is the WRONG advice here: deleting
+        # needs permission too. Someone whose file is unreadable would try the
+        # suggested fix, fail at that as well, and end up further from an answer
+        # than when they started.
+        raise OuraError(
+            f"the credentials file exists but cannot be read: permission "
+            f"denied. Check who owns it — it should be yours and mode 600: "
+            f"{ruta}"
+        ) from None
+    except IsADirectoryError:
+        raise OuraError(
+            f"the credentials path is a DIRECTORY, not a file. Something else "
+            f"created it; remove the directory and authorize again: {ruta}"
+        ) from None
     except (OSError, ValueError, KeyError) as e:
         raise OuraError(
             f"the credentials file could not be read ({type(e).__name__}). "
