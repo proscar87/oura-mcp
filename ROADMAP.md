@@ -1046,6 +1046,55 @@ error for it exists and lists all nineteen, which is an admission that it was
 expected. A resource puts the list in front of the model *before* the mistake
 rather than after it, without a round trip.
 
+### Round 4: a lock on the whole surface, instead of one guard per break
+
+Four classes of name had broken one at a time — CLI flags, response keys, tool
+parameters, return values — and **every guard was written after the class it
+watches had already broken.** None generalized. Guessing which class breaks
+fifth is a losing game, so `tests/test_public_surface.py` stops guessing and
+pins all of it: tool names, every parameter of every tool, every response key in
+both implementations, the CLI flags, the resource URIs.
+
+Rename anything a client can see and it fails until someone writes the new name
+down deliberately. That cost is the point — these names are a promise to people
+who already installed the thing, so a rename should be a decision rather than a
+refactor. Verified by breaking it on purpose: renaming `synthetic` to
+`sintetico` failed two tests immediately.
+
+### Four more Spanish messages, in the worst possible place
+
+The sweep found user-facing error strings that survived the translation: `no se
+pudo alcanzar Oura` in Python, two more in TypeScript, and a Spanglish
+`no hay refresh token; hay que authorize de nuevo`. All of them are read by
+someone who is **already stuck**. Comments and internal names can lag; a message
+cannot.
+
+**And one deliberate non-translation.** The keychain account name is
+`credenciales` and stays that way. It is a storage key, not a message: anyone
+who authorized before the translation has their refresh token filed under that
+exact string, and renaming it would orphan those credentials silently — `load()`
+finds nothing and asks them to authorize again with no explanation, while the old
+secret stays in their keychain forever. There is now a test whose job is to stop
+a future sweep from "fixing" it.
+
+### Where coverage was thin, and where it didn't matter
+
+78% overall, but the number was not the finding. `credentials.py` sat at 69% and
+the untested lines were the keychain path and the token-exchange error handler —
+the code that stores and erases someone's OAuth secret. That is where the sweep
+above started, and what it turned up.
+
+### A trap worth writing down
+
+While verifying the surface lock bites, the restore afterwards silently didn't
+take: `synthetic` and `sintetico` are **the same length**, and the restore landed
+in the same second as the mutation, so Python considered the cached bytecode
+valid and kept running the mutated module. Four tests failed against a source
+file that was, on disk, correct — and `git diff` showed nothing.
+
+Every instinct said "the code is fine, the tests are wrong". The code *was* fine.
+What ran wasn't the code.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

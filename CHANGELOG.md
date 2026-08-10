@@ -1,5 +1,39 @@
 # Changelog
 
+## 0.3.2 — unreleased
+
+Found by a 20-hour audit, and all of one family: a response that looks right and
+is not.
+
+**«What was my heart rate on January 1st» returned nothing.** `heartrate` and
+`ring_battery_level` take `start_datetime`/`end_datetime`, and a bare date went
+through untouched — `start_datetime=2026-01-01&end_datetime=2026-01-01`, an
+interval of no duration. Oura returned zero and the empty-reason blamed Oura for
+a window this client had emptied itself. A bare date now means the whole day.
+
+**A rate limit that recovered left no trace.** Oura sends no rate-limit headers
+on successful responses, so a 429 is the only signal a client ever gets that it
+is near the ceiling — and a successful retry threw that signal away. Responses
+now carry `rate_limited`.
+
+**`fields="day,score"` was answered with a validator dump** and a link to
+pydantic's website, on what is almost certainly the most common mistake anyone
+will make here. Both forms are accepted now; `fields_split` says when the string
+was split.
+
+**`discarded_out_of_range` was a bare integer that read as data loss.** It fires
+on nearly every dated query — the two-day margin is always requested and always
+trimmed — so it reported the safety margin working. It is a sentence now.
+
+**`oura://collections` is a new resource:** the catalog, static, no network or
+credentials. The likeliest mistake here is inventing a collection name, and a
+resource puts the list in front of the model before the mistake.
+
+Four Spanish user-facing error messages survived the translation and are gone.
+The keychain account name stays `credenciales` deliberately — it is a storage
+key, and renaming it would silently orphan the credentials of anyone who
+authorized earlier.
+
 ## 0.3.1 — 10 August 2026
 
 `continue_from` pointed at something you could not use. It carried Oura's

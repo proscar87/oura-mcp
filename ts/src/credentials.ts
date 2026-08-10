@@ -214,7 +214,10 @@ export async function exchangeCode(code: string, clientId: string, clientSecret:
 export async function refresh(cred: Credentials, clientId: string,
                                 clientSecret: string): Promise<Credentials> {
   if (!cred.refreshToken) {
-    throw new OuraError("no hay refresh token; hay que authorize de nuevo");
+    throw new OuraError(
+      "the stored credentials carry no refresh token, so they cannot be " +
+      "renewed. Run `oura-mcp --authorize` again, or set OURA_SANDBOX=1 to " +
+      "work with sample data.");
   }
   let r: Record<string, unknown>;
   try {

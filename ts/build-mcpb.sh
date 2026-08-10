@@ -62,6 +62,7 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2026-07-28","capabilities":{},"clientInfo":{"name":"build","version":"1"}}}' \
   '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"oura_query","arguments":{"collection":"daily_sleep","day":"2026-01-15"}}}' \
+  '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"oura://collections"}}' \
   | OURA_SANDBOX=1 node "$VERIFY/server/dist/main.js" >"$VERIFY/out.jsonl" 2>"$VERIFY/err"
 
 grep -q '"serverInfo"' "$VERIFY/out.jsonl" \
@@ -75,5 +76,10 @@ grep -q 'SANDBOX MODE' "$VERIFY/out.jsonl" \
   || { echo "sandbox data came back UNMARKED — a model would report it as the user's own" >&2
        tail -c 400 "$VERIFY/out.jsonl" >&2; exit 1; }
 
-echo "handshake ok, and sandbox data is marked as synthetic"
+# The resource is surface too, and it shipped in a bundle before anything here
+# asked for it. A capability nobody exercises is one nobody notices breaking.
+grep -q 'daily_sleep' "$VERIFY/out.jsonl" \
+  || { echo "the collections resource returned nothing" >&2; exit 1; }
+
+echo "handshake ok, sandbox data marked, and the resource answers"
 echo "==> ok"
