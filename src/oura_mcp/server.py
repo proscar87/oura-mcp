@@ -1,19 +1,19 @@
-"""Servidor MCP: tres tools sobre las 19 collections de Oura.
+"""MCP server: three tools over Oura's 19 collections.
 
-TRES, NO DIECINUEVE. Un server con una herramienta por colección obliga al
-modelo a elegir entre 19 nombres parecidos antes de saber qué contienen, y cada
-una hay que documentarla por separado. Aquí la colección es un parámetro y el
-catálogo se consulta cuando hace falta, no se memoriza.
+THREE, NOT NINETEEN. A server with one tool per collection forces the model to
+choose among 19 similar names before knowing what any of them contain, and each
+one has to be documented separately. Here the collection is a parameter and the
+catalog is consulted when needed, not memorised.
 
-NO HAY HERRAMIENTAS DE ANÁLISIS. Ni correlaciones, ni detección de anomalías, ni
-comparación de periodos — que es donde otros servidores ponen su valor.
+THERE ARE NO ANALYSIS TOOLS. No correlations, no anomaly detection, no period
+comparison — which is where other servers place their value.
 
-La razón: un promedio calculado aquí adentro llega al modelo como un número sin
-su método. Sobre nueve años de data reales, **tres de cada cuatro cambios entre
-dos mediciones consecutivas caben dentro de la oscilación normal de la propia
-métrica**. Un server que entrega «tu HRV subió 12%» sin decir cuánto oscila
-sola esa métrica no está informando: está fabricando una señal. Aquí se entregan
-los data; el análisis va donde se pueda citar el método.
+The reason: an average computed in here reaches the model as a number without
+its method. Across nine years of real data, **three out of four changes between
+two consecutive measurements fall within the metric's own normal oscillation**. A
+server that hands over "your HRV is up 12%" without saying how much that metric
+swings on its own isn't informing: it's manufacturing a signal. Here the data is
+handed over; the analysis belongs where the method can be cited.
 """
 
 from __future__ import annotations
@@ -28,41 +28,41 @@ from pydantic import Field
 from .client import OuraError, fetch
 from .collections import COLLECTIONS, WITH_DATE, describe, shape
 
-# LAS TRES SON DE SÓLO LECTURA, y no es una promesa: no hay una sola escritura
-# en todo el paquete — ni un POST, ni un PUT, ni un DELETE. Declararlo evita que
-# el client pida confirmación en cada llamada, y el directorio de conectores de
-# Claude lo exige (`title` y `readOnlyHint` en cada herramienta).
+# ALL THREE ARE READ-ONLY, and that isn't a promise: there isn't a single write
+# in the whole package — no POST, no PUT, no DELETE. Declaring it stops the
+# client asking for confirmation on every call, and Claude's connectors
+# directory requires it (`title` and `readOnlyHint` on every tool).
 #
-# `open_world_hint` va en True porque los data vienen de un servicio externo:
-# la misma llamada dos veces puede devolver distinto si el anillo sincronizó en
-# medio. Decir lo contrario sería invitar a que alguien memoice la respuesta.
+# `open_world_hint` is True because the data comes from an external service: the
+# same call twice can return something different if the ring synced in between.
+# Saying otherwise would invite someone to memoize the response.
 _SOLO_LECTURA = dict(read_only_hint=True, destructive_hint=False,
                      idempotent_hint=True, open_world_hint=True)
 
 def _version() -> str:
-    """La versión del paquete instalado, no una copia escrita a mano.
+    """The installed package's version, not a hand-written copy.
 
-    Estaba escrita a mano y se quedó en 0.1.0 mientras `pyproject.toml` iba en
-    0.2.0. Lo detectó la prueba de humo por stdio, no las 88 de función: el
-    número que ve el client MCP sale del `serverInfo` del handshake, que
-    ninguna prueba de función mira. Un server que miente sobre su versión hace
-    imposible diagnosticar «¿tienes la que trae el arreglo?».
+    It was hand-written and stayed at 0.1.0 while `pyproject.toml` moved to
+    0.2.0. The stdio smoke test caught it, not the function tests: the number an
+    MCP client sees comes from the handshake's `serverInfo`, which no function
+    test looks at. A server that lies about its version makes it impossible to
+    answer "do you have the one with the fix?".
     """
     try:
         from importlib.metadata import version
         return version("mcp-oura")
     except Exception:
-        return "desconocida"
+        return "unknown"
 
 
 server = MCPServer(
     name="oura",
     version=_version(),
-    # LO QUE UN MODELO NO PUEDE ADIVINAR. Se comprobó simulando las preguntas
-    # que un usuario hace de verdad («¿cómo dormí ayer?», «¿estoy recuperado?»,
-    # «¿cómo estuvo mi pulso en el ejercicio de ayer?») y viendo qué le faltaba
-    # saber para contestarlas sin inventar. Estas instrucciones viajan en cada
-    # sesión, así que sólo va lo que cambia una respuesta.
+    # WHAT A MODEL CANNOT GUESS. Verified by simulating the questions a user
+    # actually asks ("how did I sleep last night?", "am I recovered?", "how was
+    # my heart rate during yesterday's workout?") and seeing what they were
+    # missing to answer without inventing. These instructions travel in every
+    # session, so only what changes an answer goes in.
     instructions=(
         "Raw data from the Oura ring, via its v2 API.\n\n"
         "FOUR THINGS THAT CHANGE THE ANSWER:\n\n"
@@ -79,12 +79,12 @@ server = MCPServer(
         "a single one. To join a workout with the heart rate during it: request "
         "`workout`, take `start_datetime` and `end_datetime` from the one you "
         "care about, and use them verbatim as `start` and `end` of `heartrate`.\n\n"
-        "4. Hay collections enormes: 30 días de `daily_activity` son 250,000 "
-        "characters, y el 92% es un solo campo. Si la respuesta trae "
-        "`large_response`, vuelve a pedir con `fields` limitado a lo que "
-        "necesites.\n\n"
-        "Este server no calcula promedios ni tendencias a propósito: entrega "
-        "el dato para que el análisis se haga donde se pueda citar el método."
+        "4. Some collections are enormous: 30 days of `daily_activity` is "
+        "250,000 characters, and 92% of it is a single field. If the response "
+        "carries `large_response`, ask again with `fields` limited to what you "
+        "need.\n\n"
+        "This server deliberately computes no averages and no trends: it hands "
+        "over the data so the analysis happens where the method can be cited."
     ),
 )
 
@@ -121,27 +121,28 @@ def oura_query(
                     "a month of heartrate is ~37,000 records and in JSON the "
                     "keys repeat 37,000 times.")] = "json",
 ) -> dict:
-    """Trae una colección de Oura COMPLETA en el rango pedido.
+    """Fetches a COMPLETE Oura collection over the requested range.
 
-    Sigue la paginación hasta el final: Oura entrega `next_token` y quien no lo
-    persigue recibe la primera página sin que nada se lo diga. Un día de
-    `heartrate` son ~1,250 muestras en 2 páginas; un mes, ~37,000.
+    Follows pagination to the end: Oura returns `next_token` and whoever doesn't
+    chase it receives the first page with nothing saying so. One local day of
+    `heartrate` is 1,231 samples across 2 pages; a month, ~37,000.
 
-    El rango es INCLUSIVO en los dos extremos: `start` y `end` iguales devuelven
-    ese día. Oura no se comporta así —unas collections excluyen el último día y
-    otras no, y `workout` va desfasada a UTC— pero eso se corrige aquí.
+    The range is INCLUSIVE on both ends: equal `start` and `end` return that
+    day. Oura does not behave that way — some collections exclude the last day
+    and others don't, and `workout` is skewed to UTC — but that is corrected
+    here.
 
-    Las collections de rango de fecha usan AAAA-MM-DD. `heartrate` y
-    `ring_battery_level` usan ISO 8601 con hora. `personal_info` y
-    `ring_configuration` no llevan rango.
+    Date-range collections use YYYY-MM-DD. `heartrate` and `ring_battery_level`
+    use ISO 8601 with time. `personal_info` and `ring_configuration` take no
+    range.
     """
     if collection not in COLLECTIONS:
         return {"error": f"«{collection}» is not an Oura collection",
                 "available": sorted(COLLECTIONS)}
     if day:
-        # «Un solo día» es la consulta más común y la que estaba rota. Que la
-        # ruta común no obligue a escribir un rango es la mitad del arreglo: la
-        # otra mitad ya está en el client.
+        # "A single day" is the most common query and the one that was broken.
+        # Making the common path not require a range is half the fix; the other
+        # half is already in the client.
         if start or end:
             return {"error": "use `day`, or `start` and `end`, but not both"}
         start = end = day
@@ -154,8 +155,8 @@ def oura_query(
         return fetch(collection, start, end, fields=fields, latest=latest,
                        format=format)
     except OuraError as e:
-        # Se devuelve como dato, no se lanza: una excepción corta la conversación
-        # entera por lo que casi siempre es una fecha mal escrita o un token vencido.
+        # Returned as data, not raised: an exception cuts the whole conversation
+        # short over what is almost always a malformed date or an expired token.
         return {"error": str(e)}
 
 
@@ -163,17 +164,17 @@ def oura_query(
                annotations=ToolAnnotations(title="Self-check of the Oura connection",
                                            **_SOLO_LECTURA))
 def oura_check() -> dict:
-    """Autodiagnóstico: ¿hay token y responde Oura? Sin exponer nada.
+    """Self-check: is there a credential, and does Oura respond? Exposing nothing.
 
-    NO devuelve el token ni ningún valor de salud. Reporta la LONGITUD del token,
-    nunca el token: los mensajes de diagnóstico son los que más se copian y se
-    pegan en chats y en issues.
+    Returns neither the token nor any health value. It reports the token's
+    LENGTH, never the token: diagnostic messages are the ones most often copied
+    into chats and issues.
     """
     return check()
 
 
 def _modo_de_autenticacion() -> str:
-    """Con qué se está autenticando, en el mismo orden en que `_token()` decide."""
+    """Which credential is in use, in the same order `_token()` decides."""
     if os.environ.get("OURA_PAT_FILE"):
         return "personal token (OURA_PAT_FILE)"
     if os.environ.get("OURA_PAT"):
@@ -184,10 +185,10 @@ def _modo_de_autenticacion() -> str:
 def _estado_de_oauth() -> dict:
     """Alcances y caducidad, SIN un solo token.
 
-    Los scopes son la respuesta a la pregunta que más se hace cuando algo
-    devuelve vacío: «¿es que no hay data, o es que no di permiso?». Oura
-    contesta esa diferencia con un 403 que no siempre se distingue de un rango
-    sin registros, así que tenerlos a la mano ahorra el diagnóstico equivocado.
+    The scopes answer the question people ask most when something comes back
+    empty: "is there no data, or did I not grant permission?". Oura answers that
+    difference with a 403 that isn't always distinguishable from a range with no
+    records, so having them at hand saves the wrong diagnosis.
     """
     if os.environ.get("OURA_PAT_FILE") or os.environ.get("OURA_PAT"):
         return {}
@@ -210,18 +211,19 @@ def _estado_de_oauth() -> dict:
 
 
 def check() -> dict:
-    """Igual que la herramienta, pero llamable desde la línea de comandos."""
+    """Same as the tool, but callable from the command line."""
     from .client import _token, base, in_sandbox
     if in_sandbox():
-        # En sandbox no hay token que check y no debe parecer que sí: quien lea
-        # esta respuesta tiene que saber que los data que verá son inventados.
+        # In sandbox there is no token to check and it mustn't look like there
+        # is: whoever reads this response has to know the data is made up.
         out: dict = {"mode": "sandbox", "data": "synthetic, from Oura, not yours",
                      "base": base()}
         try:
-            # El pulso NO puede ser `personal_info`: es la única de las 19 que el
-            # sandbox no sirve. Tiene sentido —es la que devuelve correo, edad,
-            # peso y estatura— pero significa que aquí hay que preguntar otra
-            # cosa, o el autodiagnóstico reporta caída una API que está de pie.
+            # The pulse CANNOT be `personal_info`: it is the only one of the 19
+            # the sandbox does not serve. That makes sense — it's the one
+            # returning email, age, weight and height — but it means something
+            # else has to be asked here, or the self-check reports an API as down
+            # when it is up.
             r = fetch("daily_sleep", "2026-01-01", "2026-01-03")
             out["oura_responds"] = True
             out["sample_fields"] = sorted(r["data"][0]) if r["data"] else []
@@ -245,8 +247,8 @@ def check() -> dict:
     try:
         r = fetch("personal_info")
         out["oura_responds"] = True
-        # Los NOMBRES de los fields, no sus valores: confirma que la API contesta
-        # sin volcar el perfil de nadie a un log.
+        # The field NAMES, not their values: confirms the API answers without
+        # dumping anyone's profile into a log.
         out["profile_fields"] = sorted(r["data"][0]) if r["data"] else []
     except OuraError as e:
         out["oura_responds"] = False

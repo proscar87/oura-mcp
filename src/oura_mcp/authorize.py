@@ -1,17 +1,17 @@
-"""El flujo interactivo de OAuth2: del navegador al primer par de tokens.
+"""The interactive OAuth2 flow: from the browser to the first token pair.
 
-Corre UNA VEZ, a mano, desde la terminal. No es parte del server MCP — un
-server que habla por stdin/stdout no puede abrir un navegador ni pedirle nada
-a nadie, y pretender que sí es cómo se cuelga un client MCP para siempre.
+Runs ONCE, by hand, from the terminal. It is not part of the MCP server — one
+that speaks over stdin/stdout can't open a browser or ask anyone anything, and
+pretending otherwise is how you hang an MCP client forever.
 
-    oura-mcp --authorize             # abre el navegador y espera el callback
-    oura-mcp --authorize --manual    # imprime la URL; tú pegas la de vuelta
+    oura-mcp --authorize             # opens the browser, waits for the callback
+    oura-mcp --authorize --manual    # prints the URL; you paste the reply
 
-EL `state` NO ES OPCIONAL. El callback llega a un server HTTP en localhost que
-acepta lo que le manden; sin un `state` que se compare, cualquier página que el
-usuario tenga abierta puede mandarle un código de autorización de otra cuenta y
-dejarlo conectado a data que no son suyos. Se genera con `secrets` y se
-verifica antes de canjear nada.
+THE `state` IS NOT OPTIONAL. The callback arrives at an HTTP server on localhost
+that accepts whatever it's sent; without a `state` to compare, any page the user
+has open can hand them an authorization code from another account and leave them
+connected to data that isn't theirs. It's generated with `secrets` and verified
+before anything is exchanged.
 """
 
 from __future__ import annotations
@@ -29,16 +29,16 @@ from .client import OuraError
 from .credentials import (SCOPES, AUTORIZAR_URL, DEFAULT_REDIRECT,
                            exchange_code)
 
-CALLBACK_WAIT = 300          # cinco minutos para authorize en el navegador
+CALLBACK_WAIT = 300          # five minutes to authorize in the browser
 
 _PAGINA = """<!doctype html><html lang="es"><meta charset="utf-8">
 <title>oura-mcp</title>
 <body style="font-family:system-ui;max-width:32rem;margin:6rem auto;line-height:1.5">
-<h1>{titulo}</h1><p>{cuerpo}</p></body></html>"""
+<h1>{title}</h1><p>{body}</p></body></html>"""
 
 
 def app_credentials() -> tuple[str, str]:
-    """El client_id y el client_secret de la aplicación de Oura.
+    """The client_id and client_secret of the Oura application.
 
     Van en el entorno y no en un file del repositorio, por lo obvio. Se
     registran una vez en https://cloud.ouraring.com/oauth/applications con el
@@ -68,17 +68,17 @@ def authorization_url(client_id: str, estado: str,
 
 
 def extract_code(url_o_codigo: str, estado_esperado: str | None = None) -> str:
-    """Saca el `code` de la URL del callback. Verifica el `state` si se le da.
+    """Extracts the `code` from the callback URL. Verifies the `state` when given.
 
-    Acepta la URL entera porque es lo que el usuario puede copiar de la barra de
-    direcciones sin pensar. Si le dan sólo el código, también sirve.
+    It accepts the whole URL because that's what a user can copy from the address
+    bar without thinking. A bare code works too.
     """
     texto = url_o_codigo.strip()
-    # ¿Es una URL o un código pelado? Se decide por la shape, no por los
-    # characters: los códigos de OAuth son base64url y traen `-`, `_` y `=` de
-    # relleno con toda normalidad. La heurística anterior rechazaba `abc=` como
-    # «eso no trae un code», que es de las cosas más desconcertantes que le
-    # pueden pasar a alguien que pegó exactamente lo que se le pidió.
+    # Is it a URL or a bare code? Decided by SHAPE, not by characters: OAuth
+    # codes are base64url and carry `-`, `_` and `=` padding perfectly normally.
+    # The earlier heuristic rejected `abc=` as "that carries no code", one of
+    # the most baffling things that can happen to someone who pasted exactly
+    # what they were asked for.
     parece_url = texto.startswith(("http://", "https://")) or "?" in texto
     if not parece_url:
         return texto
@@ -103,46 +103,46 @@ def extract_code(url_o_codigo: str, estado_esperado: str | None = None) -> str:
 
 
 class _Recolector(http.server.BaseHTTPRequestHandler):
-    """Atiende UNA petición: la del callback. Nada más."""
+    """Serves ONE request: the callback. Nothing else."""
 
     resultado: dict = {}
 
     def do_GET(self):                                   # noqa: N802
         partes = urllib.parse.urlparse(self.path)
-        # El redirect registrado termina en diagonal, pero algunos navegadores
-        # la quitan al normalizar. Se aceptan las dos formas.
+        # The registered redirect ends in a slash, but some browsers strip it
+        # when normalising. Both forms are accepted.
         if partes.path.rstrip("/") != "/callback":
             self.send_error(404)
             return
         try:
             codigo = extract_code(self.path, _Recolector.resultado.get("estado"))
             _Recolector.resultado["codigo"] = codigo
-            titulo, cuerpo = "Listo", "Ya puedes cerrar esta pestaña y volver a la terminal."
+            title, body = "Done", "You can close this tab and go back to the terminal."
         except OuraError as e:
             _Recolector.resultado["error"] = str(e)
-            titulo, cuerpo = "No se pudo", str(e)
-        pagina = _PAGINA.format(titulo=titulo, cuerpo=cuerpo).encode()
+            title, body = "It did not work", str(e)
+        page = _PAGINA.format(title=title, body=body).encode()
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
-        self.send_header("Content-Length", str(len(pagina)))
+        self.send_header("Content-Length", str(len(page)))
         self.end_headers()
-        self.wfile.write(pagina)
+        self.wfile.write(page)
 
     def log_message(self, *a):
-        pass                    # el server no tiene por qué ensuciar la terminal
+        pass                    # the server has no business cluttering the terminal
 
 
 def wait_for_callback(puerto: int, estado: str, espera: int = CALLBACK_WAIT) -> str:
-    """Levanta el server local y espera EL CALLBACK, no la primera petición.
+    """Starts the local server and waits for THE CALLBACK, not the first request.
 
-    La diferencia costó el flujo entero. Un navegador de verdad no manda una
-    sola petición: pide `/favicon.ico` por su cuenta, y algunos hacen otras.
-    Atendiendo sólo una, el favicon se llevaba el turno, el server se cerraba,
-    y el callback bueno recibía *connection refused*. Desde afuera se veía «no
-    llegó ningún callback», sin ninguna pista de por qué.
+    The difference cost the entire flow. A real browser doesn't send one
+    request: it asks for `/favicon.ico` on its own, and some make others. Serving
+    only one, the favicon took the turn, the server closed, and the good callback
+    got *connection refused*. From outside it looked like "no callback arrived",
+    with no clue why.
 
-    Por eso se atiende hasta que llegue algo a `/callback` —o hasta que se acabe
-    el tiempo—, no hasta la primera petición que sea.
+    So it serves until something reaches `/callback` — or until time runs out —
+    not until whatever the first request happens to be.
     """
     _Recolector.resultado = {"estado": estado}
     try:
@@ -182,29 +182,29 @@ def _puerto_de(redirect: str) -> int:
 
 def authorize(manual: bool = False, redirect: str = DEFAULT_REDIRECT,
               salida=None) -> dict:
-    """El flujo completo. Devuelve un resumen SIN tokens."""
+    """The full flow. Returns a summary with NO tokens."""
     escribir = (salida or sys.stderr).write
     cid, csec = app_credentials()
     estado = secrets.token_urlsafe(24)
     url = authorization_url(cid, estado, redirect)
 
     if manual:
-        # Para máquinas sin navegador. El callback a localhost fallará en el
-        # navegador de la otra máquina —es lo esperado— y lo que sirve es la URL
-        # que queda en la barra de direcciones.
-        escribir("\nAbre esta URL en cualquier navegador:\n\n" + url + "\n\n"
-                 "Al aceptar, el navegador intentará ir a localhost y fallará.\n"
-                 "Eso es normal: copia la URL COMPLETA de la barra y pégala aquí.\n\n"
-                 "URL del callback: ")
-        pegado = sys.stdin.readline()
-        codigo = extract_code(pegado, estado)
+        # For machines with no browser. The localhost callback will fail in the
+        # other machine's browser — that's expected — and what's useful is the
+        # URL left in the address bar.
+        escribir("\nOpen this URL in any browser:\n\n" + url + "\n\n"
+                 "On approval the browser will try to reach localhost and fail.\n"
+                 "That is normal: copy the FULL URL from the bar and paste it here.\n\n"
+                 "Callback URL: ")
+        pasted = sys.stdin.readline()
+        codigo = extract_code(pasted, estado)
     else:
-        escribir("\nAbriendo el navegador. Si no se abre, entra a:\n\n" + url + "\n\n"
-                 "Esperando el callback…\n")
+        escribir("\nOpening the browser. If it does not open, go to:\n\n" + url + "\n\n"
+                 "Waiting for the callback…\n")
         try:
             webbrowser.open(url)
         except Exception:
-            pass                # que no se abra no es fatal: la URL ya se imprimió
+            pass                # failing to open isn't fatal: the URL was already printed
         codigo = wait_for_callback(_puerto_de(redirect), estado)
 
     cred = exchange_code(codigo, cid, csec, redirect)

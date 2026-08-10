@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""Arranca el server DE VERDAD y le habla por stdio, como lo haría un client.
+"""Starts the server FOR REAL and speaks stdio to it, like a client would.
 
 POR QUÉ EXISTE. Las 88 pruebas ejercitan las funciones: `fetch()`, `_token()`,
-`_trim()`. Ninguna arranca el proceso. Y el mode en que un server MCP
-falla más feo no es devolviendo un dato equivocado: es no completando el
-*handshake*, o escribiendo algo en stdout que no sea JSON-RPC. Las dos cosas se
-ven igual desde el client —un server que «no aparece»— y ninguna prueba de
-función las atrapa.
+WHY IT EXISTS. The unit tests exercise functions: `fetch()`, `_token()`,
+`_trim()`. None of them starts the process. And the ugliest way an MCP server
+fails isn't returning wrong data: it's failing the *handshake*, or writing
+something to stdout that isn't JSON-RPC. Both look identical from the client —
+a server that "doesn't show up" — and no function test catches either.
 
-Corre en mode sandbox, así que no pide credenciales y puede vivir en CI. Sale a
-internet, eso sí, de mode que va con la deriva y no con el CI obligatorio.
+It runs in sandbox mode, so it needs no credentials and can live in CI. It does
+go out to the internet, so it ships with the drift check, not the mandatory CI.
 
     python tools/smoke_stdio.py
 """
@@ -25,7 +25,7 @@ PROTOCOLO = "2026-07-28"
 
 
 class Cliente:
-    """Lo mínimo de JSON-RPC sobre stdio para hablar con el server."""
+    """The minimum JSON-RPC over stdio needed to talk to the server."""
 
     def __init__(self, proc: subprocess.Popen):
         self.proc = proc
@@ -44,14 +44,14 @@ class Cliente:
             return None
         linea = self.proc.stdout.readline()
         if not linea:
-            raise SystemExit("el server cerró stdout sin responder")
+            raise SystemExit("the server closed stdout without answering")
         try:
             return json.loads(linea)
         except json.JSONDecodeError:
             # ÉSTE es el fallo que justifica el file: cualquier `print` que se
-            # cuele en el server rompe el canal, y desde el client sólo se ve
-            # un server que no aparece.
-            raise SystemExit(f"el server escribió algo que no es JSON-RPC en "
+            # slips into the server breaks the channel, and from the client all
+            # you see is a server that doesn't show up.
+            raise SystemExit(f"the server wrote something that is not JSON-RPC to "
                              f"stdout: {linea[:200]!r}")
 
 
@@ -81,52 +81,52 @@ def main() -> int:
             "clientInfo": {"name": "humo", "version": "1"},
         })
         info = (r.get("result") or {}).get("serverInfo") or {}
-        check("el handshake responde", "result" in r, f"server: {info.get('name')} {info.get('version')}")
+        check("the handshake answers", "result" in r, f"server: {info.get('name')} {info.get('version')}")
         instrucciones = (r.get("result") or {}).get("instructions") or ""
-        check("las instrucciones llegan", "truncated" in instrucciones,
-                "mencionan `truncated`, que es lo que no hay que ignorar")
+        check("the instructions arrive", "truncated" in instrucciones,
+                "they mention `truncated`, the thing not to ignore")
 
         c.pedir("notifications/initialized", {}, espera=False)
 
         r = c.pedir("tools/list")
         tools = (r.get("result") or {}).get("tools") or []
         nombres = sorted(h["name"] for h in tools)
-        check("hay exactamente tres tools", len(tools) == 3, ", ".join(nombres))
-        check("las tres se declaran de sólo lectura",
+        check("there are exactly three tools", len(tools) == 3, ", ".join(nombres))
+        check("all three declare themselves read-only",
                 all((h.get("annotations") or {}).get("readOnlyHint") for h in tools))
-        check("las tres tienen título",
+        check("all three have a title",
                 all(h.get("title") for h in tools))
 
         r = c.pedir("tools/call", {"name": "oura_check", "arguments": {}})
         cuerpo = _contenido(r)
-        check("oura_check responde", cuerpo.get("mode") == "sandbox",
+        check("oura_check answers", cuerpo.get("mode") == "sandbox",
                 f"mode={cuerpo.get('mode')}, oura_responds={cuerpo.get('oura_responds')}")
 
         r = c.pedir("tools/call", {"name": "oura_collections", "arguments": {}})
         cuerpo = _contenido(r)
-        check("el catálogo trae las 19", len(cuerpo) == 19, f"{len(cuerpo)} collections")
+        check("the catalog carries all 19", len(cuerpo) == 19, f"{len(cuerpo)} collections")
 
         r = c.pedir("tools/call", {"name": "oura_query", "arguments": {
             "collection": "daily_sleep", "day": "2026-01-15"}})
         cuerpo = _contenido(r)
-        check("una consulta de un solo día devuelve ese día",
+        check("a single-day query returns that day",
                 cuerpo.get("n", 0) >= 1, f"n={cuerpo.get('n')}")
 
         r = c.pedir("tools/call", {"name": "oura_query", "arguments": {
             "collection": "daily_sleep", "day": "2026-01-15", "format": "csv"}})
         cuerpo = _contenido(r)
-        check("el CSV llega como texto", isinstance(cuerpo.get("data"), str),
+        check("the CSV arrives as text", isinstance(cuerpo.get("data"), str),
                 f"columns={cuerpo.get('columns')}")
 
         r = c.pedir("tools/call", {"name": "oura_query", "arguments": {
             "collection": "no_existe", "day": "2026-01-15"}})
         cuerpo = _contenido(r)
-        check("una colección inventada devuelve error como DATO, no como excepción",
-                "error" in cuerpo, "una excepción cortaría la conversación entera")
+        check("a made-up collection returns an error as DATA, not as an exception",
+                "error" in cuerpo, "an exception would cut the whole conversation")
 
-        # Nada debe haberse escrito en stdout fuera del protocolo. Si algo se
-        # coló, `Cliente.pedir` ya habría reventado arriba.
-        check("el proceso sigue vivo", proc.poll() is None)
+        # Nothing should have been written to stdout outside the protocol. If
+        # anything slipped in, the request helper would already have blown up.
+        check("the process is still alive", proc.poll() is None)
 
     finally:
         proc.terminate()
@@ -136,19 +136,19 @@ def main() -> int:
             proc.kill()
             err = ""
         if err.strip():
-            print(f"\n  (stderr del server, que es donde SÍ puede escribir:\n   "
+            print(f"\n  (the server's stderr, which is where it MAY write:\n   "
                   f"{err.strip()[:300]})")
 
     print()
     if fallas:
-        print(f"{len(fallas)} falla(s): {', '.join(fallas)}")
+        print(f"{len(fallas)} failure(s): {', '.join(fallas)}")
         return 1
-    print("El server arranca, completa el handshake y responde por stdio.")
+    print("The server starts, completes the handshake and answers over stdio.")
     return 0
 
 
 def _contenido(respuesta: dict) -> dict:
-    """El resultado de un `tools/call`, ya sea estructurado o como texto."""
+    """The result of a `tools/call`, structured or as text."""
     res = respuesta.get("result") or {}
     if "structuredContent" in res:
         return res["structuredContent"]

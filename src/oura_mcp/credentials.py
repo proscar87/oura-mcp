@@ -1,26 +1,26 @@
-"""Dónde viven los tokens de OAuth2, y cómo se rotan sin perder la sesión.
+"""Where the OAuth2 tokens live, and how they rotate without losing the session.
 
 POR QUÉ EXISTE ESTE ARCHIVO
-Oura deprecó los Personal Access Tokens en diciembre de 2025: no se pueden crear
-nuevos. Quien llegue hoy a este server no tiene shape de conseguir uno, así
-que OAuth2 dejó de ser una comodidad y pasó a ser la única puerta.
+Oura deprecated Personal Access Tokens in December 2025: new ones can't be
+created. Anyone arriving at this server today has no way to get one, so OAuth2
+stopped being a convenience and became the only door.
 
-EL PELIGRO ESTÁ EN UNA SOLA LÍNEA
-El refresh token de Oura es **de un solo uso**. Cuando se canjea, Oura lo
-invalida y entrega uno nuevo. Entre las dos cosas hay una ventana en la que el
-viejo ya no sirve y el nuevo todavía no está guardado — y si el proceso se cae
-ahí, la sesión se pierde y hay que volver a authorize desde el navegador.
+THE DANGER IS IN A SINGLE LINE
+Oura's refresh token is **single-use**. When it's exchanged, Oura invalidates it
+and issues a new one. Between those two things there's a window where the old one
+no longer works and the new one isn't saved yet — and if the process dies there,
+the session is lost and you have to authorize from the browser again.
 
-Por eso `refresh()` guarda ANTES de devolver, y guarda de shape atómica. No se
-puede hacer mejor: Oura no ofrece un canje en dos fases. Lo que sí se puede es
-que la ventana dure lo mínimo y que nunca quede un file a medio escribir.
+That's why `refresh()` saves BEFORE returning, and saves atomically. You can't
+do better: Oura offers no two-phase exchange. What you can do is make the window
+as short as possible and ensure a half-written file never exists.
 
-DÓNDE SE GUARDAN
-Archivo con permisos 600, y el llavero del sistema **si resulta estar
-instalado**. `keyring` no es una dependencia de este paquete y no debe serlo: la
-lista de dependencias vacía es lo que hace viable empaquetarlo como binario para
-Claude Desktop. Se importa con `try`, y quien lo tenga sale ganando sin que le
-cueste nada a quien no.
+WHERE THEY ARE STORED
+A file with mode 600, and the system keychain **if it happens to be installed**.
+`keyring` is not a dependency of this package and mustn't be: the empty
+dependency list is what makes packaging it as a binary for Claude Desktop
+viable. It's imported inside a `try`, and whoever has it gains without costing
+anything to whoever doesn't.
 """
 
 from __future__ import annotations
@@ -40,18 +40,18 @@ TOKEN_URL = "https://api.ouraring.com/oauth/token"
 AUTORIZAR_URL = "https://cloud.ouraring.com/oauth/authorize"
 REVOCAR_URL = "https://api.ouraring.com/oauth/revoke"
 
-# La diagonal final NO es un detalle de estilo: el portal de Oura rechaza
-# `…/callback` con `invalid_redirect_uri` y acepta `…/callback/`. Lo documenta
-# `crcatala` tras pelearse con ello, y aquí se usa la shape que el portal acepta.
+# The trailing slash is NOT a style detail: Oura's portal rejects `…/callback`
+# with `invalid_redirect_uri` and accepts `…/callback/`. `crcatala` documents it
+# after fighting with it, and the form the portal accepts is what's used here.
 DEFAULT_REDIRECT = "http://localhost:9876/callback/"
 
-# Los ocho scopes de la API v2.
+# The eight scopes of the v2 API.
 SCOPES = ("email", "personal", "daily", "heartrate", "workout", "tag",
             "session", "spo2")
 
-# Margen antes de considerar expired un access token. Un token que expira en
-# tres segundos está, a efectos prácticos, expirado: la petición que se lance
-# con él llegará tarde.
+# Margin before treating an access token as expired. One that expires in three
+# seconds is, practically speaking, already expired: the request launched with it
+# will arrive late.
 EXPIRY_MARGIN = 60
 
 _SERVICIO_LLAVERO = "oura-mcp"
@@ -59,13 +59,13 @@ _CUENTA_LLAVERO = "credenciales"
 
 
 def credentials_path() -> str:
-    """Dónde vive el file. `OURA_CREDENTIALS` lo mueve.
+    """Where the file lives. `OURA_CREDENTIALS` moves it.
 
     Siempre absoluta. Una ruta relativa pelada —`OURA_CREDENTIALS=cred.json`,
-    que es exactamente lo que alguien escribiría— dejaba el directorio en cadena
-    vacía y hacía tronar el guardado con un `FileNotFoundError: ''` que no
-    explica nada. Y además habría hecho que las credenciales dependieran del
-    directorio desde el que se arrancó el server, que en un client MCP no es
+    which is exactly what someone would write — left the directory as an empty
+    string and blew up the save with a `FileNotFoundError: ''` that explains
+    nothing. It would also have made the credentials depend on the directory
+    the server was started from, which in an MCP client is not the one you
     el que uno cree.
     """
     explicita = (os.environ.get("OURA_CREDENTIALS") or "").strip()
@@ -77,11 +77,11 @@ def credentials_path() -> str:
 
 @dataclasses.dataclass
 class Credentials:
-    """Un par de tokens de OAuth2 y lo que hace falta para renovarlo."""
+    """A pair of OAuth2 tokens and what is needed to renew them."""
 
     access: Secret
     refresh_token: Secret | None
-    expires_at: float                    # epoch en segundos
+    expires_at: float                    # epoch seconds
     scopes: tuple[str, ...] = ()
 
     def expired(self, margen: float = EXPIRY_MARGIN) -> bool:
@@ -105,34 +105,36 @@ class Credentials:
         )
 
     def __repr__(self) -> str:
-        # Ni el access ni el refresh_token salen de aquí. `Secret` ya se protege
-        # solo, pero un dataclass con `repr=True` los imprimiría por su cuenta.
-        cuando = "expired" if self.expired(0) else f"vigente {int(self.expires_at - time.time())}s"
-        return (f"<Credentials {cuando}, refresh_token={'sí' if self.refresh_token else 'no'}, "
-                f"scopes={len(self.scopes)}>")
+        # Neither the access nor the refresh token leaves here. `Secret` already
+        # protects itself, but a dataclass with `repr=True` would print them on
+        # its own.
+        when = "expired" if self.expired(0) else f"valid for {int(self.expires_at - time.time())}s"
+        return (f"<Credentials {when}, refresh_token={'yes' if self.refresh_token else 'no'}, "
+        return (f"<Credentials {when}, refresh_token={'yes' if self.refresh_token else 'no'}, "
 
 
-# ── Llavero, si está ────────────────────────────────────────────────────────
+# ── Keychain, if present ───────────────────────────────────────────────────
 def _keyring():
-    """El módulo `keyring` si el usuario lo tiene, o None. NUNCA una dependencia."""
+    """The `keyring` module if the user has it, or None. NEVER a dependency."""
     if (os.environ.get("OURA_SIN_LLAVERO") or "").strip():
         return None
     try:
         import keyring
         return keyring
     except Exception:
-        # Cualquier excepción, no sólo ImportError: keyring falla al importar en
-        # entornos sin backend configurado, y eso no puede tumbar el server.
+        # Any exception, not just ImportError: keyring fails to import in
+        # environments with no backend configured, and that can't take the server
+        # down.
         return None
 
 
 # ── Guardar y load ────────────────────────────────────────────────────────
 def save(cred: Credentials) -> str:
-    """Persiste las credenciales. Devuelve dónde quedaron ('llavero' o la ruta).
+    """Persists the credentials. Returns where they landed ('keychain' or path).
 
     Escribe de shape ATÓMICA. Un file de credenciales a medio escribir es
-    peor que ninguno: el refresh token viejo ya se consumió, y lo único que
-    podía salvar la sesión era el nuevo.
+    worse than none: the old refresh token has already been consumed, and the
+    new one was the only thing that could have saved the session.
     """
     payload = json.dumps(cred.as_json(), ensure_ascii=False)
 
@@ -141,14 +143,14 @@ def save(cred: Credentials) -> str:
         try:
             kr.set_password(_SERVICIO_LLAVERO, _CUENTA_LLAVERO, payload)
             # Si antes hubo file, se borra: `load()` prefiere el llavero,
-            # así que ese file ya no se leería nunca — quedaría un refresh
+            # so that file would never be read again — a dead refresh token
             # token muerto en disco para siempre. Un secreto que nadie usa sigue
             # siendo un secreto que alguien puede leer.
             try:
                 os.unlink(credentials_path())
             except OSError:
                 pass
-            return "llavero"
+            return "keychain"
         except Exception:
             pass                        # cae al file, que siempre funciona
 
@@ -156,10 +158,10 @@ def save(cred: Credentials) -> str:
     os.makedirs(os.path.dirname(ruta), mode=0o700, exist_ok=True)
     fd, temporal = tempfile.mkstemp(dir=os.path.dirname(ruta), prefix=".cred-")
     try:
-        os.fchmod(fd, 0o600)            # 600 ANTES de escribir, no después
+        os.fchmod(fd, 0o600)            # 600 BEFORE writing, not after
         with os.fdopen(fd, "w", encoding="utf-8") as f:
             f.write(payload)
-        os.replace(temporal, ruta)      # atómico dentro del mismo sistema de archivos
+        os.replace(temporal, ruta)      # atomic within the same filesystem
     except BaseException:
         try:
             os.unlink(temporal)
@@ -194,7 +196,7 @@ def load() -> Credentials | None:
 
 
 def forget() -> None:
-    """Borra las credenciales de los dos lados. No falla si no había."""
+    """Erases the credentials from both places. Doesn't fail if there were none."""
     kr = _keyring()
     if kr is not None:
         try:
@@ -207,7 +209,7 @@ def forget() -> None:
         pass
 
 
-# ── El canje, que es donde se pierde la sesión si se hace mal ───────────────
+# ── The exchange, which is where the session is lost if done wrong ──────────
 def _post(data: dict) -> dict:
     cuerpo = urllib.parse.urlencode(data).encode()
     req = urllib.request.Request(
@@ -220,8 +222,8 @@ def _post(data: dict) -> dict:
             return json.load(r)
     except urllib.error.HTTPError as e:
         # Oura contesta `{"error": "...", "error_description": "..."}`. La
-        # descripción es la parte accionable —«Invalid client_id.»— y enterrarla
-        # dentro de un JSON crudo obliga a leerlo a quien ya está atorado.
+        # description is the actionable part — "Invalid client_id." — and
+        # burying it inside raw JSON forces whoever is already stuck to read it.
         detalle = ""
         try:
             crudo = e.read().decode("utf-8", "replace")
@@ -238,9 +240,9 @@ def _post(data: dict) -> dict:
 def _from_response(r: dict, alcances_previos: tuple[str, ...] = ()) -> Credentials:
     if not r.get("access_token"):
         raise OuraError("Oura responded without `access_token`")
-    # La pantalla de consentimiento devuelve los scopes CONCEDIDOS, que no
-    # siempre son los pedidos ni se llaman igual. Se guarda lo que Oura dice que
-    # dio, no lo que nosotros creímos pedir: el autodiagnóstico se apoya en esto.
+    # The consent screen returns the GRANTED scopes, which aren't always the
+    # requested ones and aren't always named the same. What Oura says it gave is
+    # stored, not what we believed we asked for: the self-check relies on this.
     concedidos = tuple((r.get("scope") or "").split()) or alcances_previos
     return Credentials(
         access=Secret(r["access_token"]),
@@ -252,7 +254,7 @@ def _from_response(r: dict, alcances_previos: tuple[str, ...] = ()) -> Credentia
 
 def exchange_code(codigo: str, client_id: str, client_secret: str,
                    redirect_uri: str = DEFAULT_REDIRECT) -> Credentials:
-    """Cambia el código de autorización por el primer par de tokens, y lo guarda."""
+    """Exchanges the authorization code for the first token pair, and saves it."""
     cred = _from_response(_post({
         "grant_type": "authorization_code",
         "code": codigo,
@@ -265,17 +267,17 @@ def exchange_code(codigo: str, client_id: str, client_secret: str,
 
 
 def refresh(cred: Credentials, client_id: str, client_secret: str) -> Credentials:
-    """Renueva el par y lo GUARDA ANTES DE DEVOLVERLO.
+    """Renews the pair and SAVES IT BEFORE RETURNING IT.
 
-    El orden es todo el punto. El refresh token de Oura es de un solo uso: en
-    cuanto esta petición sale, el que teníamos queda muerto. Si el proceso se
-    cayera entre la respuesta y el guardado, la sesión se perdería y habría que
-    volver a authorize desde el navegador.
+    The order is the whole point. Oura's refresh token is single-use: the moment
+    this request goes out, the one we held is dead. If the process died between
+    the response and the save, the session would be lost and you'd have to
+    authorize from the browser again.
 
-    Si el canje falla, se relee lo guardado antes de dar la sesión por perdida:
-    dos procesos que refrescan a la vez es un caso real —dos tools MCP
-    llamadas en paralelo— y el que pierde la carrera vería un 400 aunque la
-    sesión esté perfectamente viva, ya renovada por el otro.
+    If the exchange fails, what's on disk is re-read before declaring the session
+    lost: two processes refreshing at once is a real case — two MCP tools called
+    in parallel — and the one that loses the race would see a 400 even though the
+    session is perfectly alive, already renewed by the other.
     """
     if not cred.refresh_token:
         raise OuraError("no refresh token; you need to authorize again")
@@ -289,8 +291,8 @@ def refresh(cred: Credentials, client_id: str, client_secret: str) -> Credential
     except OuraError:
         otra = load()
         if otra and otra.refresh_token and not otra.expired():
-            return otra                 # alguien más ya refrescó; la sesión vive
+            return otra                 # somebody else already refreshed; the session lives
         raise
     nueva = _from_response(r, cred.scopes)
-    save(nueva)                      # ANTES de devolver. No mover esta línea.
+    save(nueva)                      # BEFORE returning. Do not move this line.
     return nueva
