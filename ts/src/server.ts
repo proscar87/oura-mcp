@@ -1,15 +1,15 @@
 /**
  * Servidor MCP: tres herramientas sobre las 19 colecciones de Oura.
  *
- * TRES, NO DIECINUEVE. Un srv con una herramienta por colección obliga al
- * modelo a elegir entre 19 nombres parecidos antes de saber qué contienen. Aquí
- * la colección es un parámetro y el catálogo se consulta cuando hace falta.
+ * THREE, NOT NINETEEN. A server with one tool per collection forces the model
+ * to choose among 19 similar names before knowing what any of them contain. Here
+ * the collection is a parameter and the catalog is consulted when needed.
  *
- * NO HAY HERRAMIENTAS DE ANÁLISIS. Un promedio calculado aquí adentro llega al
- * modelo como un número sin su método. Sobre nueve años de data reales, tres
- * de cada cuatro cambios entre dos mediciones consecutivas caben inside de la
- * oscilación normal de la propia métrica. Entregar «tu HRV subió 12%» sin decir
- * cuánto oscila sola esa métrica no es informar: es fabricar una señal.
+ * THERE ARE NO ANALYSIS TOOLS. An average computed in here reaches the model
+ * as a number without its method. Across nine years of real data, three out of
+ * four changes between consecutive measurements fall within the metric's own
+ * normal oscillation. Handing over "your HRV is up 12%" without saying how much
+ * that metric swings on its own isn't informing: it's manufacturing a signal.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -21,13 +21,12 @@ import { SCOPE_OF, COLLECTIONS, WITH_DATE, shape } from "./collections.js";
 export const VERSION = "0.3.0";
 
 /**
- * LAS TRES SON DE SÓLO LECTURA, y no es una promesa: no hay un POST, un PUT ni
- * un DELETE en todo el paquete. Declararlo evita que el cliente pida
- * confirmación en cada llamada, y el directorio de conectores de Claude lo
- * exige.
+ * ALL THREE ARE READ-ONLY, and that isn't a promise: there is no POST, PUT or
+ * DELETE anywhere in the package. Declaring it stops the client asking for
+ * confirmation on every call, and Claude's connectors directory requires it.
  *
- * `openWorldHint` va en true porque los data vienen de un servicio externo: la
- * misma llamada dos veces puede diferir si el anillo sincronizó en medio.
+ * `openWorldHint` is true because the data comes from an external service: the
+ * same call twice can differ if the ring synced in between.
  */
 const READ_ONLY = {
   readOnlyHint: true,
@@ -37,31 +36,32 @@ const READ_ONLY = {
 } as const;
 
 /**
- * LO QUE UN MODELO NO PUEDE ADIVINAR. Se comprobó simulando las preguntas que
- * un usuario hace de verdad y viendo qué le faltaba saber para contestarlas sin
- * inventar. Estas instrucciones viajan en cada sesión, así que sólo va lo que
- * cambia una respuesta.
+ * WHAT A MODEL CANNOT GUESS. Verified by simulating the questions a user
+ * actually asks and seeing what they were missing to answer without inventing.
+ * These instructions travel in every session, so only what changes an answer
+ * goes in.
  */
 export const INSTRUCTIONS =
-  "Datos crudos del anillo Oura, vía su API v2.\n\n" +
-  "CUATRO COSAS QUE CAMBIAN LA RESPUESTA:\n\n" +
-  "1. `n: 0` NO significa que la persona no durmiera, no se moviera ni no se " +
-  "recuperara. Significa que Oura no tiene registros en ese rango, y la causa " +
-  "más común es que el anillo aún no sincroniza — los data del día en curso " +
-  "casi siempre faltan. Cuando pasa, la respuesta trae `vacio` con lo que se " +
-  "sabe. Léelo antes de concluir nada, y di que no hay dato, no que no ocurrió.\n\n" +
-  "2. Si aparece `truncated`, FALTAN data: sigue desde `continuar_desde`. Si " +
-  "aparece `ciclo_de_paginacion`, Oura se repitió y lo que hay puede estar " +
-  "incompleto. Ninguna de las dos se ignora.\n\n" +
-  "3. El rango es inclusivo en los dos extremos, y `dia` es el atajo para uno " +
-  "solo. Para juntar un ejercicio con el pulso de ese rato: pide `workout`, " +
-  "toma `start_datetime` y `end_datetime` del que te interese, y úsalos tal " +
-  "cual como `start` y `end` de `heartrate`.\n\n" +
-  "4. Hay colecciones enormes: 30 días de `daily_activity` son 250,000 " +
-  "caracteres, y el 92% es un solo campo. Si la respuesta trae " +
-  "`respuesta_grande`, vuelve a request con `fields` limitado a lo que necesites.\n\n" +
-  "Este srv no calcula promedios ni tendencias a propósito: entrega el " +
-  "dato para que el análisis se haga donde se pueda citar el método.";
+  "Raw data from the Oura ring, via its v2 API.\n\n" +
+  "FOUR THINGS THAT CHANGE THE ANSWER:\n\n" +
+  "1. `n: 0` does NOT mean the person didn't sleep, didn't move or didn't " +
+  "recover. It means Oura has no records in that range, and the most common " +
+  "cause is that the ring hasn't synced yet — the current day is almost always " +
+  "missing. When that happens the response carries `empty` with what is known. " +
+  "Read it before concluding anything, and say there is no data, not that it " +
+  "didn't happen.\n\n" +
+  "2. If `truncated` appears, data is MISSING: continue from `continue_from`. " +
+  "If `pagination_cycle` appears, Oura repeated itself and what you have may " +
+  "be incomplete. Neither one gets ignored.\n\n" +
+  "3. The range is inclusive on both ends, and `day` is the shorthand for a " +
+  "single one. To join a workout with the heart rate during it: request " +
+  "`workout`, take `start_datetime` and `end_datetime` from the one you care " +
+  "about, and use them verbatim as `start` and `end` of `heartrate`.\n\n" +
+  "4. Some collections are enormous: 30 days of `daily_activity` is 250,000 " +
+  "characters, and 92% of it is a single field. If the response carries " +
+  "`large_response`, ask again with `fields` limited to what you need.\n\n" +
+  "This server deliberately computes no averages and no trends: it hands over " +
+  "the data so the analysis happens where the method can be cited.";
 
 export function createServer(): McpServer {
   const srv = new McpServer(
@@ -70,12 +70,12 @@ export function createServer(): McpServer {
   );
 
   srv.registerTool("oura_colecciones", {
-    title: "Catálogo de colecciones de Oura",
+    title: "Oura collection catalog",
     description:
-      "Las 19 colecciones de Oura, con qué trae cada una y qué parámetros pide. " +
-      "Úsala antes de `oura_consultar` si no estás seguro del nombre exacto.",
+      "The 19 Oura collections, what each one carries and which parameters it " +
+      "takes. Use it before `oura_query` if you are unsure of the exact name.",
     inputSchema: {},
-    annotations: { title: "Catálogo de colecciones de Oura", ...READ_ONLY },
+    annotations: { title: "Oura collection catalog", ...READ_ONLY },
   }, async () => {
     const catalog = Object.fromEntries(
       Object.entries(COLLECTIONS).map(([n, c]) => [n, { shape: c.shape, que_trae: c.carries }]),
@@ -84,44 +84,44 @@ export function createServer(): McpServer {
   });
 
   srv.registerTool("oura_consultar", {
-    title: "Consultar una colección de Oura",
+    title: "Query an Oura collection",
     description:
-      "Trae una colección de Oura COMPLETA en el rango pedido, siguiendo la " +
-      "paginación hasta el final: Oura entrega `next_token` y quien no lo " +
-      "persigue recibe la primera página sin que nada se lo diga. Un día local " +
-      "de `heartrate` son 1,231 muestras en 2 páginas.\n\n" +
-      "El rango es INCLUSIVO en los dos extremos. Oura no se comporta así —unas " +
-      "colecciones excluyen el último día y otras no, y `workout` va desfasada a " +
-      "UTC— pero eso se corrige aquí.",
+      "Fetches a COMPLETE Oura collection over the requested range, following " +
+      "pagination to the end: Oura returns `next_token` and whoever doesn't " +
+      "chase it receives the first page with nothing saying so. One local day " +
+      "of `heartrate` is 1,231 samples across 2 pages.\n\n" +
+      "The range is INCLUSIVE on both ends. Oura does not behave that way — some " +
+      "collections exclude the last day and others don't, and `workout` is " +
+      "skewed to UTC — but that is corrected here.",
     inputSchema: {
       collection: z.string().describe("Nombre exacto. Ver `oura_colecciones`."),
-      dia: z.string().optional().describe("Atajo para un solo día: equivale a start=end=dia."),
+      day: z.string().optional().describe("Shorthand for a single day: equivalent to start=end=day."),
       start: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
       end: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
       fields: z.array(z.string()).optional().describe(
-        "Sólo estos fields. Oura recorta del lado suyo, así que baja menos: " +
-        "úsalo en rangos largos. `day` e `id` vuelven siempre."),
+        "Only these fields. Oura trims on its side, so less comes down: " +
+        "use it on long ranges. `day` and `id` always come back."),
       latest: z.boolean().optional().describe(
-        "Sólo el registro más reciente. Únicamente en heartrate y " +
-        "ring_battery_level; no necesita rango."),
+        "Only the most recent record. heartrate and ring_battery_level only; " +
+        "it needs no range."),
       format: z.enum(["json", "csv"]).optional().describe(
-        "`json` (por omisión) o `csv`. CSV para volúmenes grandes."),
+        "`json` (default) or `csv`. CSV for large volumes."),
     },
-    annotations: { title: "Consultar una colección de Oura", ...READ_ONLY },
+    annotations: { title: "Query an Oura collection", ...READ_ONLY },
   }, async (args) => {
     const out = await query(args);
     return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
   });
 
   srv.registerTool("oura_revisar", {
-    title: "Autodiagnóstico de la conexión con Oura",
+    title: "Self-check of the Oura connection",
     description:
-      "¿Con qué te autenticas, qué scopes tienes y responde Oura? NO devuelve " +
-      "el token ni ningún valor de salud: reporta la LONGITUD del token, nunca " +
-      "el token, porque los mensajes de diagnóstico son los que más se copian y " +
-      "se pegan en chats y en issues.",
+      "Which credential are you using, which scopes do you have, and does Oura " +
+      "respond? Returns neither the token nor any health value: it reports the " +
+      "token's LENGTH, never the token, because diagnostic messages are the " +
+      "ones most often copied into chats and issues.",
     inputSchema: {},
-    annotations: { title: "Autodiagnóstico de la conexión con Oura", ...READ_ONLY },
+    annotations: { title: "Self-check of the Oura connection", ...READ_ONLY },
   }, async () => {
     return { content: [{ type: "text", text: JSON.stringify(await check(), null, 2) }] };
   });
@@ -131,7 +131,7 @@ export function createServer(): McpServer {
 
 interface QueryArgs {
   collection: string;
-  dia?: string;
+  day?: string;
   start?: string;
   end?: string;
   fields?: string[];
@@ -142,16 +142,16 @@ interface QueryArgs {
 export async function query(a: QueryArgs): Promise<Record<string, unknown>> {
   if (!(a.collection in COLLECTIONS)) {
     return {
-      error: `«${a.collection}» no es una colección de Oura`,
+      error: `«${a.collection}» is not an Oura collection`,
       las_que_hay: Object.keys(COLLECTIONS).sort(),
     };
   }
   let { start, end } = a;
-  if (a.dia) {
-    // «Un solo día» es la consulta más común y la que estaba rota. Que la path
-    // común no obligue a escribir un rango es la mitad del arreglo.
-    if (start || end) return { error: "usa `dia`, o `start` y `end`, pero no ambos" };
-    start = end = a.dia;
+  if (a.day) {
+    // "A single day" is the most common query and the one that was broken.
+    // Making the common path not require a range is half the fix.
+    if (start || end) return { error: "use `day`, or `start` and `end`, but not both" };
+    start = end = a.day;
   }
   const f = shape(a.collection);
   if (WITH_DATE.has(f) && !a.latest && !(start && end)) {
@@ -165,23 +165,23 @@ export async function query(a: QueryArgs): Promise<Record<string, unknown>> {
       start, end, fields: a.fields, latest: a.latest, format: a.format,
     });
   } catch (e) {
-    // Se devuelve como dato, no se lanza: una excepción corta la conversación
-    // entera por lo que casi siempre es una fecha mal escrita o un token vencido.
+    // Returned as data, not thrown: an exception cuts the whole conversation
+    // short over what is almost always a malformed date or an expired token.
     if (e instanceof OuraError) return { error: e.message };
     throw e;
   }
 }
 
 function authMode(): string {
-  if (process.env.OURA_PAT_FILE) return "token personal (OURA_PAT_FILE)";
-  if (process.env.OURA_PAT) return "token personal (OURA_PAT)";
+  if (process.env.OURA_PAT_FILE) return "personal token (OURA_PAT_FILE)";
+  if (process.env.OURA_PAT) return "personal token (OURA_PAT)";
   return "OAuth2";
 }
 
 /** Alcances y caducidad, SIN un solo token.
  *
- * Los scopes contestan la pregunta que más se hace cuando algo sale vacío:
- * «¿no hay data, o no di permiso?».
+ * The scopes answer the question people ask most when something comes back
+ * empty: "is there no data, or did I not grant permission?"
  */
 async function oauthState(): Promise<Record<string, unknown>> {
   if (process.env.OURA_PAT_FILE || process.env.OURA_PAT) return {};
@@ -196,23 +196,23 @@ async function oauthState(): Promise<Record<string, unknown>> {
       se_renueva_solo: cred.refreshToken !== null,
     };
   } catch (e) {
-    return { credenciales: `ilegibles: ${(e as Error).message}` };
+    return { credenciales: `unreadable: ${(e as Error).message}` };
   }
 }
 
 export async function check(): Promise<Record<string, unknown>> {
   if (inSandbox()) {
-    // En sandbox no hay token que check y no debe parecer que sí: quien lea
-    // esta respuesta tiene que saber que los data que verá son inventados.
+    // In sandbox there is no token to check and it mustn't look like there is:
+    // whoever reads this response has to know the data they will see is made up.
     const out: Record<string, unknown> = {
       modo: "sandbox",
-      data: "sintéticos, de Oura, no tuyos",
+      data: "synthetic, from Oura, not yours",
       base: base(),
     };
     try {
-      // El pulso NO puede ser `personal_info`: es la única de las 19 que el
-      // sandbox no sirve, y preguntar por ella reportaría caída una API que
-      // está de pie.
+      // The pulse CANNOT be `personal_info`: it is the only one of the 19 the
+      // sandbox does not serve, and asking for it would report an API as down
+      // when it is up.
       const r = await fetchAll("daily_sleep", { start: "2026-01-01", end: "2026-01-03" });
       out["oura_responde"] = true;
       const data = r["data"] as Record<string, unknown>[];
@@ -222,7 +222,7 @@ export async function check(): Promise<Record<string, unknown>> {
       out["error"] = (e as Error).message;
     }
     out["no_disponible_en_sandbox"] = ["personal_info"];
-    out["siguiente_paso"] = "quita OURA_SANDBOX y pon tu propio token para ver tus data";
+    out["siguiente_paso"] = "drop OURA_SANDBOX and set your own credential to see your data";
     return out;
   }
 
@@ -241,8 +241,8 @@ export async function check(): Promise<Record<string, unknown>> {
   try {
     const r = await fetchAll("personal_info");
     out["oura_responde"] = true;
-    // Los NOMBRES de los fields, no sus valores: confirma que la API contesta
-    // sin volcar el perfil de nadie a un log.
+    // The field NAMES, not their values: confirms the API answers without
+    // dumping anyone's profile into a log.
     const data = r["data"] as Record<string, unknown>[];
     out["campos_del_perfil"] = data.length ? Object.keys(data[0]!).sort() : [];
   } catch (e) {
