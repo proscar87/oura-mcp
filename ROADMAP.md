@@ -585,6 +585,68 @@ separate into two artifacts, each honest about what it does.
 
 ---
 
+## What the WHOOP ecosystem answers for us
+
+Checked on 10 August 2026. WHOOP's MCP landscape is far more crowded than
+Oura's — at least ten servers — and being second means the questions we're still
+arguing about have already been answered out loud by someone else.
+
+### The one that mattered: nobody ships credentials
+
+The open question was whether to embed OAuth app credentials so a user never has
+to register an application. **Every WHOOP server examined requires the user to
+register their own app.** `nissand/whoop-mcp-server-claude` (18 tools, full
+OAuth) and `jonnyhaynes/whoop-mcp-server` (10 tools) both say so plainly in
+their setup steps.
+
+So the one-time client ID and secret isn't our defect — it's what this category
+looks like when the vendor requires registered applications. It stops being an
+open decision. What's left is making that single step short and impossible to
+get wrong, which the manifest already does by spelling out the trailing slash
+that otherwise bounces the registration.
+
+### The anti-pattern, confirmed in the wild
+
+`jonnyhaynes/whoop-mcp-server` exposes `nextToken` **as a tool parameter**. That
+hands pagination to the model: it has to notice the token came back, decide to
+call again, and keep going until it stops. A model that forgets gets a partial
+answer that looks complete — the exact failure this package exists to prevent,
+shipped as an interface.
+
+We paginate to exhaustion inside the server and report `pages`. Same API
+constraint, opposite place to put the burden. This is the clearest outside
+confirmation of the thesis so far, because it isn't an argument — it's a
+competitor's parameter list.
+
+### 47 tools, and still no analysis
+
+`thebriangao/totem` is the most ambitious in the category: 47 tools, read *and*
+write, against WHOOP's private iOS API. Worth reading for two reasons.
+
+It performs **no server-side analysis** — no trends, no averages, no
+correlations — despite having every opportunity. It reshapes nested responses
+into flat objects and stops there. Arrived at independently, that's the same
+line we drew, and it holds even at fifteen times our tool count. The principle
+isn't a consequence of being small.
+
+And it's honest about what it costs: *"this works through WHOOP's private iOS
+API rather than the public OAuth API. That isn't what WHOOP's terms allow."* It
+warns that WHOOP may suspend API access or terminate the membership. That's the
+trade we are not making — Oura's public API gives us everything we ship, and a
+server that can get someone's account closed isn't foolproof to install no
+matter how good the install is.
+
+### What the stars actually reward
+
+The highest-starred WHOOP repository isn't an MCP server at all. `OpenStrap/edge`
+(427 stars) pairs a WHOOP 4.0 over Bluetooth and makes it useful **without a
+subscription**. `satayutata/geniemax-core` (126 stars) is a health-analytics
+engine whose description ends "no subscription."
+
+Oura doesn't paywall its API, so there's no subscription to escape and no
+equivalent lever here. Worth knowing what the attention in this category is
+really for, and not mistaking it for interest in MCP servers.
+
 ## What is NOT on the roadmap
 
 Held over from AGENTS.md, and with more reason now that every competitor does the
