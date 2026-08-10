@@ -27,7 +27,8 @@ correct response.
   neither the token nor any health value.
 
 All three are read-only. There is no POST, PUT or DELETE in the package.
-Parameter names are in Spanish because the codebase is.
+Parameter names match Oura's own API: `collection`, `day`, `start`, `end`,
+`fields`, `latest`, `format`.
 
 ## Warning keys in the response
 
@@ -38,6 +39,9 @@ Parameter names are in Spanish because the codebase is.
 - `ignored_fields` — you asked for fields Oura didn't apply.
 - `discarded_out_of_range` — records from the safety margin that were cut.
 - `uneven_columns` — in CSV, not every record has the same keys.
+- `rate_limited` — Oura refused with 429 and a retry recovered. The data is
+  complete; the warning is about the NEXT query, which may fail.
+- `synthetic` — sample data, not this person's. Never report it as theirs.
 - `empty` — the query came back empty; explains what's knowable about why.
 - `large_response` — the payload is heavy; names the field that dominates it.
 

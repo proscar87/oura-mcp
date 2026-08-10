@@ -428,3 +428,36 @@ describe("the sandbox marker", () => {
     expect(r["synthetic"]).toBeUndefined();
   });
 });
+
+// ── A recovered 429 must not vanish ────────────────────────────────────────
+describe("rate limiting", () => {
+  it("says so when a retry succeeded", async () => {
+    // A retry that SUCCEEDS left no trace: the caller waited, the answer came
+    // back clean, and nothing said Oura had refused. The data is correct, so
+    // this is not the same bug as the four this package was built for — but
+    // being throttled is a fact about the NEXT query. A model that doesn't know
+    // it was just refused asks for another fifty pages, and that one fails.
+    let n = 0;
+    vi.stubGlobal("fetch", async () => {
+      if (n++ < 1) {
+        return new Response("{}", { status: 429, headers: { "Retry-After": "0" } });
+      }
+      return new Response(JSON.stringify({ data: [{ day: "2026-01-01" }] }),
+                          { status: 200 });
+    });
+    const r = await fetchAll("daily_sleep", { start: "2026-01-01", end: "2026-01-02" });
+
+    expect(r["n"]).toBe(1);                       // the data still arrives
+    const notice = String(r["rate_limited"]);
+    expect(notice).toContain("429");
+    expect(notice).toContain("complete");         // must not read as data lost
+    expect(notice).toMatch(/smaller|wait/);       // and say what to do next
+  });
+
+  it("stays quiet when nothing was refused", async () => {
+    // Otherwise it rides on every answer and stops being read.
+    fakeOura([[{ day: "2026-01-01" }]]);
+    const r = await fetchAll("daily_sleep", { start: "2026-01-01", end: "2026-01-02" });
+    expect(r["rate_limited"]).toBeUndefined();
+  });
+});

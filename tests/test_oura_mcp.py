@@ -813,3 +813,30 @@ def test_only_personal_info_is_missing_from_the_sandbox():
     assert WITHOUT_SANDBOX == {"personal_info"}
     assert WITHOUT_SANDBOX <= set(COLLECTIONS)
 
+
+
+def test_a_recovered_429_says_so_in_the_response(monkeypatch):
+    """A retry that SUCCEEDS used to leave no trace at all.
+
+    The caller waited, the answer came back clean, and nothing said Oura had
+    refused. The data is correct, so this isn't the same bug as the four this
+    package was built for — but being throttled is a fact about the NEXT query,
+    not this one. A model that doesn't know it was just refused will happily ask
+    for another fifty pages, and that is the request that fails.
+    """
+    dormidas = []
+    _falla_n_veces(monkeypatch, 2, dormidas=dormidas)
+    r = client.fetch("daily_sleep", "2026-01-01", "2026-01-02")
+
+    assert r["n"] == 1, "the data still arrives complete"
+    aviso = r["rate_limited"]
+    assert "429" in aviso
+    assert "complete" in aviso, "it must not read as though data were lost"
+    assert "smaller" in aviso or "wait" in aviso, "it has to say what to do next"
+
+
+def test_a_clean_request_carries_no_rate_limit_notice(monkeypatch):
+    """Otherwise it rides on every answer and stops being read."""
+    _fake_oura([[{"i": 1}]], monkeypatch)
+    r = client.fetch("daily_sleep", "2026-01-01", "2026-01-02")
+    assert "rate_limited" not in r

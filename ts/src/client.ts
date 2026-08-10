@@ -266,7 +266,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * have 30 pages fetched that would be thrown away.
  */
 export async function request(url: string, tok: Secret,
-                            retries = RETRIES_429): Promise<Record<string, unknown>> {
+                            retries = RETRIES_429,
+                            waits?: number[]): Promise<Record<string, unknown>> {
   for (let intento = 0; ; intento++) {
     let r: Response;
     try {
@@ -280,7 +281,11 @@ export async function request(url: string, tok: Secret,
     if (r.ok) return (await r.json()) as Record<string, unknown>;
 
     if (r.status === 429 && intento < retries) {
-      await sleep(requestedWait(r.headers.get("Retry-After"), intento));
+      const pause = requestedWait(r.headers.get("Retry-After"), intento);
+      // RECORD IT. A retry that SUCCEEDS left no trace: the caller waited, the
+      // answer came back clean, and nothing said Oura had refused.
+      waits?.push(pause);
+      await sleep(pause);
       continue;
     }
     const body = await r.text().catch(() => "");
@@ -496,6 +501,7 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
   const tok = await token();
   let data: Row[] = [];
   let pages = 0, nextToken: string | undefined;
+  const waits: number[] = [];
   let truncated: string | undefined, cursor: string | undefined, cycle: string | undefined;
   const seen = new Set<string>();
 
@@ -503,7 +509,8 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
     const q = new URLSearchParams(params);
     if (nextToken) q.set("next_token", nextToken);
     const qs = q.toString();
-    const body = await request(`${root}/${collection}${qs ? `?${qs}` : ""}`, tok);
+    const body = await request(`${root}/${collection}${qs ? `?${qs}` : ""}`, tok,
+                               RETRIES_429, waits);
     pages++;
 
     // `personal_info` y `ring_configuration` no vienen envueltos en `data`: el
@@ -568,6 +575,18 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
     if (cursor) out["continue_from"] = cursor;
   }
   if (cycle) out["pagination_cycle"] = cycle;
+  if (waits.length) {
+    // A SUCCESSFUL retry left no trace: the caller waited, the answer came
+    // back clean, and nothing said Oura had refused. The data is correct, so
+    // this is not the same bug as the other four — but being throttled means
+    // the NEXT query may fail, and a model that does not know it was just
+    // refused will happily fire off another fifty pages.
+    const total = waits.reduce((a, b) => a + b, 0);
+    out["rate_limited"] =
+      `Oura refused ${waits.length} time(s) with 429 and this recovered after ` +
+      `waiting ${total.toFixed(0)}s in total. The data is complete. You are ` +
+      `near Oura's limit: make the next range smaller, or wait.`;
+  }
   if (format === "csv") {
     const { text, columns, uneven } = toCsv(data);
     out["data"] = text;

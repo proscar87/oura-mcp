@@ -390,3 +390,35 @@ def test_both_clients_emit_the_same_keys():
         (ROOT / "src" / "oura_mcp" / "client.py").read_text(encoding="utf-8")))
     assert py_keys == ts_keys, \
         f"only in Python: {py_keys - ts_keys}; only in TypeScript: {ts_keys - py_keys}"
+
+
+def test_the_docs_name_the_parameters_the_tool_actually_takes():
+    """The README's parameter table stayed in Spanish — `dia`, `inicio`, `campos`,
+    `ultimo`, `formato` — long after the tool renamed them, and `llms.txt`
+    asserted outright that "parameter names are in Spanish because the codebase
+    is." Oscar pasted that table back at me as evidence something was wrong. It
+    was, and not only where I said: his installed server was stale AND the
+    documentation was wrong on its own.
+
+    Neither earlier guard could see it. The flag test only looked at `--flags`,
+    and the key test only looked at retired response keys. Parameters are a third
+    vocabulary, and it had nobody watching it.
+
+    Reads the live schema, so renaming a parameter without touching the docs
+    fails here rather than in someone's terminal.
+    """
+    from oura_mcp.server import oura_query
+    import inspect
+    fn = getattr(oura_query, "fn", oura_query)
+    real = set(inspect.signature(fn).parameters)
+
+    for name in ("README.md", "llms.txt", "AGENTS.md"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        for dead in ("dia", "inicio", "fin", "campos", "ultimo", "formato",
+                     "coleccion"):
+            assert f"`{dead}`" not in text, f"{name} still documents `{dead}`"
+
+    # And the current names must actually appear where they are explained.
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    for p in real:
+        assert f"`{p}`" in readme, f"README never mentions the `{p}` parameter"

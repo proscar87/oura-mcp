@@ -224,11 +224,12 @@ keep it that way.
 
 | | |
 |---|---|
-| `dia` | A single day. Shorthand for `inicio=fin=dia` |
-| `inicio`, `fin` | The range, **inclusive on both ends** |
-| `campos` | Only these fields. Oura trims on its side, so less comes down |
-| `ultimo` | The most recent record. `heartrate` and `ring_battery_level` only |
-| `formato` | `json` or `csv`. Savings vary by collection: 55% on `heartrate`, 10% on `daily_sleep` |
+| `collection` | Which of the 19. `oura_collections` lists them |
+| `day` | A single day. Shorthand for `start=end=day` |
+| `start`, `end` | The range, **inclusive on both ends** |
+| `fields` | Only these fields. Oura trims on its side, so less comes down |
+| `latest` | The most recent record. `heartrate` and `ring_battery_level` only |
+| `format` | `json` or `csv`. Savings vary by collection: 55% on `heartrate`, 10% on `daily_sleep` |
 
 And what the response tells you when something didn't come out clean:
 `truncated` with `continue_from` naming the last day reached, `pagination_cycle` if Oura
@@ -238,7 +239,7 @@ repeats a token, `ignored_fields`, `discarded_out_of_range`,
 
 That last one comes from measuring: **30 days of `daily_activity` is 252,000
 characters**, and 87% of it is a single field, `met`, a per-minute MET series.
-Asking for three columns with `campos` brings those same 30 days down to 5,000
+Asking for three columns with `fields` brings those same 30 days down to 5,000
 characters — **99% less**. The server doesn't trim on its own — that would be
 under-delivering — but it does say what's heavy and how to ask for less.
 

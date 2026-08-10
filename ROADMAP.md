@@ -926,6 +926,56 @@ not pending work.
 
 ---
 
+## The 20-hour audit — round 1
+
+Started 10 August 2026. Brief: find what's missing, what isn't being exploited,
+and iterate. Publishing and third-party repos are out of scope by standing rule.
+
+### A rate limit that recovered used to leave no trace
+
+Oura refuses with 429 and this client retries, bounded. When the retry
+**succeeds**, nothing said it happened: the caller waited, the answer came back
+clean, and the response looked identical to one that was never refused.
+
+That is not the same bug as the four this package was built for — the data is
+correct. It's a fact about the **next** query rather than this one. Oura sends no
+rate-limit headers on successful responses, so being refused is the only signal a
+client ever gets that it's near the ceiling, and throwing that signal away means
+a model asks for another fifty pages and that request is the one that fails.
+
+Responses now carry `rate_limited` when a retry recovered: how many refusals,
+how long was spent waiting, that the data is complete, and to make the next
+range smaller. In both implementations, checked against each other by the parity
+test — which is what caught TypeScript missing it.
+
+### The README documented parameters that no longer existed
+
+The parameter table still read `dia`, `inicio`, `fin`, `campos`, `ultimo`,
+`formato`, and `llms.txt` asserted "parameter names are in Spanish because the
+codebase is." Both false since 0.3.0.
+
+Oscar pasted that table back as evidence something was wrong. It was — and not
+only where I said. I attributed it entirely to his stale 0.2.0 install, which was
+true of the running process and incomplete as an answer: the documentation was
+independently wrong, and would have stayed wrong after he updated.
+
+Neither existing guard could see it. The flag test only inspected `--flags`; the
+key test only inspected retired response keys. **Parameters were a third
+vocabulary with nobody watching it.** The new test reads the live tool schema, so
+a rename that skips the docs now fails in CI instead of in someone's terminal.
+
+Three vocabularies, three lessons, one shape: translating a codebase breaks
+references that no compiler checks, and each class of reference needs its own
+guard because none of them generalize.
+
+### Checked and deliberately not adopted
+
+**Argument completion** (`completion/complete`). `oura_query`'s `collection`
+takes exactly 19 valid values and a model has to know them or call
+`oura_collections` first, so autocomplete looked like an obvious win. It isn't
+available: the protocol scopes completions to prompt arguments and resource
+template arguments, never tool arguments. Verified against the SDK's own types.
+
 ## Execution order — reprioritized 10 August 2026
 
 Rewritten after reading the WHOOP ecosystem and counting the field. The old
