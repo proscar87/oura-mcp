@@ -22,7 +22,7 @@ from oura_mcp.client import OuraError, Secret
 
 @pytest.fixture(autouse=True)
 def _isolate(tmp_path, monkeypatch):
-    """Cada prueba con su propio file, y sin tocar el llavero de nadie."""
+    """Each test gets its own file, and nobody's keychain is touched."""
     monkeypatch.setenv("OURA_CREDENTIALS", str(tmp_path / "cred.json"))
     monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
     return tmp_path
@@ -37,7 +37,7 @@ def _cred(refresh_token="R1", expires_at=None, scopes=("daily",)):
     )
 
 
-# ── Guardar ─────────────────────────────────────────────────────────────────
+# ── Saving ─────────────────────────────────────────────────────────────────
 def test_el_archivo_queda_en_600():
     path = cr.save(_cred())
     mode = stat.S_IMODE(os.stat(path).st_mode)
@@ -91,10 +91,10 @@ def test_olvidar_no_falla_si_no_habia():
     assert cr.load() is None
 
 
-# ── Que nada imprima los tokens ─────────────────────────────────────────────
+# ── Nothing may print the tokens ───────────────────────────────────────────
 def test_the_credentials_repr_carries_no_tokens():
-    """`Secret` se protege solo, pero un dataclass con repr automático los
-    imprimiría por su cuenta."""
+    """`Secret` protects itself, but a dataclass with an automatic repr would print
+    them on its own."""
     c = _cred()
     assert "A1" not in repr(c)
     assert "R1" not in repr(c)
@@ -102,21 +102,21 @@ def test_the_credentials_repr_carries_no_tokens():
 
 
 def test_el_archivo_guardado_no_es_legible_por_otros(_isolate):
-    """Obvio y por eso vale probarlo: el contenido SÍ lleva los tokens en claro,
-    y lo único que los protege son los permisos."""
+    """Obvious, which is why it is worth testing: the contents DO carry the tokens
+    in the clear, and the only thing protecting them is the file mode."""
     path = cr.save(_cred())
     assert "R1" in open(path).read()
     assert stat.S_IMODE(os.stat(path).st_mode) & 0o077 == 0
 
 
-# ── Caducidad ───────────────────────────────────────────────────────────────
+# ── Expiry ─────────────────────────────────────────────────────────────────
 def test_un_token_que_expira_en_tres_segundos_ya_esta_caducado():
-    """La petición que se lance con él llegará tarde."""
+    """The request launched with it will arrive late."""
     assert _cred(expires_at=time.time() + 3).expired()
     assert not _cred(expires_at=time.time() + 3600).expired()
 
 
-# ── La rotación: donde se pierde la sesión si se hace mal ───────────────────
+# ── The rotation: where the session is lost if done wrong ──────────────────
 def _fake_token_endpoint(monkeypatch, respuesta, registrar=None):
     def postear(data):
         if registrar is not None:
@@ -129,10 +129,10 @@ def _fake_token_endpoint(monkeypatch, respuesta, registrar=None):
 
 
 def test_refrescar_guarda_antes_de_devolver(monkeypatch):
-    """LA LÍNEA QUE IMPORTA. Oura invalida el refresh token en cuanto se canjea;
-    entre la respuesta y el guardado hay una ventana en la que el viejo ya murió
-    y el nuevo no existe en disco. Esta prueba fija que sea lo más corta
-    posible: al momento de devolver, ya está guardado."""
+    """THE LINE THAT MATTERS. Oura invalidates the refresh token the moment it is
+    exchanged; between the response and the save there is a window where the old
+    one has died and the new one does not exist on disk. This test pins that
+    window as short as possible: by the time it returns, it is already saved."""
     _fake_token_endpoint(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
                                   "expires_in": 3600, "scope": "daily"})
     devuelta = cr.refresh(_cred(), "id", "secreto")
@@ -151,8 +151,8 @@ def test_el_refresco_manda_el_token_viejo(monkeypatch):
 
 
 def test_si_otro_proceso_ya_refresco_la_sesion_no_se_da_por_perdida(monkeypatch):
-    """Dos tools MCP llamadas en paralelo es un caso real. El que pierde
-    la carrera ve un 400 aunque la sesión esté viva, ya renovada por el otro."""
+    """Two MCP tools called in parallel is a real case. The one that loses the race
+    sees a 400 even though the session is alive, already renewed by the other."""
     cr.save(cr.Credentials(access=Secret("A9"), refresh_token=Secret("R9"),
                                expires_at=time.time() + 3600, scopes=("daily",)))
     _fake_token_endpoint(monkeypatch, OuraError("Oura rechazó el canje (400)"))
@@ -172,8 +172,8 @@ def test_without_a_refresh_token_it_says_to_authorize(monkeypatch):
 
 
 def test_se_guardan_los_alcances_concedidos_no_los_pedidos(monkeypatch):
-    """La pantalla de consentimiento devuelve lo que el usuario ACEPTÓ, que no
-    siempre es lo que se pidió. El autodiagnóstico se apoya en esto."""
+    """The consent screen returns what the user ACCEPTED, which is not always what
+    was asked for. The self-check relies on this."""
     _fake_token_endpoint(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
                                   "expires_in": 3600, "scope": "daily personal"})
     nueva = cr.refresh(_cred(scopes=("daily", "heartrate", "spo2")), "id", "s")
@@ -197,17 +197,17 @@ def test_canjear_codigo_tambien_guarda(monkeypatch):
 
 
 def test_the_default_redirect_has_a_trailing_slash():
-    """No es estilo: el portal de Oura rechaza `…/callback` con
-    `invalid_redirect_uri` y acepta `…/callback/`."""
+    """Not style: Oura's portal rejects `…/callback` with `invalid_redirect_uri`
+    and accepts `…/callback/`."""
     assert cr.DEFAULT_REDIRECT.endswith("/callback/")
 
 
-# ── Rutas que alguien de verdad escribiría ──────────────────────────────────
+# ── Paths someone would actually write ─────────────────────────────────────
 def test_una_ruta_relativa_pelada_no_truena(tmp_path, monkeypatch):
-    """`OURA_CREDENTIALS=cred.json` dejaba el directorio en cadena vacía y
-    hacía tronar el guardado con `FileNotFoundError: ''`, que no explica nada.
-    Y habría hecho que las credentials dependieran del directorio desde el que
-    se arrancó el server — que en un client MCP no es el que uno cree."""
+    """`OURA_CREDENTIALS=cred.json` left the directory as an empty string and blew
+    up the save with `FileNotFoundError: ''`, which explains nothing. It would
+    also have made the credentials depend on the directory the server was started
+    from — which in an MCP client is not the one you think."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("OURA_CREDENTIALS", "cred.json")
     path = cr.save(_cred())

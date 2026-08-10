@@ -38,7 +38,7 @@ def _version_declarada() -> str:
     return m.group(1)
 
 
-# ── La versión, en todos lados ──────────────────────────────────────────────
+# ── The version, everywhere ────────────────────────────────────────────────
 def test_server_json_matches_pyproject():
     """El registro de MCP valida que la versión exacta exista en PyPI. Si no
     coinciden, la publicación falla a medio camino: el paquete sube y el
@@ -60,7 +60,7 @@ def test_the_handshake_announces_the_installed_version():
     assert _version() != "desconocida"
 
 
-# ── Lo que el registro exige y es fácil borrar sin querer ──────────────────
+# ── What the registry demands and is easy to delete by accident ────────────
 def test_the_readme_keeps_the_ownership_proof():
     """El registro de MCP comprueba que quien publica el server controla el
     paquete buscando esta línea en el README publicado en PyPI. Sin ella,
@@ -84,7 +84,7 @@ def test_the_readme_carries_the_privacy_policy():
         assert tema in readme, tema
 
 
-# ── Que la documentación no se contradiga a sí misma ───────────────────────
+# ── The documentation must not contradict itself ───────────────────────────
 def _docs() -> dict[str, str]:
     """Los documentos, con lo entrecomillado quitado.
 
