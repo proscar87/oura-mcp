@@ -212,3 +212,65 @@ def test_the_mcpb_carries_a_privacy_policy_url():
     """«Missing or incomplete privacy policies result in immediate rejection.»"""
     urls = _read_json("ts/manifest.json")["privacy_policies"]
     assert urls and all(u.startswith("https://") for u in urls)
+
+
+def test_the_sample_data_checkbox_warns_in_its_title():
+    """The sandbox default is ON, so someone who reads nothing gets Oura's
+    made-up numbers on their first question. That's only acceptable because
+    every response carries the `synthetic` key — see test_sandbox_marker.py.
+
+    The title is the one string a non-reader does see, so it has to carry the
+    warning by itself; the description below it is already optional reading.
+    """
+    cfg = _read_json("ts/manifest.json")["user_config"]["sandbox"]
+    assert cfg["default"] is True, \
+        "if the default changes, revisit whether a fresh install still works"
+    assert "NOT your own" in cfg["title"], cfg["title"]
+
+
+def test_both_languages_word_the_marker_the_same():
+    """Python and TypeScript are two implementations of one promise. A marker
+    that says different things depending on which one you installed is the same
+    drift the version test exists to catch, on the string that matters most."""
+    py = (ROOT / "src" / "oura_mcp" / "client.py").read_text(encoding="utf-8")
+    ts = (ROOT / "ts" / "src" / "client.ts").read_text(encoding="utf-8")
+    for fragment in ("SANDBOX MODE: this is Oura's sample data, not this person's",
+                     "sample-data setting and connect an Oura account"):
+        assert fragment in py, f"client.py: {fragment}"
+        assert fragment in ts, f"client.ts: {fragment}"
+
+
+def test_the_docs_only_cite_flags_the_cli_accepts():
+    """A command in a README is an instruction, and one that doesn't exist wastes
+    someone's afternoon before they conclude the package is broken.
+
+    The flags were renamed to English and the documents kept the old ones: twelve
+    commands across README, llms.txt and AGENTS.md that answered
+    `I don't know --revisar`. The rename was recorded for the tool parameters and
+    not for the CLI, so nothing caught it.
+
+    CHANGELOG.md is excluded on purpose: its 0.2.0 entry describes a release
+    whose flags really were Spanish. Rewriting history to satisfy a test would
+    make the changelog lie about what was shipped.
+    """
+    from oura_mcp.__main__ import ACTIONS, MODIFIERS
+    known = set(ACTIONS) | set(MODIFIERS)
+
+    for name in ("README.md", "llms.txt", "AGENTS.md"):
+        text = (ROOT / name).read_text(encoding="utf-8")
+        for flag in set(re.findall(r"(?<![\w-])--[a-z][a-z-]+", text)):
+            # Only flags applied to this CLI; the docs also quote npm, pip,
+            # docker and mcp-publisher, which have their own vocabularies.
+            if re.search(rf"oura[_-]mcp\b[^\n`]*{re.escape(flag)}", text) or \
+               re.search(rf"oura-mcp\b[^\n`]*{re.escape(flag)}", text):
+                assert flag in known, f"{name} cites {flag}, which the CLI rejects"
+
+
+def test_both_clis_accept_the_same_flags():
+    """Two implementations of one promise. A flag that works in the Python one
+    and not in the TypeScript one turns the documentation into a lie for
+    whichever half the person installed — and the `.mcpb` ships the TS one."""
+    from oura_mcp.__main__ import ACTIONS, MODIFIERS
+    ts = (ROOT / "ts" / "src" / "main.ts").read_text(encoding="utf-8")
+    declared = set(re.findall(r'"(--?[a-z][a-z-]*)"', ts))
+    assert set(ACTIONS) | set(MODIFIERS) == declared

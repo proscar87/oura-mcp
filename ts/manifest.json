@@ -59,8 +59,8 @@
   "user_config": {
     "sandbox": {
       "type": "boolean",
-      "title": "Use sample data",
-      "description": "Oura's official synthetic data. No account needed. Leave this on to see what the tools return; turn it off once you have set up a credential below.",
+      "title": "Use sample data — NOT your own",
+      "description": "Oura's official made-up data, for trying the server without an account. Every answer says it is sample data, so nothing here is about your sleep. Turn this off and connect your account to see your real numbers.",
       "default": true,
       "required": false
     },

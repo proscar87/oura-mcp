@@ -786,6 +786,58 @@ other three things it can't guess.
 
 ---
 
+## The default that answered a question nobody asked
+
+Oscar read the sample-data checkbox in the `.mcpb` and asked the right question:
+is that left on by default — what about someone who doesn't read?
+
+The checkbox turned out to be the smaller half. `oura_check` announced that
+sandbox data was synthetic; **the queries did not.** So a fresh install, in the
+default configuration, answered "how did I sleep?" with a score of 73 out of
+Oura's made-up data, and nothing in the response said whose data it was. A model
+has no way to know, and would report it as the person's own.
+
+That is this repository's thesis — an answer that looks right when it isn't —
+committed by us, against our own users, on the default path.
+
+**The fix is in band, not in the documentation.** Every sandbox response now
+carries a `synthetic` key naming what it is and what to do next. Documentation
+is where warnings go to be skipped; a key in the payload is where a model must
+read it.
+
+**The default stays on**, and now it's defensible. Turned off, a stranger with
+no registered Oura application gets an error on their first question instead of
+a working demonstration. Turned on and marked, the first question demonstrates
+the tools *and* names the next step. What changed is that "on" is now tied by
+test to the marker existing — `test_the_sample_data_checkbox_warns_in_its_title`
+fails if the default flips without someone revisiting this.
+
+### Two more found while fixing it
+
+**Declining the authorization prompt killed the server.** `cancel()` rejects a
+promise nobody awaits — the caller throws its own error instead — and Node treats
+an unhandled rejection as fatal. No assertion caught it; vitest reporting
+unhandled rejections as errors did. Saying "no thanks" should not take the
+process down.
+
+**Twelve dead commands in the documentation.** The CLI flags were translated with
+everything else — `--autorizar` → `--authorize`, `--revisar` → `--check`,
+`--olvidar` → `--forget` — and the README, `llms.txt`, `AGENTS.md` and a
+`package.json` script went on citing the old ones. The tool-parameter rename got
+recorded in the changelog; the flag rename didn't, so nothing was looking. Every
+flag quoted in the documentation is now checked against the list the CLI accepts,
+and the two CLIs are checked against each other.
+
+### What the build script was hiding
+
+`npm install --silent` swallowed a corrupted-cache error, so the build exited 1
+after printing "installing production dependencies" and nothing else. Same family
+as everything above. It now prints npm's own output and names the fix.
+
+And the bundle verification was too weak to catch any of this: it completed a
+handshake, which the unmarked build did perfectly. It now issues a real
+`tools/call` and fails if the sample data comes back unlabeled.
+
 ## State at the close
 
 **Done:** v0.2 (eight fixes), v0.3 (full OAuth2), v0.4 (Claude Code plugin,
