@@ -97,28 +97,28 @@ def main() -> int:
         check("las tres tienen título",
                 all(h.get("title") for h in tools))
 
-        r = c.pedir("tools/call", {"name": "oura_revisar", "arguments": {}})
+        r = c.pedir("tools/call", {"name": "oura_check", "arguments": {}})
         cuerpo = _contenido(r)
-        check("oura_revisar responde", cuerpo.get("mode") == "sandbox",
+        check("oura_check responde", cuerpo.get("mode") == "sandbox",
                 f"mode={cuerpo.get('mode')}, oura_responds={cuerpo.get('oura_responds')}")
 
-        r = c.pedir("tools/call", {"name": "oura_colecciones", "arguments": {}})
+        r = c.pedir("tools/call", {"name": "oura_collections", "arguments": {}})
         cuerpo = _contenido(r)
         check("el catálogo trae las 19", len(cuerpo) == 19, f"{len(cuerpo)} collections")
 
-        r = c.pedir("tools/call", {"name": "oura_consultar", "arguments": {
+        r = c.pedir("tools/call", {"name": "oura_query", "arguments": {
             "collection": "daily_sleep", "day": "2026-01-15"}})
         cuerpo = _contenido(r)
         check("una consulta de un solo día devuelve ese día",
                 cuerpo.get("n", 0) >= 1, f"n={cuerpo.get('n')}")
 
-        r = c.pedir("tools/call", {"name": "oura_consultar", "arguments": {
+        r = c.pedir("tools/call", {"name": "oura_query", "arguments": {
             "collection": "daily_sleep", "day": "2026-01-15", "format": "csv"}})
         cuerpo = _contenido(r)
         check("el CSV llega como texto", isinstance(cuerpo.get("data"), str),
                 f"columns={cuerpo.get('columns')}")
 
-        r = c.pedir("tools/call", {"name": "oura_consultar", "arguments": {
+        r = c.pedir("tools/call", {"name": "oura_query", "arguments": {
             "collection": "no_existe", "day": "2026-01-15"}})
         cuerpo = _contenido(r)
         check("una colección inventada devuelve error como DATO, no como excepción",

@@ -89,13 +89,13 @@ server = MCPServer(
 )
 
 
-@server.tool(title="Catálogo de collections de Oura",
-               annotations=ToolAnnotations(title="Catálogo de collections de Oura",
+@server.tool(title="Oura collection catalog",
+               annotations=ToolAnnotations(title="Oura collection catalog",
                                            **_SOLO_LECTURA))
-def oura_colecciones() -> dict:
-    """Las 19 collections de Oura, con qué trae cada una y qué parámetros pide.
+def oura_collections() -> dict:
+    """The 19 Oura collections, what each one carries and which parameters it takes.
 
-    Úsala antes de `oura_consultar` si no estás seguro del nombre exacto.
+    Use it before `oura_query` if you are unsure of the exact name.
     """
     return {n: {"shape": f, "que_trae": d} for n, (f, d) in COLLECTIONS.items()}
 
@@ -103,8 +103,8 @@ def oura_colecciones() -> dict:
 @server.tool(title="Query an Oura collection",
                annotations=ToolAnnotations(title="Query an Oura collection",
                                            **_SOLO_LECTURA))
-def oura_consultar(
-    collection: Annotated[str, Field(description="Nombre exacto. Ver `oura_colecciones`.")],
+def oura_query(
+    collection: Annotated[str, Field(description="Nombre exacto. Ver `oura_collections`.")],
     start: Annotated[str | None, Field(description="YYYY-MM-DD, or ISO 8601 with time")] = None,
     end: Annotated[str | None, Field(description="YYYY-MM-DD, or ISO 8601 with time")] = None,
     day: Annotated[str | None, Field(
@@ -162,7 +162,7 @@ def oura_consultar(
 @server.tool(title="Self-check of the Oura connection",
                annotations=ToolAnnotations(title="Self-check of the Oura connection",
                                            **_SOLO_LECTURA))
-def oura_revisar() -> dict:
+def oura_check() -> dict:
     """Autodiagnóstico: ¿hay token y responde Oura? Sin exponer nada.
 
     NO devuelve el token ni ningún valor de salud. Reporta la LONGITUD del token,
