@@ -1202,6 +1202,49 @@ models; the README is read by people deciding whether to install. Documenting a
 warning in only one means half the audience meets it for the first time in a
 live response.
 
+### Round 7: a green suite and a suite with teeth are different claims
+
+255 passing tests say the tests pass. They do not say the tests would **fail if
+the product broke**, and after six rounds of adding tests it was worth finding
+out which claim was actually true.
+
+So every core guarantee was broken on purpose — the reasons this package exists —
+and the suites were run against the sabotage. `tools/mutate.py` now does it on
+demand.
+
+Twelve of twelve held in Python. TypeScript had two that didn't:
+
+**`ignored_fields` never reached the response, and nothing noticed.** The helper
+`ignoredFields()` had its own test; the line attaching its result to the response
+had none. Deleting that line broke nothing. The function worked, the wiring was
+unguarded — and a warning that never arrives looks exactly like a query with
+nothing to warn about. Python had the end-to-end test. Same asymmetry that left
+`credentials.ts` with no tests at all.
+
+**A `Secret` has three ways out and only two were watched.** `toString` and
+`toJSON` were covered. `nodejs.util.inspect.custom` was not — and that is the one
+that fires on `console.log` and **inside a stack trace**, which is exactly how a
+token leaked in this project once. Both halves now check every route a string can
+take out of the object, including a formatted traceback.
+
+Along the way: the TypeScript `Secret` printed `<secreto de N characters>` —
+Spanglish, and different from Python's `<secret, N characters>`. That string
+shows up in logs and traces, which is where someone looks when a token is
+misbehaving, so the two halves of one product were describing it differently. And
+its public property was `largo`.
+
+### The non-finding that matters as much
+
+The run also reported a mutant that survives **correctly**: changing the file
+mode on `writeFile` in `credentials.ts` goes unnoticed because an explicit
+`chmod` after it makes that argument redundant. Removing both is caught.
+
+Defense in depth and a coverage hole look identical from outside the code. **A
+surviving mutant is a question, not a verdict** — which is why the tool prints
+"read the code before adding a test" rather than a score, and why chasing a
+number here would have produced a test asserting something already guaranteed
+twice.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

@@ -76,12 +76,12 @@ export class Secret {
     return this.#valor;
   }
 
-  get largo(): number {
+  get length(): number {
     return this.#valor.length;
   }
 
   toString(): string {
-    return `<secreto de ${this.#valor.length} characters>`;
+    return `<secret, ${this.#valor.length} characters>`;
   }
 
   toJSON(): string {
