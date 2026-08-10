@@ -352,11 +352,17 @@ def test_the_docs_do_not_name_response_keys_that_no_longer_exist():
     Pinned by name rather than inferred, because the docs legitimately quote
     Oura's own vocabulary (`next_token`, `start_date`) and a general rule would
     fire on those.
+
+    ASSERTING IS NOT QUOTING, again. ROADMAP.md and CHANGELOG.md record these
+    names precisely so nobody brings them back, and including them here made the
+    test fire on the explanation of its own rule — the third time that has
+    happened in this file. Only the documents that tell a reader what to expect
+    are checked.
     """
     retired = ("campos_ignorados", "ciclo_de_paginacion",
                "descartados_fuera_de_rango", "respuesta_grande",
                "continuar_desde", "columnas_desiguales")
-    for name in ("README.md", "llms.txt", "AGENTS.md", "ROADMAP.md"):
+    for name in ("README.md", "llms.txt", "AGENTS.md"):
         text = (ROOT / name).read_text(encoding="utf-8")
         for key in retired:
             assert f"`{key}`" not in text, f"{name} still documents `{key}`"
