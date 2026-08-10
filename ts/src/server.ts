@@ -128,7 +128,7 @@ export function createServer(): McpServer {
       day: z.string().optional().describe("Shorthand for a single day: equivalent to start=end=day."),
       start: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
       end: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
-      fields: z.array(z.string()).optional().describe(
+      fields: z.union([z.array(z.string()), z.string()]).optional().describe(
         "Only these fields. Oura trims on its side, so less comes down: " +
         "use it on long ranges. `day` and `id` always come back."),
       latest: z.boolean().optional().describe(
@@ -164,7 +164,10 @@ interface QueryArgs {
   day?: string;
   start?: string;
   end?: string;
-  fields?: string[];
+  // A list or a comma-separated string: models send "day,score" far more often
+  // than ["day","score"], and the validator error for that is a dump, not an
+  // answer. `asFields` normalizes it and the response says it happened.
+  fields?: string[] | string;
   latest?: boolean;
   format?: "json" | "csv";
 }

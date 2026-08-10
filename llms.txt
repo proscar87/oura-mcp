@@ -37,7 +37,10 @@ Parameter names match Oura's own API: `collection`, `day`, `start`, `end`,
   cursor parameter on purpose: a cursor makes pagination the model's job.
 - `pagination_cycle` — Oura repeated a token; what's there may be incomplete.
 - `ignored_fields` — you asked for fields Oura didn't apply.
-- `discarded_out_of_range` — records from the safety margin that were cut.
+- `discarded_out_of_range` — records from the ±2-day safety margin that were
+  cut. NORMAL, and it appears on almost every dated query: nothing you asked
+  for is missing.
+- `fields_split` — `fields` arrived as a comma-separated string and was split.
 - `uneven_columns` — in CSV, not every record has the same keys.
 - `rate_limited` — Oura refused with 429 and a retry recovered. The data is
   complete; the warning is about the NEXT query, which may fail.

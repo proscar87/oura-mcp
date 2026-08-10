@@ -968,6 +968,33 @@ Three vocabularies, three lessons, one shape: translating a codebase breaks
 references that no compiler checks, and each class of reference needs its own
 guard because none of them generalize.
 
+### Round 2: simulating the questions found two more
+
+Ran the three questions a person actually asks — worst night of the month,
+did I sleep better on training days, compare January against February — against
+the sandbox, and read what a model would receive.
+
+**`fields` as a comma-separated string was rejected with a validator dump.**
+Declared `list[str]`, a model sending the very natural `"day,score"` got:
+
+    Input should be a valid list [type=list_type, input_value='day,score']
+    For further information visit https://errors.pydantic.dev/2.13/v/list_type
+
+Technically correct, and a link to a library's website is not an answer — it is
+precisely the kind of response this package exists to stop shipping, on what is
+almost certainly the most common mistake anyone will make with this tool. Both
+implementations now accept either form. No Oura field name contains a comma, so
+splitting is unambiguous. The response says `fields_split` when it happened,
+because silently reinterpreting someone's input is the other half of the same
+sin.
+
+**`discarded_out_of_range` was a bare number that read as data loss.** It fires
+on essentially every dated query — two extra days are always requested on each
+side and always trimmed — so it reports the safety margin working, not a
+problem. `discarded_out_of_range: 3` invites "3 of your records were thrown
+away", which is the opposite of true, and a warning that fires every single time
+stops being read regardless. It is now a sentence that says it is normal.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

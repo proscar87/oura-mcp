@@ -339,6 +339,27 @@ export function toCsv(data: Row[]): { text: string; columns: string[]; uneven: b
  * applies the good one and drops the bad one without a word. In both cases the
  * asker believes they filtered and didn't.
  */
+export const FIELDS_NOTE =
+  "`fields` arrived as a comma-separated string and was split. Models send " +
+  "\"day,score\" far more often than [\"day\", \"score\"], and the raw schema " +
+  "error for that is a validator dump — the opposite of what this server is " +
+  "for. No Oura field name contains a comma, so splitting is unambiguous.";
+
+/**
+ * Accept a list OR a comma-separated string.
+ *
+ * THE MOST LIKELY MISTAKE ON THIS TOOL. Declared as `string[]`, a model sending
+ * `"day,score"` got a raw validator error pointing at a library's docs site —
+ * technically correct, and not an answer. No Oura field name contains a comma.
+ */
+export function asFields(fields: string[] | string | undefined): string[] | undefined {
+  if (fields === undefined) return undefined;
+  const list = typeof fields === "string"
+    ? fields.split(",").map((f) => f.trim()).filter(Boolean)
+    : [...fields];
+  return list.length ? list : undefined;
+}
+
 export function ignoredFields(fields: string[] | undefined, data: Row[]): string[] {
   if (!fields?.length || !data.length) return [];
   const present = new Set<string>();
@@ -443,15 +464,17 @@ async function whyEmpty(collection: string, start?: string, end?: string) {
 export interface Options {
   start?: string;
   end?: string;
-  fields?: string[];
+  fields?: string[] | string;
   latest?: boolean;
   format?: "json" | "csv";
   pageLimit?: number;
 }
 
 export async function fetchAll(collection: string, o: Options = {}): Promise<Row> {
-  const { start, end, fields, latest = false, format = "json",
+  const { start, end, fields: rawFields, latest = false, format = "json",
           pageLimit = PAGE_LIMIT } = o;
+  const wasString = typeof rawFields === "string";
+  const fields = asFields(rawFields);
   const f = shape(collection);
   const params = new URLSearchParams();
 
@@ -598,11 +621,20 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
         "absent field or a null value";
     }
   }
+  if (wasString) out["fields_split"] = FIELDS_NOTE;
   const ignored = ignoredFields(fields, data);
   if (ignored.length) out["ignored_fields"] = ignored;
   const warning = sizeWarning(data, fields);
   if (warning) out["large_response"] = warning;
-  if (trimmed.discarded) out["discarded_out_of_range"] = trimmed.discarded;
+  if (trimmed.discarded) {
+    // AS A BARE NUMBER IT READ AS DATA LOSS. It fires on essentially every dated
+    // query — two extra days are always requested on each side and always
+    // trimmed — so it reports the safety margin working, not a problem.
+    out["discarded_out_of_range"] =
+      `${trimmed.discarded} record(s) from the ±${EXTRA_DAYS}-day safety margin ` +
+      `were trimmed. This is normal and nothing you asked for is missing: the ` +
+      `margin exists because Oura's \`end_date\` is inconsistent across collections.`;
+  }
   if (!data.length) out["empty"] = await whyEmpty(collection, start, end);
   if (inSandbox()) {
     // EVERY sandbox response says so. `oura_check` said it and the queries did

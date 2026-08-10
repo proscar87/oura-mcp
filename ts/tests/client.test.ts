@@ -113,7 +113,11 @@ describe("date range", () => {
       .map((day) => ({ day }))]);
     const r = await fetchAll("daily_sleep", { start: "2026-08-09", end: "2026-08-11" });
     expect(r["n"]).toBe(3);
-    expect(r["discarded_out_of_range"]).toBe(2);
+    // A SENTENCE, NOT A BARE NUMBER. This fires on essentially every dated
+    // query, and `discarded_out_of_range: 2` reads as "2 of your records were
+    // thrown away", the opposite of true.
+    expect(String(r["discarded_out_of_range"])).toContain("2 record");
+    expect(String(r["discarded_out_of_range"])).toContain("normal");
   });
 
   it("a single day returns that day", async () => {
@@ -459,5 +463,29 @@ describe("rate limiting", () => {
     fakeOura([[{ day: "2026-01-01" }]]);
     const r = await fetchAll("daily_sleep", { start: "2026-01-01", end: "2026-01-02" });
     expect(r["rate_limited"]).toBeUndefined();
+  });
+});
+
+// ── The most likely mistake on this tool ───────────────────────────────────
+describe("fields as a string", () => {
+  it("splits a comma-separated string and says it did", async () => {
+    // Declared as string[], a model sending "day,score" got a raw validator
+    // dump pointing at a library's documentation site. Technically correct, and
+    // not an answer — exactly what this package exists to stop shipping.
+    const urls: string[] = [];
+    fakeOura([[{ day: "2026-01-01", score: 70 }]], urls);
+    const r = await fetchAll("daily_sleep",
+      { start: "2026-01-01", end: "2026-01-02", fields: "day, score" });
+
+    expect(urls[0]).toContain("fields=day%2Cscore");
+    expect(r["ignored_fields"]).toBeUndefined();  // splitting invents nothing
+    expect(r["fields_split"]).toBeDefined();      // reinterpreting is announced
+  });
+
+  it("says nothing when the caller sent a proper list", async () => {
+    fakeOura([[{ day: "2026-01-01", score: 70 }]]);
+    const r = await fetchAll("daily_sleep",
+      { start: "2026-01-01", end: "2026-01-02", fields: ["day", "score"] });
+    expect(r["fields_split"]).toBeUndefined();
   });
 });
