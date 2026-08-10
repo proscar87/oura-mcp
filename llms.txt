@@ -19,11 +19,11 @@ correct response.
 
 ## Tools
 
-- `oura_colecciones` — all 19, what each carries and which parameters it takes.
-- `oura_consultar` — one collection in full over a range, paginating to the end.
+- `oura_collections` — all 19, what each carries and which parameters it takes.
+- `oura_query` — one collection in full over a range, paginating to the end.
   Parameters: coleccion, dia, inicio, fin, campos, ultimo, formato.
   The range is INCLUSIVE on both ends.
-- `oura_revisar` — self-check: auth mode, granted scopes, expiry. Returns
+- `oura_check` — self-check: auth mode, granted scopes, expiry. Returns
   neither the token nor any health value.
 
 All three are read-only. There is no POST, PUT or DELETE in the package.

@@ -163,9 +163,9 @@ mistakes when configuring an MCP server.
 
 | | |
 |---|---|
-| `oura_colecciones` | All 19, what each one carries and which parameters it takes |
-| `oura_consultar` | One collection in full over a range, paginating to the end |
-| `oura_revisar` | Self-check that exposes nothing |
+| `oura_collections` | All 19, what each one carries and which parameters it takes |
+| `oura_query` | One collection in full over a range, paginating to the end |
+| `oura_check` | Self-check that exposes nothing |
 
 **Three, not nineteen.** A server with one tool per collection forces the model
 to pick among 19 similar names before knowing what any of them contain. Here the
@@ -175,7 +175,7 @@ All three declare themselves read-only, and that isn't a promise: there is no
 `POST`, `PUT` or `DELETE` anywhere in the package, and a test reads the source to
 keep it that way.
 
-### `oura_consultar` parameters
+### `oura_query` parameters
 
 | | |
 |---|---|
@@ -275,7 +275,7 @@ policy](https://ouraring.com/privacy-policy), not by this one.
 `oura-mcp --olvidar`, or by removing the file. Health data isn't retained at all
 — it lives in the response and that's it.
 
-**Diagnostics expose nothing.** `oura_revisar` reports the token's length, never
+**Diagnostics expose nothing.** `oura_check` reports the token's length, never
 the token; the profile's field names, never their values. The token is wrapped
 in a type that won't print even in a stack trace.
 

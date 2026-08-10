@@ -491,8 +491,8 @@ def test_un_cuerpo_de_error_ilegible_no_tumba_nada(monkeypatch):
 # ── `day`: que la consulta más común no obligue a escribir un rango ─────────
 def test_dia_equivale_a_inicio_igual_a_fin(monkeypatch):
     _oura_falso([[{"day": "2026-08-09"}, {"day": "2026-08-10"}]], monkeypatch)
-    from oura_mcp.server import oura_consultar
-    f = getattr(oura_consultar, "fn", oura_consultar)
+    from oura_mcp.server import oura_query
+    f = getattr(oura_query, "fn", oura_query)
     r = f(collection="workout", day="2026-08-10")
     assert r["n"] == 1 and r["data"][0]["day"] == "2026-08-10"
 
@@ -501,8 +501,8 @@ def test_dia_y_rango_juntos_es_un_error(monkeypatch):
     """Mezclar los dos no tiene una interpretación obvia, y elegir una en
     silencio es cómo se cuelan los rangos equivocados."""
     _oura_falso([[{}]], monkeypatch)
-    from oura_mcp.server import oura_consultar
-    f = getattr(oura_consultar, "fn", oura_consultar)
+    from oura_mcp.server import oura_query
+    f = getattr(oura_query, "fn", oura_query)
     assert "not both" in f(collection="workout", day="2026-08-10",
                            start="2026-08-01")["error"]
 
