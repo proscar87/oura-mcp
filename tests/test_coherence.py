@@ -461,3 +461,20 @@ def test_no_tool_returns_a_key_in_spanish():
                      "modo", "responde"):
             assert f'"{dead}"' not in text, f"{f} returns `{dead}`"
             assert f"{dead}:" not in text, f"{f} returns `{dead}`"
+
+
+def test_the_readme_documents_every_warning_key():
+    """Three keys were added by the audit — `synthetic`, `rate_limited`,
+    `fields_split` — and llms.txt got all three while the README got none.
+
+    llms.txt is read by models; the README is read by people deciding whether to
+    install. Documenting a warning in only one of them means half the audience
+    meets it for the first time in a live response.
+
+    `data` and `columns` are excluded: they are payload, not warnings.
+    """
+    payload = {"data", "columns", "collection", "n", "pages", "format"}
+    emitted = _emitted_keys() - payload
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    missing = [k for k in sorted(emitted) if f"`{k}`" not in readme]
+    assert not missing, f"README documents no warning called: {missing}"

@@ -237,6 +237,20 @@ repeats a token, `ignored_fields`, `discarded_out_of_range`,
 `uneven_columns`, `empty` when a query comes back empty, and
 `large_response` when what's returned is heavy enough to matter.
 
+Three more say something happened that you'd otherwise never learn:
+
+- **`synthetic`** — this is Oura's sample data, not yours. It rides on every
+  response in sample mode, which is how the extension ships, so a model can't
+  report made-up numbers as your sleep.
+- **`rate_limited`** — Oura refused with a 429 and a retry got through. **The
+  data is complete**; the warning is about the *next* query. Oura sends no
+  rate-limit headers on successful responses, so being refused is the only
+  signal there is that you're near the ceiling.
+- **`fields_split`** — `fields` arrived as `"day,score"` instead of
+  `["day","score"]` and was split. No Oura field name contains a comma, so
+  splitting is unambiguous — but reinterpreting your input silently would be the
+  same sin this whole package is about.
+
 That last one comes from measuring: **30 days of `daily_activity` is 252,000
 characters**, and 87% of it is a single field, `met`, a per-minute MET series.
 Asking for three columns with `fields` brings those same 30 days down to 5,000
