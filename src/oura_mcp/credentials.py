@@ -54,8 +54,13 @@ SCOPES = ("email", "personal", "daily", "heartrate", "workout", "tag",
 # will arrive late.
 EXPIRY_MARGIN = 60
 
-_SERVICIO_LLAVERO = "oura-mcp"
-_CUENTA_LLAVERO = "credenciales"
+_KEYCHAIN_SERVICE = "oura-mcp"
+# THE VALUE STAYS IN SPANISH ON PURPOSE. It is a storage key, not a message:
+# anyone who authorized before the translation has their refresh token filed
+# under this exact string, and renaming it would orphan those credentials
+# silently — `load()` would find nothing and ask them to authorize again with
+# no explanation, while the old secret stayed in their keychain forever.
+_KEYCHAIN_ACCOUNT = "credenciales"
 
 
 def credentials_path() -> str:
@@ -141,7 +146,7 @@ def save(cred: Credentials) -> str:
     kr = _keyring()
     if kr is not None:
         try:
-            kr.set_password(_SERVICIO_LLAVERO, _CUENTA_LLAVERO, payload)
+            kr.set_password(_KEYCHAIN_SERVICE, _KEYCHAIN_ACCOUNT, payload)
             # Si antes hubo file, se borra: `load()` prefiere el llavero,
             # so that file would never be read again — a dead refresh token
             # token muerto en disco para siempre. Un secreto que nadie usa sigue
@@ -176,7 +181,7 @@ def load() -> Credentials | None:
     kr = _keyring()
     if kr is not None:
         try:
-            crudo = kr.get_password(_SERVICIO_LLAVERO, _CUENTA_LLAVERO)
+            crudo = kr.get_password(_KEYCHAIN_SERVICE, _KEYCHAIN_ACCOUNT)
             if crudo:
                 return Credentials.from_json(json.loads(crudo))
         except Exception:
@@ -200,7 +205,7 @@ def forget() -> None:
     kr = _keyring()
     if kr is not None:
         try:
-            kr.delete_password(_SERVICIO_LLAVERO, _CUENTA_LLAVERO)
+            kr.delete_password(_KEYCHAIN_SERVICE, _KEYCHAIN_ACCOUNT)
         except Exception:
             pass
     try:
@@ -234,7 +239,7 @@ def _post(data: dict) -> dict:
             pass
         raise OuraError(f"Oura rejected the exchange ({e.code}){detalle}") from None
     except urllib.error.URLError as e:
-        raise OuraError(f"no se pudo alcanzar Oura: {e.reason}") from None
+        raise OuraError(f"could not reach Oura: {e.reason}") from None
 
 
 def _from_response(r: dict, alcances_previos: tuple[str, ...] = ()) -> Credentials:

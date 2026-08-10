@@ -6,14 +6,14 @@
   },
   "metadata": {
     "description": "MCP server for the Oura ring",
-    "version": "0.3.1"
+    "version": "0.3.2"
   },
   "plugins": [
     {
       "name": "oura",
       "source": "./",
       "description": "Oura's 19 collections over MCP. Paginates to the end, fixes the date range, and warns when it under-delivers.",
-      "version": "0.3.1",
+      "version": "0.3.2",
       "author": {
         "name": "Oscar Pacheco"
       },

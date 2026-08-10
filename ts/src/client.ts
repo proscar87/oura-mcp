@@ -192,7 +192,7 @@ export async function token(): Promise<Secret> {
     try {
       t = (await readFile(path.replace(/^~/, homedir()), "utf8")).trim();
     } catch (e) {
-      throw new OuraError(`no se pudo leer OURA_PAT_FILE: ${(e as Error).message}`);
+      throw new OuraError(`could not read OURA_PAT_FILE: ${(e as Error).message}`);
     }
     if (!t) throw new OuraError(`OURA_PAT_FILE points at an empty file: ${path}`);
     return new Secret(t);
@@ -294,7 +294,7 @@ export async function request(url: string, tok: Secret,
         signal: AbortSignal.timeout(TIMEOUT),
       });
     } catch (e) {
-      throw new OuraError(`no se pudo alcanzar Oura: ${(e as Error).message}`);
+      throw new OuraError(`could not reach Oura: ${(e as Error).message}`);
     }
     if (r.ok) return (await r.json()) as Record<string, unknown>;
 
