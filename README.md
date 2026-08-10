@@ -1,5 +1,13 @@
 # oura-mcp
 
+[![PyPI](https://img.shields.io/pypi/v/mcp-oura?label=PyPI)](https://pypi.org/project/mcp-oura/)
+[![Glama score](https://glama.ai/mcp/servers/proscar87/oura-mcp/badges/score.svg)](https://glama.ai/mcp/servers/proscar87/oura-mcp)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+
+<!-- The Glama badge is live, not a screenshot: it renders whatever that
+     independent index scores this server at today. A badge that can only go up
+     is decoration; one that can drop is evidence. -->
+
 The [Oura](https://ouraring.com) v2 API as an [MCP](https://modelcontextprotocol.io)
 server. All 19 collections, three tools, no dependencies beyond the MCP SDK.
 
