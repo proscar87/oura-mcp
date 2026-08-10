@@ -82,6 +82,8 @@ TYPESCRIPT = [
     ("Secret survives node's inspect", "ts/src/client.ts",
      [('[Symbol.for("nodejs.util.inspect.custom")](): string {\n    return this.toString();',
        '[Symbol.for("nodejs.util.inspect.custom")](): string {\n    return this.#valor;')]),
+    ("CSV quotes what would shift a column", "ts/src/client.ts",
+     [("""/[",\\n\\r]/.test(s)""", "/never-matches/.test(s)")]),
     ("the credentials file leaves no debris", "ts/src/credentials.ts",
      [("await rm(tmp, { force: true });", "")]),
 ]

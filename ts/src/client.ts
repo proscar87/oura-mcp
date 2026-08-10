@@ -343,7 +343,13 @@ export function toCsv(data: Row[]): { text: string; columns: string[]; uneven: b
   const columns = [...front, ...[...keys].filter((k) => !front.includes(k)).sort()];
   const uneven = data.some((r) => Object.keys(r).length !== keys.size);
 
-  const escapeCell = (s: string) => (/[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+  // `\r` IS IN THIS SET, and was not. A lone carriage return — no newline after
+  // it — went out unquoted, while Python quoted it, because Python's csv module
+  // treats `\r` as part of a line terminator and this regex did not. Plenty of
+  // readers, Excel among them, end a row on a bare `\r`: the row splits there
+  // and every column after it shifts, so a number arrives under the name of the
+  // field before it. Rare, silent, and wrong in the worst way.
+  const escapeCell = (s: string) => (/[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
   const rows = [columns.map(escapeCell).join(",")];
   for (const r of data) rows.push(columns.map((c) => escapeCell(cell(r[c]))).join(","));
   return { text: rows.join("\n") + "\n", columns, uneven };

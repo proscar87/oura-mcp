@@ -965,3 +965,49 @@ def test_the_secret_stays_hidden_through_every_escape_route():
 
     # And still retrievable on purpose, which is the whole point.
     assert s.reveal() == "TOKEN-QUE-NO-DEBE-SALIR"
+
+
+# ── CSV with values that shift columns ─────────────────────────────────────
+# `tag` and `enhanced_tag` carry `comment`: text the person typed. Commas,
+# quotes and newlines are not edge cases there, they are Tuesday. A CSV that
+# escapes them wrong doesn't fail — it shifts every column to the right, and the
+# numbers that come out are someone else's field read under this one's name.
+@pytest.mark.parametrize("nombre,valor", [
+    ("a comma", "ran 5k, felt great"),
+    ("quotes", 'they said "excellent"'),
+    ("a newline", "line1\nline2"),
+    ("CRLF", "a\r\nb"),
+    ("a lone quote", '"'),
+    ("a semicolon and tab", "a;b\tc"),
+    # A LONE CARRIAGE RETURN. Python quotes it because its csv module counts
+    # `\r` as part of a line terminator; the TypeScript half did not, and a
+    # reader that ends a row on a bare `\r` split the row and shifted every
+    # later column. Pinned on both sides now.
+    ("a lone carriage return", "a\rb"),
+])
+def test_csv_survives_free_text_and_reads_back_identical(nombre, valor):
+    import csv as _csv
+    import io as _io
+
+    data = [{"day": "2026-01-01", "comment": valor, "score": 73}]
+    texto, columnas, _ = client.to_csv(data)
+
+    filas = list(_csv.DictReader(_io.StringIO(texto)))
+    assert len(filas) == 1, f"{nombre}: the row count changed"
+    assert set(filas[0]) == set(columnas), f"{nombre}: the columns shifted"
+    assert filas[0]["comment"] == valor, f"{nombre}: the value came back changed"
+    assert filas[0]["score"] == "73", f"{nombre}: a NUMBER moved column"
+
+
+def test_csv_keeps_nested_structures_in_one_cell():
+    """`contributors` is a dict and `hr_5min` a list. Flattening them would
+    invent columns that differ per record; leaving them as JSON in one cell
+    keeps the table rectangular and the data recoverable."""
+    import csv as _csv
+    import io as _io
+
+    data = [{"day": "2026-01-01", "contributors": {"deep": 90, "rem": 70}}]
+    texto, columnas, _ = client.to_csv(data)
+    fila = list(_csv.DictReader(_io.StringIO(texto)))[0]
+    assert set(fila) == set(columnas)
+    assert json.loads(fila["contributors"]) == {"deep": 90, "rem": 70}
