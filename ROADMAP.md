@@ -1281,6 +1281,46 @@ stays in its own column — which is the thing that actually harms someone.
 
 And the CSV escaping is in `tools/mutate.py` now, because it earned its place.
 
+### Round 9: the table that answered the question, at the one moment nobody asked it
+
+`SCOPE_OF` exists in this package for exactly one purpose, stated in its own
+docstring: telling *«there is no data»* apart from *«you didn't grant that
+permission»*. The two look identical from outside — both arrive as nothing — and
+they lead to opposite conclusions.
+
+The empty path consulted it. **The 403 path did not**, and a 403 is Oura
+*answering that question out loud*. It replied:
+
+    Oura responded 403: Forbidden
+
+The status code, restated. Someone asking for their workouts with a credential
+that lacks the `workout` scope got a number and a word, and no way to tell that
+from an outage or a bad date.
+
+Now:
+
+> Oura refused `workout` with 403. This collection needs the `workout` scope and
+> your credentials don't have it (you granted: daily). Run `oura-mcp --authorize`
+> again and approve it.
+
+With a personal token the granted list isn't readable, so it says which scope the
+collection needs and stops short of claiming what was granted. Saying nothing
+beats guessing at somebody's permissions.
+
+A 401 deliberately still talks about the token and never about scopes: expired
+and unauthorized are different problems with different fixes, and blurring them
+sends someone to re-approve permissions they already have. Both implementations
+now say *«Did the credential expire?»* — they had drifted to different wordings
+of the same sentence.
+
+### Checking a check
+
+The TypeScript test for that last point is a **negative** assertion —
+`rejects.not.toThrow(/scope/)` — and negative assertions are the easiest kind to
+write in a form that can never fail. So it was verified the same way everything
+else has been this week: the word `scope` was inserted into the 401 message on
+purpose, and the test caught it.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

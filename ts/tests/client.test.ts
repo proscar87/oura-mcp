@@ -629,3 +629,32 @@ describe("CSV and free text", () => {
     expect(JSON.parse(rows[1][columns.indexOf("contributors")])).toEqual({ deep: 90 });
   });
 });
+
+// ── 403: Oura answering «did you grant that permission?» ───────────────────
+describe("a refused scope", () => {
+  it("names the scope instead of restating the status", async () => {
+    // It used to answer `Oura responded 403: Forbidden`. SCOPE_OF exists in this
+    // package for exactly one purpose — telling «there is no data» apart from
+    // «you didn't grant that permission» — and a 403 is Oura ANSWERING that
+    // question. It was the one moment the table went unconsulted.
+    process.env.OURA_PAT = "token-de-prueba";
+    vi.stubGlobal("fetch", async () =>
+      new Response(JSON.stringify({ detail: "Forbidden" }), { status: 403 }));
+
+    await expect(fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" }))
+      .rejects.toThrow(/`workout` scope/);
+    await expect(fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" }))
+      .rejects.toThrow(/not that there is no data/);
+  });
+
+  it("leaves a 401 talking about the token, not about scopes", async () => {
+    // Expired and unauthorized are different problems with different fixes.
+    // Blurring them sends someone to re-approve permissions they already have.
+    process.env.OURA_PAT = "token-de-prueba";
+    vi.stubGlobal("fetch", async () => new Response("{}", { status: 401 }));
+    await expect(fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" }))
+      .rejects.toThrow(/401/);
+    await expect(fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" }))
+      .rejects.not.toThrow(/scope/);
+  });
+});

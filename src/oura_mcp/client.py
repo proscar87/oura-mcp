@@ -33,7 +33,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from .collections import BASE, WITH_DATE, WITH_LATEST, WITHOUT_SANDBOX, shape
+from .collections import (BASE, SCOPE_OF, WITH_DATE, WITH_LATEST,
+                          WITHOUT_SANDBOX, shape)
 
 TIMEOUT = 30
 PAGE_LIMIT = 50          # ~50k records; more than that is a usage error
@@ -278,7 +279,7 @@ def _request(url: str, token: Secret, retries: int = RETRIES_429,
                 continue
             detail = _detail_of(e)
             if e.code == 401:
-                raise OuraError("Oura rejected the token (401). Did it expire?") from None
+                raise OuraError("Oura rejected the token (401). Did the credential expire?") from None
             if e.code == 429:
                 raise OuraError(
                     f"Oura is rate limiting (429) and kept doing so after "
@@ -392,6 +393,39 @@ def _cell(v) -> str:
     return str(v)
 
 
+def _missing_scope(collection: str) -> str | None:
+    """The sentence to say when this collection needs a scope you didn't grant.
+
+    Extracted so the 403 path can use the same knowledge the empty path already
+    had. `SCOPE_OF` exists precisely to tell "there is no data" apart from "you
+    didn't grant that permission" — and a 403 is Oura ANSWERING that question,
+    which was the one moment the table wasn't consulted. It replied
+    `Oura responded 403: Forbidden`: the status code, restated.
+
+    Returns None when it cannot know: the sandbox grants everything, and a
+    personal token carries no readable scope list. Saying nothing beats guessing
+    at somebody's permissions.
+    """
+    from .collections import SCOPE_OF
+
+    scope = SCOPE_OF.get(collection)
+    if not scope or in_sandbox():
+        return None
+    if os.environ.get("OURA_PAT") or os.environ.get("OURA_PAT_FILE"):
+        return None
+    try:
+        from .credentials import load
+        cred = load()
+    except OuraError:
+        return None
+    if cred and scope not in cred.scopes:
+        granted = ", ".join(cred.scopes) or "none"
+        return (f"this collection needs the `{scope}` scope and your credentials "
+                f"don't have it (you granted: {granted}). Run "
+                f"`oura-mcp --authorize` again and approve it.")
+    return None
+
+
 def _why_empty(collection: str, start: str | None, end: str | None) -> dict:
     """What is known when the query comes back with nothing.
 
@@ -420,18 +454,9 @@ def _why_empty(collection: str, start: str | None, end: str | None) -> dict:
                 "ring syncs with the app; the current day is usually missing or "
                 "incomplete")
 
-    scope = SCOPE_OF.get(collection)
-    if scope and not (in_sandbox() or os.environ.get("OURA_PAT")
-                      or os.environ.get("OURA_PAT_FILE")):
-        try:
-            from .credentials import load
-            cred = load()
-        except OuraError:
-            cred = None
-        if cred and scope not in cred.scopes:
-            reasons.append(
-                f"this collection needs the `{scope}` scope and your credentials "
-                f"don't have it: run `oura-mcp --authorize` again and grant it")
+    missing = _missing_scope(collection)
+    if missing:
+        reasons.append(missing)
 
     return {
         "no_data": "the query succeeded; Oura has no records in that range",
@@ -651,7 +676,23 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
         if next_token:
             q["next_token"] = next_token
         url = f"{root}/{collection}" + (f"?{urllib.parse.urlencode(q)}" if q else "")
-        body = _request(url, token, waits=waits)
+        try:
+            body = _request(url, token, waits=waits)
+        except OuraError as e:
+            # A 403 IS OURA ANSWERING «did you grant that permission?», and the
+            # reply used to be the status code restated. `SCOPE_OF` has known
+            # the answer all along; it just wasn't consulted at the one moment
+            # somebody was asking.
+            if "403" in str(e):
+                hint = _missing_scope(collection)
+                if hint:
+                    raise OuraError(
+                        f"Oura refused `{collection}` with 403. {hint}") from None
+                raise OuraError(
+                    f"Oura refused `{collection}` with 403. That usually means "
+                    f"the credential lacks the `{SCOPE_OF.get(collection, '?')}` "
+                    f"scope for it — not that there is no data.") from None
+            raise
         pages += 1
 
         # `personal_info` and `ring_configuration` don't come wrapped in `data`:
