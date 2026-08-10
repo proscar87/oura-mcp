@@ -315,7 +315,7 @@ export async function check(): Promise<Record<string, unknown>> {
   }
   const out: Record<string, unknown> = {
     token_present: true,
-    token_length: t.largo,
+    token_length: t.length,
     mode: authMode(),
     ...(await oauthState()),
   };

@@ -7,6 +7,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { inspect } from "node:util";
 
 import {
   OuraError, Secret, toCsv, sizeWarning, ignoredFields, shiftDays, dayOf,
@@ -522,5 +523,48 @@ describe("whole-day widening", () => {
     await fetchAll("daily_sleep", { start: "2026-01-05", end: "2026-01-06" });
     expect(urls[0]).toContain("start_date=2026-01-03");
     expect(urls[0]).not.toContain("T00");
+  });
+});
+
+// ── What the mutation run exposed ──────────────────────────────────────────
+describe("warnings actually reach the response", () => {
+  it("puts ignored_fields in the response, not just in the helper", async () => {
+    // `ignoredFields()` was tested as a function and NOTHING checked that its
+    // result reached the caller. Deleting the line that attaches it to the
+    // response broke no test at all — the helper worked, the wiring was
+    // unguarded, and a warning that never arrives looks exactly like a query
+    // with nothing to warn about.
+    //
+    // Found by breaking it on purpose. Python had the end-to-end test; this is
+    // the same asymmetry that left credentials.ts untested.
+    fakeOura([[{ day: "2026-01-01", score: 70 }]]);
+    const r = await fetchAll("daily_sleep", {
+      start: "2026-01-01", end: "2026-01-02", fields: ["score", "no_existe"] });
+    expect(r["ignored_fields"]).toEqual(["no_existe"]);
+  });
+
+  it("describes a secret exactly the way Python does", () => {
+    // It read `<secreto de N characters>` — Spanglish, and different from the
+    // Python `<secret, N characters>`. This string surfaces in stack traces and
+    // logs, which is where someone looks when a token is misbehaving, so the
+    // two halves of one product must not describe it differently.
+    expect(String(new Secret("abcdefghij"))).toBe("<secret, 10 characters>");
+    expect(new Secret("abcdefghij").length).toBe(10);
+  });
+
+  it("stays hidden through every escape route a token has", () => {
+    // THREE WAYS OUT, and only two were covered. `toString` and `toJSON` had
+    // tests; `nodejs.util.inspect.custom` did not — and that is the one that
+    // fires on `console.log(secret)` and inside stack traces, which is exactly
+    // the scenario this class exists for. A token has already leaked here once,
+    // through a traceback.
+    const s = new Secret("TOKEN-QUE-NO-DEBE-SALIR");
+    expect(String(s)).not.toContain("TOKEN-QUE-NO-DEBE-SALIR");
+    expect(JSON.stringify({ s })).not.toContain("TOKEN-QUE-NO-DEBE-SALIR");
+    expect(inspect(s)).not.toContain("TOKEN-QUE-NO-DEBE-SALIR");
+    expect(inspect({ deep: { s } }, { depth: 5 }))
+      .not.toContain("TOKEN-QUE-NO-DEBE-SALIR");
+    // And it is still retrievable on purpose.
+    expect(s.reveal()).toBe("TOKEN-QUE-NO-DEBE-SALIR");
   });
 });

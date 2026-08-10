@@ -935,3 +935,33 @@ def test_date_collections_are_untouched_by_the_widening(monkeypatch):
     client.fetch("daily_sleep", "2026-01-05", "2026-01-06")
     assert "start_date=2026-01-03" in llamadas[0]
     assert "T00" not in llamadas[0]
+
+
+def test_the_secret_stays_hidden_through_every_escape_route():
+    """A token has already leaked here once, through a traceback.
+
+    The lesson wasn't «be more careful» — care can't be sustained by hand. So
+    every route a string can take out of a Python object is checked, not just
+    `repr`: the TypeScript half had three escape routes and only two were
+    covered, and the uncovered one was `nodejs.util.inspect.custom`, which is
+    exactly the one that fires in a stack trace.
+    """
+    import json
+    import traceback
+
+    s = client.Secret("TOKEN-QUE-NO-DEBE-SALIR")
+    for salida in (repr(s), str(s), f"{s}", "%s" % s, "{}".format(s)):
+        assert "NO-DEBE-SALIR" not in salida, salida
+
+    # `json` must refuse rather than invent a serialization.
+    with pytest.raises(TypeError):
+        json.dumps({"s": s})
+
+    # The scar itself: an exception carrying it, formatted.
+    try:
+        raise ValueError(f"algo con {s}")
+    except ValueError:
+        assert "NO-DEBE-SALIR" not in traceback.format_exc()
+
+    # And still retrievable on purpose, which is the whole point.
+    assert s.reveal() == "TOKEN-QUE-NO-DEBE-SALIR"
