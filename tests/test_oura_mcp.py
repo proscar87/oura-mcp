@@ -1,11 +1,11 @@
-"""Pruebas de oura-mcp.
+"""oura-mcp tests.
 
-NO TOCAN LA RED. La API de Oura se sustituye por una falsa que sirve páginas, lo
-que permite probar la única cosa que de verdad importa aquí —la paginación—
-contra un caso que en la vida real requeriría un mes de data.
+THEY NEVER TOUCH THE NETWORK. Oura's API is replaced by a fake one that serves
+pages, which allows testing the one thing that genuinely matters here — the
+pagination — against a case that in real life would need a month of data.
 
-Un CI que necesita el token de alguien para pasar no es un CI: es una dependencia
-de esa persona.
+A CI that needs someone's token to pass is not a CI: it is a dependency on that
+person.
 """
 
 import email.message
@@ -46,7 +46,7 @@ class _RespuestaFalsa(io.BytesIO):
         return False
 
 
-def _oura_falso(pages, monkeypatch, registrar=None):
+def _fake_oura(pages, monkeypatch, registrar=None):
     """Replaces the API with one serving `pages`, each with its own next_token."""
     llamadas = []
 
@@ -68,13 +68,11 @@ def _oura_falso(pages, monkeypatch, registrar=None):
 
 
 def test_follows_next_token_to_the_end(monkeypatch):
-    """LA CICATRIZ QUE JUSTIFICA EL PAQUETE. Oura entrega `next_token` y quien no
-    lo persigue recibe la primera página sin que nada se lo diga: la respuesta es
-    un JSON válido, con data reales, que se ve completo.
-
-    De siete servidores MCP de Oura publicados, el más completo no pagina."""
+    """THE SCAR THAT JUSTIFIES THE PACKAGE. Oura returns `next_token` and whoever
+    does not chase it receives the first page with nothing saying so: the
+    response is valid JSON, with real data, that looks complete."""
     pages = [[{"i": n} for n in range(100)] for _ in range(5)]
-    _oura_falso(pages, monkeypatch)
+    _fake_oura(pages, monkeypatch)
     r = client.fetch("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z")
     assert r["n"] == 500
     assert r["pages"] == 5
@@ -85,7 +83,7 @@ def test_says_so_when_truncating(monkeypatch):
     """An incomplete result that doesn't declare itself incomplete is worse than an
     error: it looks exactly like a complete one."""
     pages = [[{"i": n}] for n in range(20)]
-    _oura_falso(pages, monkeypatch)
+    _fake_oura(pages, monkeypatch)
     r = client.fetch("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z",
                         page_limit=3)
     assert r["pages"] == 3
@@ -93,24 +91,24 @@ def test_says_so_when_truncating(monkeypatch):
 
 
 def test_a_single_page_asks_for_no_more(monkeypatch):
-    llamadas = _oura_falso([[{"i": 1}]], monkeypatch)
+    llamadas = _fake_oura([[{"i": 1}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-01", "2026-08-02")
     assert r["n"] == 1 and r["pages"] == 1
     assert len(llamadas) == 1
 
 
 # ── The date range: the second scar ────────────────────────────────────────
-# Medido contra la API de verdad el 9-ago-2026. `end_date` es INCONSISTENTE
-# entre collections —daily_activity, sleep y workout pierden el último día
-# pedido; las demás no— y encima `workout` se filtra por la fecha UTC mientras
-# reporta `day` en hora local, así que con -06:00 un entrenamiento de la tarde
-# se contaba en el día siguiente. Pedir [d..d] devolvía CERO registros sin un
-# solo aviso: la misma familia de falla que no paginar.
+# Measured against the real API on 2026-08-09. `end_date` is INCONSISTENT across
+# collections — daily_activity, sleep and workout lose the last day requested;
+# the others do not — and on top of that `workout` filters by UTC date while
+# reporting `day` in local time, so at -06:00 an evening workout counted on the
+# following day. Asking for [d..d] returned ZERO records with no warning at all:
+# the same family of failure as not paginating.
 def test_requests_two_extra_days_on_each_side(monkeypatch):
     """Not a courtesy margin: `workout` is exclusive AND skewed to UTC, and the two
     stack. One day was not enough."""
     urls = []
-    _oura_falso([[{}]], monkeypatch, registrar=urls)
+    _fake_oura([[{}]], monkeypatch, registrar=urls)
     client.fetch("daily_sleep", "2026-08-10", "2026-08-20")
     assert "start_date=2026-08-08" in urls[-1]
     assert "end_date=2026-08-22" in urls[-1]
@@ -120,7 +118,7 @@ def test_the_datetime_range_is_not_widened(monkeypatch):
     """`heartrate` is requested with a time. Shifting it two days would ask for a
     thousand times more samples than needed to fix a problem it doesn't have."""
     urls = []
-    _oura_falso([[{}]], monkeypatch, registrar=urls)
+    _fake_oura([[{}]], monkeypatch, registrar=urls)
     client.fetch("heartrate", "2026-08-10T00:00:00Z", "2026-08-10T06:00:00Z")
     assert "start_datetime=2026-08-10T00%3A00%3A00Z" in urls[-1]
 
@@ -131,7 +129,7 @@ def test_trims_the_extra_days_and_says_so(monkeypatch):
     it"."""
     pagina = [{"day": d} for d in ("2026-08-08", "2026-08-09", "2026-08-10",
                                    "2026-08-11", "2026-08-12")]
-    _oura_falso([pagina], monkeypatch)
+    _fake_oura([pagina], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-09", "2026-08-11")
     assert [x["day"] for x in r["data"]] == ["2026-08-09", "2026-08-10", "2026-08-11"]
     assert r["n"] == 3
@@ -142,7 +140,7 @@ def test_a_single_day_returns_that_day(monkeypatch):
     """The case that was broken: asking for [d..d] returned zero on daily_activity,
     sleep and workout."""
     pagina = [{"day": "2026-08-09"}, {"day": "2026-08-10"}, {"day": "2026-08-11"}]
-    _oura_falso([pagina], monkeypatch)
+    _fake_oura([pagina], monkeypatch)
     r = client.fetch("workout", "2026-08-10", "2026-08-10")
     assert r["n"] == 1 and r["data"][0]["day"] == "2026-08-10"
 
@@ -150,16 +148,16 @@ def test_a_single_day_returns_that_day(monkeypatch):
 def test_the_day_comes_from_start_day_when_there_is_no_day(monkeypatch):
     """`rest_mode_period` and `enhanced_tag` carry no `day`: they carry `start_day`."""
     pagina = [{"start_day": "2026-08-09"}, {"start_day": "2026-08-30"}]
-    _oura_falso([pagina], monkeypatch)
+    _fake_oura([pagina], monkeypatch)
     r = client.fetch("enhanced_tag", "2026-08-09", "2026-08-09")
     assert r["n"] == 1
 
 
 def test_what_cannot_be_dated_is_kept(monkeypatch):
-    """Descartar lo que no se entiende es la shape más rápida de entregar de
-    menos, que es exactamente lo que este paquete existe para no hacer."""
+    """Discarding what you do not understand is the fastest way to under-deliver,
+    which is exactly what this package exists not to do."""
     pagina = [{"day": "2026-08-09"}, {"sin_fecha": True}, {"day": "2026-09-30"}]
-    _oura_falso([pagina], monkeypatch)
+    _fake_oura([pagina], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-09", "2026-08-09")
     assert r["n"] == 2
     assert {"sin_fecha": True} in r["data"]
@@ -176,7 +174,7 @@ def test_truncating_leaves_a_cursor_to_continue_from(monkeypatch):
     """`truncated` warned but didn't let you continue: whoever received it could
     only retry blind."""
     pages = [[{"i": n}] for n in range(20)]
-    _oura_falso(pages, monkeypatch)
+    _fake_oura(pages, monkeypatch)
     r = client.fetch("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z",
                         page_limit=3)
     assert r["continue_from"] == "3"
@@ -184,10 +182,10 @@ def test_truncating_leaves_a_cursor_to_continue_from(monkeypatch):
 
 # ── CSV: el mismo dato sin repetir las claves 37,000 veces ──────────────────
 def test_the_header_comes_from_the_union_not_the_first_record(monkeypatch):
-    """Sacar el encabezado del primer registro es la shape más fácil de perder
-    data aquí: basta un registro con un campo extra para que ese campo
-    desaparezca sin dejar rastro."""
-    _oura_falso([[{"day": "2026-08-10", "score": 1},
+    """Taking the header from the first record is the easiest way to lose data
+    here: one record with an extra field is enough for that field to vanish
+    without a trace."""
+    _fake_oura([[{"day": "2026-08-10", "score": 1},
                   {"day": "2026-08-11", "score": 2, "extra": 9}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-11", format="csv")
     assert "extra" in r["columns"]
@@ -195,45 +193,45 @@ def test_the_header_comes_from_the_union_not_the_first_record(monkeypatch):
 
 
 def test_avisa_cuando_los_registros_no_traen_las_mismas_claves(monkeypatch):
-    """Una celda vacía puede ser «campo ausente» o «valor nulo». Con registros de
-    distinta shape la diferencia importa y callarla aparenta regularidad."""
-    _oura_falso([[{"day": "2026-08-10"}, {"day": "2026-08-11", "extra": 1}]], monkeypatch)
+    """An empty cell can be an absent field or a null value. With records of
+    differing shape the difference matters, and hiding it feigns regularity."""
+    _fake_oura([[{"day": "2026-08-10"}, {"day": "2026-08-11", "extra": 1}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-11", format="csv")
     assert "uneven_columns" in r
-    _oura_falso([[{"day": "2026-08-10"}, {"day": "2026-08-11"}]], monkeypatch)
+    _fake_oura([[{"day": "2026-08-10"}, {"day": "2026-08-11"}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-11", format="csv")
     assert "uneven_columns" not in r
 
 
 def test_lo_anidado_va_como_json_en_su_celda(monkeypatch):
-    """Aplanar inventaría columns que Oura no tiene; omitir sería perder data."""
-    _oura_falso([[{"day": "2026-08-10", "contributors": {"deep": 91}}]], monkeypatch)
+    """Flattening would invent columns Oura does not have; omitting would lose data."""
+    _fake_oura([[{"day": "2026-08-10", "contributors": {"deep": 91}}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-10", format="csv")
     assert '{""deep"":91}' in r["data"]
 
 
 def test_the_date_is_the_first_column(monkeypatch):
     """Es la columna con la que se cruza contra otra fuente."""
-    _oura_falso([[{"score": 1, "day": "2026-08-10", "aaa": 2}]], monkeypatch)
+    _fake_oura([[{"score": 1, "day": "2026-08-10", "aaa": 2}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-10", format="csv")
     assert r["columns"][0] == "day"
 
 
 def test_the_csv_arrives_when_truncated_too(monkeypatch):
     """Con dos salidas, la truncada se iba sin format ni avisos — y es la que
-    más necesita que se le crea todo lo que dice."""
+    it is precisely the response that most needs everything it says believed."""
     pages = [[{"day": "2026-08-10", "i": n}] for n in range(20)]
-    _oura_falso(pages, monkeypatch)
+    _fake_oura(pages, monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-10",
                         format="csv", page_limit=3)
     assert r["format"] == "csv" and "truncated" in r and r["continue_from"] == "3"
 
 
 # ── The 429: a bounded retry ───────────────────────────────────────────────
-# Oura NO manda cabeceras de límite de tasa en las respuestas buenas —verificado
-# el 9-ago-2026— así que un client no puede saber qué tan cerca está del tope.
-# Sólo se entera cuando ya se lo negaron, y para entonces puede llevar 30
-# páginas traídas que se tirarían a la basura.
+# Oura sends NO rate-limit headers on successful responses — verified 2026-08-09
+# — so a client cannot know how close it is to the ceiling. It only finds out
+# once it has been refused, and by then it may have 30 pages fetched that would
+# be thrown away.
 def _falla_n_veces(monkeypatch, veces, cabeceras=None, dormidas=None):
     if dormidas is None:
         dormidas = []
@@ -286,8 +284,8 @@ def test_retry_after_cannot_hang_the_conversation(monkeypatch):
 
 
 def test_only_the_429_is_retried(monkeypatch):
-    """Un 401 no mejora esperando: reintentarlo sólo tarda tres veces más en dar
-    la misma mala noticia."""
+    """A 401 does not improve by waiting: retrying it only takes three times as long
+    to deliver the same bad news."""
     intentos = {"n": 0}
 
     def urlopen(req, timeout=None):
@@ -303,56 +301,58 @@ def test_only_the_429_is_retried(monkeypatch):
 
 
 # ── `fields` y `latest`: los dos que Oura ignora en silencio ────────────────
-# Medido contra la API el 9-ago-2026. Los dos fallan igual: no dan error, dan
-# de más. `fields=no_existe` devuelve el registro COMPLETO —la proyección no
-# ocurre— y `latest=true` en una colección que no lo soporta devuelve la
-# colección entera. Quien pidió cree que filtró, y no filtró.
+# Measured against the API on 2026-08-09. Both fail the same way: no error, just
+# more than asked for. `fields=made_up` returns the COMPLETE record — the
+# projection never happens — and `latest=true` on a collection that does not
+# support it returns the entire collection. The asker believes they filtered and
+# did not.
 def test_los_campos_van_como_fields(monkeypatch):
     urls = []
-    _oura_falso([[{"day": "2026-08-10", "score": 1}]], monkeypatch, registrar=urls)
+    _fake_oura([[{"day": "2026-08-10", "score": 1}]], monkeypatch, registrar=urls)
     client.fetch("daily_sleep", "2026-08-10", "2026-08-10", fields=["score", "day"])
     assert "fields=score%2Cday" in urls[-1]
 
 
 def test_avisa_de_los_campos_que_no_aparecieron(monkeypatch):
-    _oura_falso([[{"day": "2026-08-10", "score": 1}]], monkeypatch)
+    _fake_oura([[{"day": "2026-08-10", "score": 1}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-10",
                         fields=["score", "no_existe"])
     assert r["ignored_fields"] == ["no_existe"]
 
 
 def test_sin_campos_pedidos_no_hay_aviso(monkeypatch):
-    _oura_falso([[{"day": "2026-08-10"}]], monkeypatch)
+    _fake_oura([[{"day": "2026-08-10"}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-10")
     assert "ignored_fields" not in r
 
 
 def test_ultimo_solo_donde_oura_lo_respeta(monkeypatch):
     urls = []
-    _oura_falso([[{"bpm": 60}]], monkeypatch, registrar=urls)
+    _fake_oura([[{"bpm": 60}]], monkeypatch, registrar=urls)
     client.fetch("heartrate", latest=True)
     assert "latest=true" in urls[-1]
 
 
 def test_ultimo_se_rechaza_donde_oura_lo_ignora(monkeypatch):
-    """Rechazarlo AQUÍ y no dejar que Oura devuelva la colección entera: pedir el
-    último registro y recibir diez creyendo que es uno es peor que un error."""
-    _oura_falso([[{}]], monkeypatch)
+    """Rejected HERE rather than letting Oura return the whole collection: asking
+    for the latest record and receiving ten while believing it is one is worse
+    than an error."""
+    _fake_oura([[{}]], monkeypatch)
     with pytest.raises(client.OuraError, match="it's ignored"):
         client.fetch("daily_sleep", "2026-08-01", "2026-08-10", latest=True)
 
 
 def test_ultimo_no_exige_rango(monkeypatch):
-    """`latest` no necesita fechas, y exigirlas sería inventar un requisito."""
-    _oura_falso([[{"bpm": 60}]], monkeypatch)
+    """`latest` needs no dates, and demanding them would invent a requirement."""
+    _fake_oura([[{"bpm": 60}]], monkeypatch)
     assert client.fetch("ring_battery_level", latest=True)["n"] == 1
 
 
 # ── The sandbox: trying it with nothing to authenticate with ───────────────
-# Oura deprecó los tokens personales en diciembre de 2025. Quien llega hoy no
-# tiene cómo conseguir uno, así que «instálalo y luego consigue un token» dejó
-# de ser un camino. El sandbox es oficial —está en el OpenAPI, con 34 rutas
-# espejo— y acepta cualquier cadena como Authorization.
+# Oura deprecated personal tokens in December 2025. Anyone arriving today has no
+# way to get one, so "install it and then get a token" stopped being a path. The
+# sandbox is official — it is in the OpenAPI spec, with 34 mirror routes — and it
+# accepts any string as Authorization.
 def test_the_sandbox_asks_for_no_token(monkeypatch):
     monkeypatch.delenv("OURA_PAT", raising=False)
     monkeypatch.delenv("OURA_PAT_FILE", raising=False)
@@ -368,8 +368,8 @@ def test_the_sandbox_changes_the_base(monkeypatch):
 
 
 def test_the_base_can_be_forced(monkeypatch):
-    """`OURA_API_BASE_URL` gana sobre todo: es lo que permite apuntar a un doble
-    en una prueba sin monkeypatchear el módulo."""
+    """`OURA_API_BASE_URL` wins over everything: it is what allows pointing at a
+    double in a test without monkeypatching the module."""
     monkeypatch.setenv("OURA_SANDBOX", "1")
     monkeypatch.setenv("OURA_API_BASE_URL", "http://localhost:9999/v2/x/")
     assert client.base() == "http://localhost:9999/v2/x"
@@ -393,22 +393,22 @@ def test_date_collections_require_a_range(monkeypatch):
 
 
 def test_cada_forma_manda_el_parametro_que_le_toca(monkeypatch):
-    """`daily_*` usa start_date; `heartrate` usa start_datetime. Mandar el
-    equivocado devuelve un 400 que después hay que descifrar."""
+    """`daily_*` uses start_date; `heartrate` uses start_datetime. Sending the wrong
+    one returns a 400 that then has to be deciphered."""
     urls = []
-    _oura_falso([[{}]], monkeypatch, registrar=urls)
+    _fake_oura([[{}]], monkeypatch, registrar=urls)
     client.fetch("daily_sleep", "2026-08-01", "2026-08-02")
     assert "start_date=" in urls[-1] and "start_datetime=" not in urls[-1]
     client.fetch("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z")
     assert "start_datetime=" in urls[-1]
     client.fetch("personal_info")
-    assert "?" not in urls[-1]      # sin rango no se inventan parámetros
+    assert "?" not in urls[-1]      # with no range, no parameters are invented
 
 
 def test_sin_credenciales_se_ofrecen_los_tres_caminos(monkeypatch, tmp_path):
-    """El mensaje mandaba a la página de tokens personales, y desde diciembre de
-    2025 esa página ya no deja crear ninguno: quien llegaba ahí se quedaba
-    atorado sin saber por qué. Ahora la primera opción es la que funciona."""
+    """The message pointed at the personal-tokens page, and since December 2025
+    that page issues none: whoever landed there got stuck without knowing why.
+    Now the first option is the one that works."""
     monkeypatch.delenv("OURA_PAT", raising=False)
     monkeypatch.delenv("OURA_PAT_FILE", raising=False)
     monkeypatch.delenv("OURA_SANDBOX", raising=False)
@@ -417,23 +417,23 @@ def test_sin_credenciales_se_ofrecen_los_tres_caminos(monkeypatch, tmp_path):
     with pytest.raises(client.OuraError) as exc:
         client.fetch("personal_info")
     mensaje = str(exc.value)
-    assert "OURA_SANDBOX=1" in mensaje          # lo que no exige trámite, primero
+    assert "OURA_SANDBOX=1" in mensaje          # the one with no paperwork, first
     assert "--authorize" in mensaje
-    assert "December 2025" in mensaje       # por qué el PAT ya no es opción
+    assert "December 2025" in mensaje       # why the PAT is no longer an option
 
 
 # ── Garbage input: the error should say what to do ─────────────────────────
 def test_the_backwards_range_is_caught_here(monkeypatch):
-    """Se atrapa antes de salir a la red porque el margen de EXTRA_DAYS cambia
-    las fechas: Oura devolvería un 400 citando dos fechas que quien preguntó
-    nunca escribió, y diagnosticar eso cuesta más que el error mismo."""
-    _oura_falso([[{}]], monkeypatch)
+    """Caught before hitting the network because the EXTRA_DAYS margin changes the
+    dates: Oura would return a 400 quoting two dates the asker never wrote, and
+    diagnosing that costs more than the error itself."""
+    _fake_oura([[{}]], monkeypatch)
     with pytest.raises(client.OuraError, match="runs backwards"):
         client.fetch("daily_sleep", "2026-08-10", "2026-08-01")
 
 
 def test_the_range_error_quotes_the_dates_that_were_written(monkeypatch):
-    _oura_falso([[{}]], monkeypatch)
+    _fake_oura([[{}]], monkeypatch)
     with pytest.raises(client.OuraError) as exc:
         client.fetch("daily_sleep", "2026-08-10", "2026-08-01")
     assert "2026-08-10" in str(exc.value) and "2026-08-01" in str(exc.value)
@@ -442,8 +442,8 @@ def test_the_range_error_quotes_the_dates_that_were_written(monkeypatch):
 
 def test_ouras_422_is_translated_into_something_readable(monkeypatch):
     """Oura contesta `detail` como el arreglo de errores de pydantic, cuyo JSON
-    pasa de 200 characters antes de llegar a lo único que importa. Recortado en
-    crudo dejaba `{"detail":[{"type":"datetime_from_date_pars` y nada más."""
+    runs past 200 characters before reaching the only thing that matters. Trimmed
+    raw it left `{"detail":[{"type":"datetime_from_date_pars` and nothing else."""
     cuerpo = json.dumps({"detail": [{
         "type": "datetime_from_date_parsing",
         "loc": ["query", "start_date", "datetime"],
@@ -461,7 +461,7 @@ def test_ouras_422_is_translated_into_something_readable(monkeypatch):
     m = str(exc.value)
     assert "start_date" in m
     assert "valid datetime" in m
-    assert "'ayer'" in m                    # qué se recibió, que es lo que uno busca
+    assert "'ayer'" in m                    # what was received, which is what one looks for
     assert "datetime_from_date_parsing" not in m   # el ruido, fuera
 
 
@@ -491,7 +491,7 @@ def test_an_unreadable_error_body_breaks_nothing(monkeypatch):
 
 # ── `day`: the most common query shouldn't require writing a range ─────────
 def test_dia_equivale_a_inicio_igual_a_fin(monkeypatch):
-    _oura_falso([[{"day": "2026-08-09"}, {"day": "2026-08-10"}]], monkeypatch)
+    _fake_oura([[{"day": "2026-08-09"}, {"day": "2026-08-10"}]], monkeypatch)
     from oura_mcp.server import oura_query
     f = getattr(oura_query, "fn", oura_query)
     r = f(collection="workout", day="2026-08-10")
@@ -499,9 +499,9 @@ def test_dia_equivale_a_inicio_igual_a_fin(monkeypatch):
 
 
 def test_dia_y_rango_juntos_es_un_error(monkeypatch):
-    """Mezclar los dos no tiene una interpretación obvia, y elegir una en
-    silencio es cómo se cuelan los rangos equivocados."""
-    _oura_falso([[{}]], monkeypatch)
+    """Mixing the two has no obvious interpretation, and choosing one silently is
+    how wrong ranges slip through."""
+    _fake_oura([[{}]], monkeypatch)
     from oura_mcp.server import oura_query
     f = getattr(oura_query, "fn", oura_query)
     assert "not both" in f(collection="workout", day="2026-08-10",
@@ -522,14 +522,14 @@ def test_all_three_declare_themselves_read_only():
         assert t.annotations.read_only_hint is True, t.name
         assert t.annotations.destructive_hint is False, t.name
         # Los data vienen de un servicio externo: la misma llamada dos veces
-        # puede diferir si el anillo sincronizó en medio. Decir lo contrario
-        # sería invitar a que alguien memoice la respuesta.
+        # can differ if the ring synced in between. Saying otherwise would
+        # invite someone to memoize the response.
         assert t.annotations.open_world_hint is True, t.name
 
 
 def test_there_is_not_a_single_write_in_the_package():
-    """La anotación de sólo lectura tiene que seguir siendo verdad cuando alguien
-    agregue código. Esta prueba es la que se entera."""
+    """The read-only annotation has to stay true when someone adds code. This test
+    is the one that finds out."""
     import pathlib
     raiz = pathlib.Path(__file__).parent.parent / "src" / "oura_mcp"
     for file in raiz.glob("*.py"):
@@ -542,15 +542,15 @@ def test_there_is_not_a_single_write_in_the_package():
 # ── Nothing may carry the token away ───────────────────────────────────────
 def test_the_token_is_not_printed_by_accident():
     """Un str con el token adentro sale solo por demasiados lados: el repr de las
-    locales en una traza, un print de depuración que se quedó, un f-string
-    escrito de prisa. Aquí ya costó un token una vez."""
+    locals in a traceback, a debug print that was left behind, an f-string
+    written in a hurry. It already cost a token once here."""
     s = client.Secret("abcdefghij")
     assert "abcdefghij" not in repr(s)
     assert "abcdefghij" not in str(s)
     assert "abcdefghij" not in f"{s}"
     assert "abcdefghij" not in "{}".format(s)
-    assert "10" in repr(s)              # la longitud sí, que es lo que diagnostica
-    assert s.reveal() == "abcdefghij"  # revelarlo es explícito y se puede grepear
+    assert "10" in repr(s)              # the length yes, which is what diagnoses
+    assert s.reveal() == "abcdefghij"  # revealing it is explicit and greppable
 
 
 def test_el_secreto_sabe_cuanto_mide():
@@ -560,8 +560,8 @@ def test_el_secreto_sabe_cuanto_mide():
 
 
 def test_the_error_never_carries_the_token(monkeypatch):
-    """Los mensajes de error son lo que más se copia y se pega. El token va en un
-    encabezado y no tiene por qué salir de ahí jamás."""
+    """Error messages are what gets copied and pasted most. The token travels in a
+    header and has no business ever leaving it."""
     monkeypatch.setenv("OURA_PAT", "token-secretisimo-12345")
 
     def revienta(req, timeout=None):
@@ -582,23 +582,23 @@ def test_revisar_reporta_el_largo_del_token_no_el_token(monkeypatch):
     texto = json.dumps(r)
     assert "token-secretisimo-12345" not in texto
     assert r["token_length"] == len("token-secretisimo-12345")
-    # Y de la respuesta sólo los NOMBRES de los fields, nunca los valores.
+    # And from the response only the field NAMES, never the values.
     assert r["profile_fields"] == ["age", "email"]
     assert "x@y.z" not in texto and "39" not in texto
 
 
-def test_el_token_puede_venir_de_un_archivo(monkeypatch, tmp_path):
-    """Un server MCP se registra en un JSON de configuración, y meter ahí el
-    token lo deja en claro en un file que se respalda, se sincroniza y se
-    comparte al pedir ayuda. El file aparte se rota sin tocar la config."""
+def test_the_token_can_come_from_a_file(monkeypatch, tmp_path):
+    """An MCP server is registered in a config JSON, and putting the token there
+    leaves it in the clear in a file that gets backed up, synced, and shared when
+    asking for help."""
     f = tmp_path / "pat"
-    f.write_text("token-del-file\n")
+    f.write_text("token-from-file\n")
     monkeypatch.delenv("OURA_PAT", raising=False)
     monkeypatch.setenv("OURA_PAT_FILE", str(f))
-    assert client._token().reveal() == "token-del-file"
+    assert client._token().reveal() == "token-from-file"
 
 
-def test_el_archivo_gana_sobre_la_variable(monkeypatch, tmp_path):
+def test_the_file_wins_over_the_variable(monkeypatch, tmp_path):
     f = tmp_path / "pat"
     f.write_text("del-file")
     monkeypatch.setenv("OURA_PAT", "de-la-variable")
@@ -606,7 +606,7 @@ def test_el_archivo_gana_sobre_la_variable(monkeypatch, tmp_path):
     assert client._token().reveal() == "del-file"
 
 
-def test_un_archivo_vacio_no_pasa_por_token(monkeypatch, tmp_path):
+def test_an_empty_file_does_not_pass_as_a_token(monkeypatch, tmp_path):
     f = tmp_path / "pat"
     f.write_text("   \n")
     monkeypatch.delenv("OURA_PAT", raising=False)
@@ -617,11 +617,11 @@ def test_un_archivo_vacio_no_pasa_por_token(monkeypatch, tmp_path):
 
 # ── The loop's third exit: a repeated `next_token` ─────────────────────────
 def test_un_next_token_repetido_se_detecta_como_ciclo(monkeypatch):
-    """Sería irónico tenerlo aquí. Sin detectarlo se hacían 50 peticiones
-    idénticas, se devolvían 50 copias del mismo registro, y el aviso decía
-    «acorta el rango» — consejo inútil, porque acortar no arregla que la API se
-    repita. Y encima quemaba 49 peticiones contra un límite de tasa que Oura no
-    anuncia por ninguna cabecera."""
+    """It would be ironic to carry this here. Without detecting it the client made
+    50 identical requests, returned 50 copies of the same record, and the warning
+    said "shorten the range" — useless advice, because shortening does not stop
+    the API from repeating itself. It also burned 49 requests against a rate
+    limit Oura announces in no header."""
     llamadas = []
 
     def urlopen(req, timeout=None):
@@ -635,13 +635,13 @@ def test_un_next_token_repetido_se_detecta_como_ciclo(monkeypatch):
     r = client.fetch("daily_sleep", "2026-08-01", "2026-08-01")
     assert len(llamadas) == 2, f"hizo {len(llamadas)} peticiones"
     assert "pagination_cycle" in r
-    assert "truncated" not in r, "no es truncamiento: es la API portándose mal"
+    assert "truncated" not in r, "not truncation: the API is misbehaving"
 
 
 def test_el_ciclo_no_estorba_a_la_paginacion_normal(monkeypatch):
-    """Tokens distintos en cada página siguen su curso hasta el final."""
+    """Distinct tokens on each page run their course to the end."""
     pages = [[{"i": n}] for n in range(6)]
-    _oura_falso(pages, monkeypatch)
+    _fake_oura(pages, monkeypatch)
     r = client.fetch("heartrate", "2026-08-01T00:00:00Z", "2026-08-02T00:00:00Z")
     assert r["n"] == 6 and r["pages"] == 6
     assert "pagination_cycle" not in r
@@ -649,9 +649,9 @@ def test_el_ciclo_no_estorba_a_la_paginacion_normal(monkeypatch):
 
 # ── Response shapes Oura shouldn't send, but just in case ──────────────────
 def test_data_that_is_not_a_list_is_reported(monkeypatch):
-    """Envolver el sobre entero convertiría eso en «un registro» con shape
-    `{"data": …}` que se ve legítimo. Callarlo sería la falla de siempre,
-    cometida por nosotros."""
+    """Wrapping the whole envelope would turn that into "one record" shaped like
+    `{"data": …}` that looks legitimate. Staying quiet about it would be the
+    usual failure, committed by us."""
     def urlopen(req, timeout=None):
         return _RespuestaFalsa(json.dumps({"data": {"day": "2026-08-01"}}).encode())
 
@@ -662,8 +662,8 @@ def test_data_that_is_not_a_list_is_reported(monkeypatch):
 
 
 def test_las_colecciones_sin_sobre_siguen_funcionando(monkeypatch):
-    """`personal_info` y `ring_configuration` no vienen envueltas en `data`: el
-    cuerpo entero es el registro. Se distingue por la AUSENCIA de la clave."""
+    """`personal_info` and `ring_configuration` are not wrapped in `data`: the whole
+    body is the record. It is told apart by the ABSENCE of the key."""
     def urlopen(req, timeout=None):
         return _RespuestaFalsa(json.dumps({"email": "x", "age": 1}).encode())
 
@@ -684,12 +684,12 @@ def test_an_empty_response_is_zero_records_not_one(monkeypatch):
 
 # ── Response size, which nobody was looking at ─────────────────────────────
 def test_an_enormous_response_comments_on_itself(monkeypatch):
-    """Medido: 30 días de `daily_activity` son 252,000 characters, y el 87% es un
-    solo campo (`met`, una serie de MET por minuto). Un server que entrega un
-    cuarto de millón de characters sin comentarlo gasta el contexto de quien
-    pregunta en data que probablemente no quería."""
+    """Measured: 30 days of `daily_activity` is 252,000 characters, and 87% of it is
+    a single field (`met`, a per-minute MET series). A server handing over a
+    quarter of a million characters without comment spends the asker's context on
+    data they probably did not want."""
     gordo = {"day": "2026-08-01", "score": 80, "met": list(range(6000))}
-    _oura_falso([[dict(gordo, day=f"2026-08-{d:02d}") for d in range(1, 6)]], monkeypatch)
+    _fake_oura([[dict(gordo, day=f"2026-08-{d:02d}") for d in range(1, 6)]], monkeypatch)
     r = client.fetch("daily_activity", "2026-08-01", "2026-08-05")
     aviso = r["large_response"]
     assert aviso["heaviest_field"] == "met"
@@ -698,10 +698,10 @@ def test_an_enormous_response_comments_on_itself(monkeypatch):
 
 
 def test_nothing_is_trimmed_on_its_own_initiative(monkeypatch):
-    """El aviso NO viene con una poda. Recortar sin que lo pidan sería entregar
-    de menos, que es justo lo que este paquete existe para no hacer."""
+    """The warning does NOT come with a trim. Cutting without being asked would be
+    under-delivering, which is precisely what this package exists not to do."""
     gordo = {"day": "2026-08-01", "met": list(range(6000))}
-    _oura_falso([[dict(gordo, day=f"2026-08-{d:02d}") for d in range(1, 6)]], monkeypatch)
+    _fake_oura([[dict(gordo, day=f"2026-08-{d:02d}") for d in range(1, 6)]], monkeypatch)
     r = client.fetch("daily_activity", "2026-08-01", "2026-08-05")
     assert r["n"] == 5
     assert all(len(x["met"]) == 6000 for x in r["data"])
@@ -709,24 +709,24 @@ def test_nothing_is_trimmed_on_its_own_initiative(monkeypatch):
 
 def test_si_ya_eligio_columnas_no_se_le_insiste(monkeypatch):
     gordo = {"day": "2026-08-01", "met": list(range(6000))}
-    _oura_falso([[dict(gordo, day=f"2026-08-{d:02d}") for d in range(1, 6)]], monkeypatch)
+    _fake_oura([[dict(gordo, day=f"2026-08-{d:02d}") for d in range(1, 6)]], monkeypatch)
     r = client.fetch("daily_activity", "2026-08-01", "2026-08-05", fields=["met"])
     assert "large_response" not in r
 
 
 def test_una_respuesta_normal_no_lleva_aviso(monkeypatch):
-    _oura_falso([[{"day": "2026-08-01", "score": 80}]], monkeypatch)
+    _fake_oura([[{"day": "2026-08-01", "score": 80}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-01", "2026-08-01")
     assert "large_response" not in r
 
 
 # ── `n: 0`: the most common answer to the most common questions ────────────
 def test_an_empty_query_explains_what_is_known(monkeypatch):
-    """«¿cómo dormí ayer?» y «¿estoy recuperado?» devuelven n=0 con frecuencia, y
-    eso no distingue entre no llevar el anillo, que no haya sincronizado, pedir
-    una fecha futura, o no tener el permiso. Un modelo que reciba `{"n": 0}` va a
-    contestar «no dormiste» con toda confianza, y puede estar equivocado."""
-    _oura_falso([[]], monkeypatch)
+    """"how did I sleep last night?" and "am I recovered?" often return n=0, and
+    that does not distinguish between not wearing the ring, it not having synced,
+    a future date, or a missing permission. A model receiving `{"n": 0}` will
+    answer "you did not sleep" with complete confidence, and may be wrong."""
+    _fake_oura([[]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-01-01", "2026-01-02")
     assert "empty" in r
     assert "you didn't sleep" in r["empty"]["do_not_confuse"]
@@ -735,28 +735,28 @@ def test_an_empty_query_explains_what_is_known(monkeypatch):
 def test_a_future_range_is_reported(monkeypatch):
     import datetime
     manana = (datetime.date.today() + datetime.timedelta(days=30)).isoformat()
-    _oura_falso([[]], monkeypatch)
+    _fake_oura([[]], monkeypatch)
     r = client.fetch("daily_sleep", manana, manana)
     assert any("future" in x for x in r["empty"]["what_we_know"])
 
 
 def test_asking_up_to_today_warns_about_syncing(monkeypatch):
-    """La causa número uno de un vacío legítimo: el anillo no ha sincronizado."""
+    """The number-one cause of a legitimate empty result: the ring has not synced."""
     import datetime
     hoy = datetime.date.today().isoformat()
-    _oura_falso([[]], monkeypatch)
+    _fake_oura([[]], monkeypatch)
     r = client.fetch("daily_sleep", hoy, hoy)
     assert any("syncs" in x for x in r["empty"]["what_we_know"])
 
 
 def test_si_hay_datos_no_se_explica_nada(monkeypatch):
-    _oura_falso([[{"day": "2026-01-01"}]], monkeypatch)
+    _fake_oura([[{"day": "2026-01-01"}]], monkeypatch)
     assert "empty" not in client.fetch("daily_sleep", "2026-01-01", "2026-01-01")
 
 
 def test_toda_coleccion_declara_su_alcance():
     """Sirve para distinguir «no hay dato» de «no diste ese permiso»: las dos se
-    ven idénticas (n=0) y llevan a conclusiones opuestas."""
+    identical (n=0) and lead to opposite conclusions."""
     from oura_mcp.collections import SCOPE_OF, COLLECTIONS
     assert set(SCOPE_OF) == set(COLLECTIONS)
     from oura_mcp.credentials import SCOPES
@@ -764,7 +764,7 @@ def test_toda_coleccion_declara_su_alcance():
 
 
 def test_the_instructions_carry_what_cannot_be_guessed():
-    """Viajan en cada sesión: sólo va lo que cambia una respuesta."""
+    """They travel in every session: only what changes an answer goes in."""
     from oura_mcp.server import server
     ins = server.instructions
     for imprescindible in ("n: 0", "truncated", "continue_from", "start_datetime",
@@ -774,22 +774,22 @@ def test_the_instructions_carry_what_cannot_be_guessed():
 
 # ── The sandbox as the first experience of someone who just installed ──────
 def test_the_profile_in_sandbox_explains_instead_of_returning_404(monkeypatch):
-    """El sandbox contesta 404 a secas para `personal_info`. Un «404: Not Found»
-    a quien acaba de instalar le dice que el server está roto, cuando lo que
-    pasa es que Oura no pone data falsos de la única colección con correo,
-    edad, peso y estatura."""
+    """The sandbox answers a bare 404 for `personal_info`. A "404: Not Found"
+    to someone who has just installed says the server is broken, when what is
+    actually happening is that Oura publishes no fake data for the one collection
+    carrying email, age, weight and height."""
     monkeypatch.setenv("OURA_SANDBOX", "1")
     with pytest.raises(client.OuraError) as exc:
         client.fetch("personal_info")
     m = str(exc.value)
     assert "does not exist in Oura's sandbox" in m
-    assert "Everything else works here" in m       # que no parezca que todo falló
-    assert "--authorize" in m                     # y a dónde ir después
+    assert "Everything else works here" in m       # so it does not look like all failed
+    assert "--authorize" in m                     # and where to go next
 
 
 def test_outside_the_sandbox_the_profile_is_requested_normally(monkeypatch):
     monkeypatch.delenv("OURA_SANDBOX", raising=False)
-    _oura_falso([[{"email": "x"}]], monkeypatch)
+    _fake_oura([[{"email": "x"}]], monkeypatch)
     assert client.fetch("personal_info")["n"] == 1
 
 

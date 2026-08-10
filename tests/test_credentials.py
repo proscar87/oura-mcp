@@ -1,12 +1,12 @@
-"""Pruebas del almacenamiento y la rotación de credentials de OAuth2.
+"""Tests for OAuth2 credential storage and rotation.
 
-NO TOCAN LA RED. El endpoint de token se sustituye por uno falso.
+THEY NEVER TOUCH THE NETWORK. The token endpoint is replaced by a fake one.
 
-Lo que se prueba aquí no es «save un JSON»: es que la ventana en la que el
-refresh token viejo ya murió y el nuevo todavía no está guardado sea lo más
-corta posible, y que nunca quede un file a medio escribir. Oura invalida el
-refresh token en cuanto se canjea; equivocarse aquí deja al usuario fuera de su
-propia cuenta hasta que vuelva a authorize desde el navegador.
+What is tested here is not "saving a JSON": it is that the window where the old
+refresh token has died and the new one is not yet saved stays as short as
+possible, and that a half-written file never exists. Oura invalidates the refresh
+token the moment it is exchanged; getting this wrong locks the user out of their
+own account until they authorize from the browser again.
 """
 
 import json
@@ -63,7 +63,7 @@ def test_sin_archivo_no_hay_credenciales():
     assert cr.load() is None
 
 
-def test_un_archivo_corrupto_dice_qué_hacer(_isolate):
+def test_a_corrupt_file_says_what_to_do(_isolate):
     path = _isolate / "cred.json"
     path.write_text("{no es json")
     with pytest.raises(OuraError, match="authorize again"):
@@ -71,9 +71,9 @@ def test_un_archivo_corrupto_dice_qué_hacer(_isolate):
 
 
 def test_no_debris_is_left_if_it_fails_mid_write(_isolate, monkeypatch):
-    """Un file de credentials a medio escribir es peor que ninguno: el
-    refresh token viejo ya se consumió y el nuevo era lo único que salvaba la
-    sesión."""
+    """A half-written credentials file is worse than none: the old refresh token
+    has already been consumed and the new one was the only thing that could save
+    the session."""
     def revienta(*a, **k):
         raise OSError("disco lleno")
 
@@ -85,7 +85,7 @@ def test_no_debris_is_left_if_it_fails_mid_write(_isolate, monkeypatch):
 
 
 def test_olvidar_no_falla_si_no_habia():
-    cr.forget()          # sin excepción
+    cr.forget()          # no exception
     cr.save(_cred())
     cr.forget()
     assert cr.load() is None
@@ -155,13 +155,13 @@ def test_si_otro_proceso_ya_refresco_la_sesion_no_se_da_por_perdida(monkeypatch)
     sees a 400 even though the session is alive, already renewed by the other."""
     cr.save(cr.Credentials(access=Secret("A9"), refresh_token=Secret("R9"),
                                expires_at=time.time() + 3600, scopes=("daily",)))
-    _fake_token_endpoint(monkeypatch, OuraError("Oura rechazó el canje (400)"))
+    _fake_token_endpoint(monkeypatch, OuraError("Oura rejected the exchange (400)"))
     recuperada = cr.refresh(_cred(refresh_token="R1"), "id", "secreto")
     assert recuperada.access.reveal() == "A9"
 
 
 def test_if_it_fails_and_nothing_is_saved_it_propagates(monkeypatch):
-    _fake_token_endpoint(monkeypatch, OuraError("Oura rechazó el canje (400)"))
+    _fake_token_endpoint(monkeypatch, OuraError("Oura rejected the exchange (400)"))
     with pytest.raises(OuraError, match="400"):
         cr.refresh(_cred(), "id", "secreto")
 

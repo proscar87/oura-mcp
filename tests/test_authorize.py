@@ -1,10 +1,10 @@
-"""Pruebas del flujo interactivo de OAuth2. NO TOCAN LA RED.
+"""Tests for the interactive OAuth2 flow. THEY NEVER TOUCH THE NETWORK.
 
-Lo que más importa aquí es el `state`. El callback llega a un server HTTP en
-localhost que atiende lo que le manden; sin comparar el `state`, cualquier
-página abierta en el navegador del usuario puede mandarle un código de
-autorización de OTRA cuenta y dejarlo conectado a data que no son suyos, sin
-que nada se vea raro.
+What matters most here is the `state`. The callback arrives at an HTTP server on
+localhost that serves whatever it is sent; without comparing the `state`, any
+page open in the user's browser can hand them an authorization code from ANOTHER
+account and leave them connected to data that is not theirs, with nothing looking
+wrong.
 """
 
 import urllib.parse
@@ -149,10 +149,10 @@ def test_a_busy_port_suggests_manual_mode(monkeypatch):
         az.wait_for_callback(9876, "s", espera=1)
 
 
-# ── El mode manual, para máquinas sin navegador ─────────────────────────────
+# ── Manual mode, for machines with no browser ──────────────────────────────
 def test_manual_mode_starts_no_server(monkeypatch, capsys):
-    """En una máquina sin navegador no hay a dónde redirigir: el punto del mode
-    manual es que el usuario abra la URL donde sea y pegue de vuelta."""
+    """On a machine with no browser there is nowhere to redirect: the point of
+    manual mode is that the user opens the URL anywhere and pastes back."""
     import io
 
     monkeypatch.setenv("OURA_CLIENT_ID", "id")
@@ -187,8 +187,8 @@ def test_manual_mode_starts_no_server(monkeypatch, capsys):
     monkeypatch.setattr(az.sys, "stdin", io.StringIO(
         "http://localhost:9876/callback/?code=EL-CODIGO&state=REEMPLAZAR\n"))
 
-    # El estado se genera adentro, así que hay que dejar que corra una vez para
-    # conocerlo. Se reinyecta la entrada con el estado correcto.
+    # The state is generated inside, so it has to run once to learn it. The
+    # input is then re-injected with the correct state.
     with pytest.raises(OuraError):
         az.authorize(manual=True, salida=salida)
     bueno = estado_visto["estado"]
@@ -201,7 +201,7 @@ def test_manual_mode_starts_no_server(monkeypatch, capsys):
     assert guardadas["codigo"] == "EL-CODIGO"
     assert resumen["authorized"] is True
     assert resumen["granted_scopes"] == ["daily"]
-    # Y que la URL quedó impresa, que es lo único que el usuario necesita.
+    # And that the URL was printed, which is all the user needs.
     assert "cloud.ouraring.com/oauth/authorize" in salida.getvalue()
 
 
