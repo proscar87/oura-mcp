@@ -926,13 +926,82 @@ not pending work.
 
 ---
 
-## Execution order
+## Execution order — reprioritized 10 August 2026
 
-1. **v0.2** — done.
-2. **v0.3** — done.
-3. **v0.4** — `uvx` in the README, plugin, and the binary-versus-port decision:
-   measured, and the answer is TypeScript if Claude Desktop is genuinely the goal.
-4. **v0.5** — submit the MCPB to the directory.
+Rewritten after reading the WHOOP ecosystem and counting the field. The old
+order assumed getting listed was the finish line. It isn't.
 
-And separately, free and overdue: `smithery.yaml`, `glama.json` and `llms.txt`
-are in. PRs to `awesome-mcp-servers` and mcp.so are not.
+### The number that reorders everything
+
+**The MCP registry already carries ten Oura servers.** Measured directly against
+the registry API on 10 August 2026:
+
+| version | server |
+|---------|--------|
+| 1.16.0  | `ai.smithery/eliu243-oura-mcp-server` (listed three times) |
+| 0.6.0   | `ai.foura/mcp` |
+| 0.4.6   | `io.github.davidmosiah/ouramcp` |
+| 0.4.1   | `io.github.AntVsl/oura-mcp` |
+| 0.3.0   | `io.github.proscar87/oura-mcp` ← this one |
+| 0.2.13  | `io.github.YasuakiOmokawa/oura-mcp` |
+| 0.2.0   | `io.github.jordanburke/oura-ring-mcp-server` |
+| 0.1.4   | `io.github.mitchhankins01/oura-ring-mcp` |
+| 0.1.1   | `link.smirnov/mcp-oura` |
+| 1.0.0   | `com.sendyouragent/readiness` |
+
+Being in the registry sat near the top of the old list. It is **table stakes**:
+everyone is there, several of them for longer and at higher version numbers. A
+listing is the cost of entry, not a differentiator, and any plan whose payoff is
+"we get listed" is a plan to be tenth.
+
+What is scarce is the **Claude desktop extension directory** — a separate, much
+smaller door, and the only one that ends in a double-click.
+
+### 1. Attach the `.mcpb` to a GitHub release · the README is lying right now
+
+The README sends people to a releases page that is **empty** — verified, zero
+releases. The most visible install path in the most-read file leads nowhere.
+Everything below is worth less than fixing a broken promise that is already in
+front of people. Costs one command.
+
+### 2. Make the first screen of the README say the difference
+
+The ecosystem scan showed the differentiator is real and invisible.
+`jonnyhaynes/whoop-mcp-server` ships `nextToken` **as a tool parameter** — the
+model is expected to paginate — and someone comparing ten Oura servers has no
+way to tell which ones do that. Ours explains it well below the fold.
+
+The claim has to be the first thing read, and checkable in the time someone
+spends choosing: *one local day of heart rate is 1,231 samples across 2 pages; a
+client that doesn't paginate returns 81% of them and says nothing.* Measured,
+quotable, and nobody else in the field publishes a number like it.
+
+### 3. Submit to the Claude desktop extension directory
+
+Now genuinely the highest-leverage listing, precisely because the registry is
+crowded and this door is not. Depends on 1.
+
+### 4. `awesome-mcp-servers` and mcp.so
+
+Still free, still not done, now correctly ranked **below** the two above rather
+than alongside them.
+
+### Settled — removed from the roadmap, not deferred
+
+**Embedding OAuth app credentials.** Every WHOOP server examined makes the user
+register their own application. That is what this category looks like when the
+vendor requires registered apps. It was the last piece of install friction and
+it is not ours to remove. What remains is keeping that one step short and
+impossible to get wrong, which the manifest already does by spelling out the
+trailing slash.
+
+**More tools, and server-side analysis.** `thebriangao/totem` runs 47 tools and
+still computes no trends, averages or correlations. Tool count was never what
+forces analysis into a server, so growing ours wouldn't threaten the line we
+drew — and wouldn't help either. Three tools stay.
+
+**Chasing stars.** The most-starred WHOOP repository (`OpenStrap/edge`, 427
+stars) is about using the hardware *without a subscription*. Oura doesn't
+paywall its API, so there is no equivalent lever here. The attention in this
+category is for escaping a fee; mistaking it for interest in MCP servers would
+send us building the wrong thing.
