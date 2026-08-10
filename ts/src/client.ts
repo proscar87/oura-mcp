@@ -150,6 +150,24 @@ export function dayOf(registro: unknown): string | null {
 /** `YYYY-MM-DD` ± days. If it doesn't parse it's returned untouched: a
  * malformed date is rejected by Oura with a 422 explaining what it expected, and
  * that message is more useful than anything we could invent. */
+/** A bare `YYYY-MM-DD` becomes the START of that day. */
+export function widenStart(value: string): string {
+  return value.length === 10 ? `${value}T00:00:00` : value;
+}
+
+/**
+ * A bare `YYYY-MM-DD` becomes the END of that day.
+ *
+ * 23:59:59 rather than the next midnight, and that is a guess hedged in the
+ * safe direction, NOT a measurement: whether `end_datetime` is inclusive has
+ * not been tested. If it is, midnight would pull in the following day's first
+ * sample and attribute it to this one. If it isn't, 23:59:59 costs at most the
+ * final second — and `heartrate` samples every five minutes.
+ */
+export function widenEnd(value: string): string {
+  return value.length === 10 ? `${value}T23:59:59` : value;
+}
+
 export function shiftDays(fecha: string, dias: number): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(fecha);
   if (!m) return fecha;
@@ -515,8 +533,13 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
       params.set("start_date", shiftDays(start, -EXTRA_DAYS));
       params.set("end_date", shiftDays(end, +EXTRA_DAYS));
     } else {
-      params.set("start_datetime", start);
-      params.set("end_datetime", end);
+      // A BARE DATE HERE IS A ZERO-WIDTH WINDOW. `day="2026-01-01"` on
+      // `heartrate` produced start_datetime === end_datetime — an interval of
+      // no duration — Oura returned nothing, and the empty-reason blamed Oura
+      // for a window this client had emptied itself. A date means the whole
+      // day, which is what anyone typing one means.
+      params.set("start_datetime", widenStart(start));
+      params.set("end_datetime", widenEnd(end));
     }
   }
 

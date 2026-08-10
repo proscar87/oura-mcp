@@ -875,3 +875,42 @@ def test_a_list_of_fields_is_not_announced_as_split(monkeypatch):
     r = client.fetch("daily_sleep", "2026-01-01", "2026-01-02",
                      fields=["day", "score"])
     assert "fields_split" not in r
+
+
+def test_a_bare_date_on_a_datetime_collection_means_the_whole_day(monkeypatch):
+    """«What was my heart rate on January 1st» returned nothing.
+
+    `heartrate` and `ring_battery_level` take `start_datetime`/`end_datetime`,
+    and a bare `YYYY-MM-DD` went through untouched: `start_datetime=2026-01-01&
+    end_datetime=2026-01-01` is an interval of NO DURATION. Oura returned zero
+    records and the empty-reason blamed Oura — "the query succeeded; Oura has no
+    records in that range" — for a window this client had made empty itself.
+
+    This package's own thesis committed by this package: the answer looked right
+    and wasn't, with the explanation pointing away from the cause.
+    """
+    llamadas = _fake_oura([[{"timestamp": "2026-01-01T10:00:00+00:00", "bpm": 60}]],
+                          monkeypatch)
+    r = client.fetch("heartrate", "2026-01-01", "2026-01-01")
+
+    url = llamadas[0]
+    assert "start_datetime=2026-01-01T00%3A00%3A00" in url, url
+    assert "end_datetime=2026-01-01T23%3A59%3A59" in url, url
+    assert r["n"] == 1
+
+
+def test_an_explicit_time_is_left_exactly_as_given(monkeypatch):
+    """Widening only fills in what wasn't said. Someone who asked for a
+    two-hour window gets a two-hour window."""
+    llamadas = _fake_oura([[]], monkeypatch)
+    client.fetch("heartrate", "2026-01-01T08:00:00", "2026-01-01T10:00:00")
+    assert "start_datetime=2026-01-01T08%3A00%3A00" in llamadas[0]
+    assert "end_datetime=2026-01-01T10%3A00%3A00" in llamadas[0]
+
+
+def test_date_collections_are_untouched_by_the_widening(monkeypatch):
+    """`daily_sleep` still gets dates with the ±2-day margin, not timestamps."""
+    llamadas = _fake_oura([[]], monkeypatch)
+    client.fetch("daily_sleep", "2026-01-05", "2026-01-06")
+    assert "start_date=2026-01-03" in llamadas[0]
+    assert "T00" not in llamadas[0]

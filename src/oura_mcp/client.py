@@ -309,6 +309,34 @@ def day_of(record: dict) -> str | None:
     return None
 
 
+def _widen_start(value: str | None) -> str | None:
+    """A bare `YYYY-MM-DD` becomes the START of that day."""
+    if value and len(value) == 10:
+        return f"{value}T00:00:00"
+    return value
+
+
+def _widen_end(value: str | None) -> str | None:
+    """A bare `YYYY-MM-DD` becomes the END of that day.
+
+    23:59:59 rather than the next day at 00:00:00, and the reason is a guess
+    hedged in the safe direction, NOT a measurement: whether `end_datetime` is
+    inclusive has not been tested. If it is, midnight would pull in the first
+    sample of the following day and quietly attribute it to this one. If it
+    isn't, 23:59:59 costs at most the last second of the day — and `heartrate`
+    samples every five minutes, so nothing is lost in practice.
+
+    The asymmetry is deliberate: being wrong here loses one second, while the
+    other choice contaminates a day. It cannot be measured against the sandbox,
+    which is a generator rather than a filter, and measuring it against a real
+    account would mean handling someone's health data to settle a detail that
+    the conservative choice already covers.
+    """
+    if value and len(value) == 10:
+        return f"{value}T23:59:59"
+    return value
+
+
 def _shift_days(date: str, days: int) -> str:
     """`YYYY-MM-DD` ± days. If it doesn't parse, it's returned untouched.
 
@@ -600,8 +628,18 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
             params["start_date"] = _shift_days(start, -EXTRA_DAYS)
             params["end_date"] = _shift_days(end, +EXTRA_DAYS)
         else:
-            params[f"start_{key}"] = start
-            params[f"end_{key}"] = end
+            # A BARE DATE ON A DATETIME COLLECTION IS A ZERO-WIDTH WINDOW.
+            # `day="2026-01-01"` on `heartrate` produced
+            # `start_datetime=2026-01-01&end_datetime=2026-01-01` — an interval
+            # of no duration — Oura returned nothing, and the empty-reason said
+            # "Oura has no records in that range". A person asking what their
+            # heart rate was on a given day got zero, blamed on Oura.
+            #
+            # This package's own thesis, committed by this package: the answer
+            # looked right and was not. A date means the whole day, which is
+            # what anyone typing one means.
+            params[f"start_{key}"] = _widen_start(start)
+            params[f"end_{key}"] = _widen_end(end)
 
     root = base()
     data, pages, next_token = [], 0, None

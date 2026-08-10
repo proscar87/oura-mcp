@@ -98,7 +98,30 @@ def oura_collections() -> dict:
 
     Use it before `oura_query` if you are unsure of the exact name.
     """
-    return {n: {"shape": f, "que_trae": d} for n, (f, d) in COLLECTIONS.items()}
+    return {n: {"shape": f, "carries": d} for n, (f, d) in COLLECTIONS.items()}
+
+
+@server.resource("oura://collections",
+                 name="Oura collection catalog",
+                 description="The 19 collections, what each carries and which "
+                             "parameters it takes. Static: no network, no "
+                             "credentials, no health data.",
+                 mime_type="application/json")
+def collections_resource() -> str:
+    """The same catalog as `oura_collections`, attachable instead of called.
+
+    The most likely mistake on this server is inventing a collection name — the
+    error for it exists and lists all nineteen, which is an admission that it
+    was expected. A resource puts the list in front of the model BEFORE the
+    mistake instead of after it, and costs no round trip.
+
+    Static data, so it touches nothing: no network, no credentials, and no
+    health values of any kind.
+    """
+    import json
+    return json.dumps(
+        {n: {"shape": f, "carries": d} for n, (f, d) in COLLECTIONS.items()},
+        indent=2, ensure_ascii=False)
 
 
 @server.tool(title="Query an Oura collection",

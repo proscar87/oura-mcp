@@ -489,3 +489,38 @@ describe("fields as a string", () => {
     expect(r["fields_split"]).toBeUndefined();
   });
 });
+
+// ── A bare date on a datetime collection ───────────────────────────────────
+describe("whole-day widening", () => {
+  it("turns a bare date into the whole day", async () => {
+    // "What was my heart rate on January 1st" returned nothing: a bare date
+    // went through untouched, start_datetime === end_datetime, an interval of
+    // no duration. Oura returned zero and the empty-reason blamed Oura for a
+    // window this client had emptied itself.
+    const urls: string[] = [];
+    fakeOura([[{ timestamp: "2026-01-01T10:00:00+00:00", bpm: 60 }]], urls);
+    const r = await fetchAll("heartrate", { start: "2026-01-01", end: "2026-01-01" });
+
+    expect(urls[0]).toContain("start_datetime=2026-01-01T00%3A00%3A00");
+    expect(urls[0]).toContain("end_datetime=2026-01-01T23%3A59%3A59");
+    expect(r["n"]).toBe(1);
+  });
+
+  it("leaves an explicit time exactly as given", async () => {
+    // Widening only fills in what wasn't said.
+    const urls: string[] = [];
+    fakeOura([[]], urls);
+    await fetchAll("heartrate",
+      { start: "2026-01-01T08:00:00", end: "2026-01-01T10:00:00" });
+    expect(urls[0]).toContain("start_datetime=2026-01-01T08%3A00%3A00");
+    expect(urls[0]).toContain("end_datetime=2026-01-01T10%3A00%3A00");
+  });
+
+  it("does not touch the date collections", async () => {
+    const urls: string[] = [];
+    fakeOura([[]], urls);
+    await fetchAll("daily_sleep", { start: "2026-01-05", end: "2026-01-06" });
+    expect(urls[0]).toContain("start_date=2026-01-03");
+    expect(urls[0]).not.toContain("T00");
+  });
+});

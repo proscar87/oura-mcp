@@ -422,3 +422,42 @@ def test_the_docs_name_the_parameters_the_tool_actually_takes():
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
     for p in real:
         assert f"`{p}`" in readme, f"README never mentions the `{p}` parameter"
+
+
+def test_both_catalogs_describe_the_collections_identically():
+    """The catalog is PUBLIC OUTPUT, and the two implementations disagreed on it.
+
+    TypeScript spells its internal shape type `dateRange` and Python spells it
+    `date_range`, and both leaked straight into the tool result — so the same
+    server described itself two different ways depending on which one someone
+    installed. Oura's own parameters are `start_date` and `start_datetime`, so
+    snake_case is the side that matches the API these names describe.
+
+    Compares the Python catalog against the names TypeScript maps to, without
+    running Node: this test lives in the mandatory CI, which has Python only.
+    """
+    from oura_mcp.collections import COLLECTIONS
+
+    ts = (ROOT / "ts" / "src" / "collections.ts").read_text(encoding="utf-8")
+    mapped = set(re.findall(r'"(date_range|datetime_range|single|token_only)"', ts))
+    python_shapes = {f for f, _ in COLLECTIONS.values()}
+    assert python_shapes <= mapped, \
+        f"TypeScript maps no public name for: {python_shapes - mapped}"
+
+    # And the count and names of collections must agree.
+    ts_names = set(re.findall(r"^  ([a-zA-Z0-9_]+): \{ shape:", ts, re.M))
+    assert ts_names == set(COLLECTIONS), \
+        f"only in Python: {set(COLLECTIONS) - ts_names}; only in TS: {ts_names - set(COLLECTIONS)}"
+
+
+def test_no_tool_returns_a_key_in_spanish():
+    """The catalog returned `que_trae`. The earlier key test only read
+    `client.py`, so the whole server surface went unwatched — a fourth
+    vocabulary after flags, response keys and parameters.
+    """
+    for f in ("src/oura_mcp/server.py", "ts/src/server.ts"):
+        text = (ROOT / f).read_text(encoding="utf-8")
+        for dead in ("que_trae", "paginas", "coleccion", "campos_ignorados",
+                     "modo", "responde"):
+            assert f'"{dead}"' not in text, f"{f} returns `{dead}`"
+            assert f"{dead}:" not in text, f"{f} returns `{dead}`"
