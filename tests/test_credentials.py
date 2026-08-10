@@ -350,3 +350,78 @@ def test_an_unreachable_oura_is_not_a_traceback(monkeypatch):
     with pytest.raises(OuraError) as e:
         cr._post({"grant_type": "refresh_token"})
     assert "could not reach Oura" in str(e.value)
+
+
+# ── Two tool calls at once, after the token expired ────────────────────────
+def test_two_threads_refreshing_exchange_the_token_once(monkeypatch):
+    """Oura's refresh token is SINGLE USE, and MCP tools run concurrently.
+
+    Two queries arriving after expiry started two exchanges of the same token:
+    the first won and the second came back «Refresh token already used» — a
+    failure the person cannot act on, reading like corruption, on a query that
+    had nothing wrong with it.
+
+    A recovery already existed (reload and use whatever another refresher
+    saved), but it is ITSELF a race: it only works if the winner finished
+    writing before the loser finished reading. The fake endpoint below sleeps on
+    purpose so the race is reliable rather than occasional.
+    """
+    import threading
+
+    usados = set()
+    llamadas = []
+    cerrojo = threading.Lock()
+
+    def _post_falso(data):
+        with cerrojo:
+            llamadas.append(1)
+            t = data["refresh_token"]
+            ya = t in usados
+            usados.add(t)
+        time.sleep(0.02)                      # a real round trip
+        if ya:
+            raise OuraError("Oura rejected the exchange (400): Refresh token already used.")
+        return {"access_token": "A2", "refresh_token": f"R2-{len(llamadas)}",
+                "expires_in": 3600, "scope": "daily"}
+
+    monkeypatch.setattr(cr, "_post", _post_falso)
+    vencida = _cred(refresh_token="R1", expires_at=time.time() - 10)
+    cr.save(vencida)
+
+    salidas: list = []
+    errores: list = []
+
+    def correr():
+        try:
+            salidas.append(cr.refresh(vencida, "id", "secreto"))
+        except Exception as e:        # noqa: BLE001
+            errores.append(e)
+
+    hilos = [threading.Thread(target=correr) for _ in range(2)]
+    for h in hilos:
+        h.start()
+    for h in hilos:
+        h.join()
+
+    assert not errores, f"a caller was refused: {errores}"
+    assert len(llamadas) == 1, "the single-use token was spent twice"
+    assert salidas[0].refresh_token.reveal() == salidas[1].refresh_token.reveal()
+
+
+def test_a_refresh_of_a_credential_nobody_replaced_still_happens(monkeypatch):
+    """The re-read under the lock has to be narrow. Short-circuiting on «what's
+    on disk looks fine» would make `refresh()` a no-op for the ordinary caller —
+    the test is «different from the one I am holding», not merely «valid»."""
+    llamadas = []
+
+    def _post_falso(data):
+        llamadas.append(data["refresh_token"])
+        return {"access_token": "A2", "refresh_token": "R2", "expires_in": 3600}
+
+    monkeypatch.setattr(cr, "_post", _post_falso)
+    vigente = _cred(refresh_token="R1")
+    cr.save(vigente)
+
+    nueva = cr.refresh(vigente, "id", "secreto")
+    assert llamadas == ["R1"], "it skipped an exchange it was asked to make"
+    assert nueva.refresh_token.reveal() == "R2"

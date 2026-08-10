@@ -28,6 +28,7 @@ from __future__ import annotations
 import dataclasses
 import json
 import os
+import threading
 import tempfile
 import time
 import urllib.error
@@ -271,6 +272,29 @@ def exchange_code(codigo: str, client_id: str, client_secret: str,
     return cred
 
 
+_REFRESH_LOCK = threading.Lock()
+"""One refresh at a time IN THIS PROCESS.
+
+Oura's refresh token is single-use, and MCP tools run concurrently. Two queries
+arriving after the access token expired started two exchanges of the SAME token:
+the first won and the second came back
+
+    Oura rejected the exchange (400): Refresh token already used.
+
+A failure the person cannot act on, reading like corruption, on a query that had
+nothing wrong with it. Reproduced with two concurrent refreshes: two calls to the
+token endpoint, one rejection.
+
+There was already a recovery — on failure, reload and use whatever another
+refresher saved — but that recovery is ITSELF a race: it only works if the winner
+finished writing before the loser finished reading.
+
+The lock removes the in-process case entirely. The cross-process case (the CLI
+and the server at once) still needs the recovery below, because no lock here can
+see another process.
+"""
+
+
 def refresh(cred: Credentials, client_id: str, client_secret: str) -> Credentials:
     """Renews the pair and SAVES IT BEFORE RETURNING IT.
 
@@ -284,6 +308,28 @@ def refresh(cred: Credentials, client_id: str, client_secret: str) -> Credential
     in parallel — and the one that loses the race would see a 400 even though the
     session is perfectly alive, already renewed by the other.
     """
+    with _REFRESH_LOCK:
+        return _refresh_locked(cred, client_id, client_secret)
+
+
+def _refresh_locked(cred: Credentials, client_id: str,
+                    client_secret: str) -> Credentials:
+    """Runs holding `_REFRESH_LOCK`.
+
+    The re-read is the POINT of the lock, not a side effect: whoever waited on it
+    is holding a credential the winner has already replaced, and exchanging that
+    one would consume a token which is now dead.
+    """
+    ya = load()
+    if (ya is not None and ya.refresh_token is not None and not ya.expired()
+            and cred.refresh_token is not None
+            and ya.refresh_token.reveal() != cred.refresh_token.reveal()):
+        # SOMEBODY ELSE ALREADY DID IT. The test is "different from the one I am
+        # holding", not merely "valid": a caller who asks to refresh a credential
+        # that is still the current one means it, and short-circuiting on
+        # freshness alone would turn `refresh()` into a no-op for everyone.
+        return ya
+
     if not cred.refresh_token:
         raise OuraError("no refresh token; you need to authorize again")
     try:

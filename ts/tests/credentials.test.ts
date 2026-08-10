@@ -245,3 +245,75 @@ describe("the OAuth state", () => {
       .toThrow(/state/);
   });
 });
+
+// ── Two queries at once, after the token expired ───────────────────────────
+describe("concurrent refresh", () => {
+  it("exchanges the token ONCE and answers both callers", async () => {
+    // Oura's refresh token is single use. MCP tools run concurrently, so two
+    // queries arriving after expiry started two exchanges of the same token:
+    // the first won and the second came back «Refresh token already used» — a
+    // failure the person cannot act on, reading like corruption, on a query
+    // that had nothing wrong with it.
+    //
+    // The recovery that existed (reload and use whatever another refresher
+    // saved) is itself a race: it only works if the winner finished writing
+    // before the loser finished reading. This test fails without the shared
+    // promise, reliably, because the fake endpoint takes time on purpose.
+    const used = new Set<string>();
+    let calls = 0;
+    vi.stubGlobal("fetch", async (_u: string, o: RequestInit) => {
+      calls++;
+      const t = new URLSearchParams(String(o.body)).get("refresh_token") ?? "";
+      await new Promise((r) => setTimeout(r, 20));      // a real round trip
+      if (used.has(t)) {
+        return new Response(JSON.stringify({ error: "invalid_grant",
+          error_description: "Refresh token already used." }), { status: 400 });
+      }
+      used.add(t);
+      return new Response(JSON.stringify(
+        { access_token: "A2", refresh_token: `R2-${calls}`, expires_in: 3600 }));
+    });
+
+    const expired = cred("R1", Date.now() - 1000);
+    await save(expired);
+
+    const [a, b] = await Promise.all([
+      refresh(expired, "id", "secret"),
+      refresh(expired, "id", "secret"),
+    ]);
+
+    expect(calls).toBe(1);                       // the token was spent once
+    expect(a.refreshToken?.reveal()).toBe(b.refreshToken?.reveal());
+  });
+
+  it("gives both callers the real reason when the exchange truly fails", async () => {
+    // Sharing the failure is deliberate. If the refresh genuinely cannot
+    // succeed, both should hear why — not one of them hearing "already used",
+    // which points at the wrong problem.
+    vi.stubGlobal("fetch", async () => new Response(
+      JSON.stringify({ error: "invalid_client",
+                       error_description: "Invalid client_id." }), { status: 400 }));
+
+    const expired = cred("R1", Date.now() - 1000);
+    const results = await Promise.allSettled([
+      refresh(expired, "id", "secret"),
+      refresh(expired, "id", "secret"),
+    ]);
+    for (const r of results) {
+      expect(r.status).toBe("rejected");
+      expect(String((r as PromiseRejectedResult).reason.message))
+        .toContain("Invalid client_id.");
+    }
+  });
+
+  it("does not wedge: a later refresh still runs", async () => {
+    // If the shared promise were never cleared, one failure would poison every
+    // refresh for the life of the process.
+    vi.stubGlobal("fetch", async () => new Response("{}", { status: 400 }));
+    await expect(refresh(cred("R1", Date.now() - 1000), "id", "secret")).rejects.toThrow();
+
+    fakeToken({ access_token: "A3", refresh_token: "R3", expires_in: 3600 });
+    const ok = await refresh(cred("R1", Date.now() - 1000), "id", "secret");
+    expect(ok.refreshToken?.reveal()).toBe("R3");
+  });
+});

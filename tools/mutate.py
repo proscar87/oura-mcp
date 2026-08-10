@@ -62,6 +62,9 @@ PYTHON = [
      [('            if "403" in str(e):', "            if False:")]),
     ("Secret is not printable", "src/oura_mcp/client.py",
      [('        return f"<secret, {len(self._value)} characters>"', "        return self._value")]),
+    ("one refresh at a time", "src/oura_mcp/credentials.py",
+     [("    with _REFRESH_LOCK:\n        return _refresh_locked(cred, client_id, client_secret)",
+       "    return _refresh_locked(cred, client_id, client_secret)")]),
     ("the credentials file leaves no debris", "src/oura_mcp/credentials.py",
      [("        try:\n            os.unlink(temporal)\n        except OSError:\n            pass\n        raise",
        "        raise")]),
@@ -88,6 +91,8 @@ TYPESCRIPT = [
        '[Symbol.for("nodejs.util.inspect.custom")](): string {\n    return this.#valor;')]),
     ("CSV quotes what would shift a column", "ts/src/client.ts",
      [("""/[",\\n\\r]/.test(s)""", "/never-matches/.test(s)")]),
+    ("one refresh at a time", "ts/src/credentials.ts",
+     [("  if (inFlight) return inFlight;", "")]),
     ("the credentials file leaves no debris", "ts/src/credentials.ts",
      [("await rm(tmp, { force: true });", "")]),
 ]
