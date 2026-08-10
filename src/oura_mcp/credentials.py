@@ -110,13 +110,13 @@ class Credentials:
         # its own.
         when = "expired" if self.expired(0) else f"valid for {int(self.expires_at - time.time())}s"
         return (f"<Credentials {when}, refresh_token={'yes' if self.refresh_token else 'no'}, "
-        return (f"<Credentials {when}, refresh_token={'yes' if self.refresh_token else 'no'}, "
+                f"scopes={len(self.scopes)}>")
 
 
 # ── Keychain, if present ───────────────────────────────────────────────────
 def _keyring():
     """The `keyring` module if the user has it, or None. NEVER a dependency."""
-    if (os.environ.get("OURA_SIN_LLAVERO") or "").strip():
+    if (os.environ.get("OURA_NO_KEYCHAIN") or "").strip():
         return None
     try:
         import keyring

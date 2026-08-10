@@ -21,10 +21,10 @@ from oura_mcp.client import OuraError, Secret
 
 
 @pytest.fixture(autouse=True)
-def _aislar(tmp_path, monkeypatch):
+def _isolate(tmp_path, monkeypatch):
     """Cada prueba con su propio file, y sin tocar el llavero de nadie."""
     monkeypatch.setenv("OURA_CREDENTIALS", str(tmp_path / "cred.json"))
-    monkeypatch.setenv("OURA_SIN_LLAVERO", "1")
+    monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
     return tmp_path
 
 
@@ -39,19 +39,19 @@ def _cred(refresh_token="R1", expires_at=None, scopes=("daily",)):
 
 # ── Guardar ─────────────────────────────────────────────────────────────────
 def test_el_archivo_queda_en_600():
-    ruta = cr.save(_cred())
-    mode = stat.S_IMODE(os.stat(ruta).st_mode)
+    path = cr.save(_cred())
+    mode = stat.S_IMODE(os.stat(path).st_mode)
     assert mode == 0o600, oct(mode)
 
 
-def test_el_directorio_queda_en_700(_aislar, monkeypatch):
-    monkeypatch.setenv("OURA_CREDENTIALS", str(_aislar / "hondo" / "cred.json"))
-    ruta = cr.save(_cred())
-    mode = stat.S_IMODE(os.stat(os.path.dirname(ruta)).st_mode)
+def test_the_directory_ends_up_at_700(_isolate, monkeypatch):
+    monkeypatch.setenv("OURA_CREDENTIALS", str(_isolate / "hondo" / "cred.json"))
+    path = cr.save(_cred())
+    mode = stat.S_IMODE(os.stat(os.path.dirname(path)).st_mode)
     assert mode == 0o700, oct(mode)
 
 
-def test_ida_y_vuelta():
+def test_round_trip():
     cr.save(_cred(scopes=("daily", "heartrate")))
     leida = cr.load()
     assert leida.access.reveal() == "A1"
@@ -63,14 +63,14 @@ def test_sin_archivo_no_hay_credenciales():
     assert cr.load() is None
 
 
-def test_un_archivo_corrupto_dice_qué_hacer(_aislar):
-    ruta = _aislar / "cred.json"
-    ruta.write_text("{no es json")
+def test_un_archivo_corrupto_dice_qué_hacer(_isolate):
+    path = _isolate / "cred.json"
+    path.write_text("{no es json")
     with pytest.raises(OuraError, match="authorize again"):
         cr.load()
 
 
-def test_no_queda_basura_si_falla_a_medio_escribir(_aislar, monkeypatch):
+def test_no_debris_is_left_if_it_fails_mid_write(_isolate, monkeypatch):
     """Un file de credentials a medio escribir es peor que ninguno: el
     refresh token viejo ya se consumió y el nuevo era lo único que salvaba la
     sesión."""
@@ -80,7 +80,7 @@ def test_no_queda_basura_si_falla_a_medio_escribir(_aislar, monkeypatch):
     monkeypatch.setattr(cr.os, "replace", revienta)
     with pytest.raises(OSError):
         cr.save(_cred())
-    sobras = [p for p in os.listdir(_aislar) if p.startswith(".cred-")]
+    sobras = [p for p in os.listdir(_isolate) if p.startswith(".cred-")]
     assert sobras == [], sobras
 
 
@@ -92,21 +92,21 @@ def test_olvidar_no_falla_si_no_habia():
 
 
 # ── Que nada imprima los tokens ─────────────────────────────────────────────
-def test_el_repr_de_las_credenciales_no_lleva_tokens():
+def test_the_credentials_repr_carries_no_tokens():
     """`Secret` se protege solo, pero un dataclass con repr automático los
     imprimiría por su cuenta."""
     c = _cred()
     assert "A1" not in repr(c)
     assert "R1" not in repr(c)
-    assert "vigente" in repr(c)
+    assert "valid for" in repr(c)
 
 
-def test_el_archivo_guardado_no_es_legible_por_otros(_aislar):
+def test_el_archivo_guardado_no_es_legible_por_otros(_isolate):
     """Obvio y por eso vale probarlo: el contenido SÍ lleva los tokens en claro,
     y lo único que los protege son los permisos."""
-    ruta = cr.save(_cred())
-    assert "R1" in open(ruta).read()
-    assert stat.S_IMODE(os.stat(ruta).st_mode) & 0o077 == 0
+    path = cr.save(_cred())
+    assert "R1" in open(path).read()
+    assert stat.S_IMODE(os.stat(path).st_mode) & 0o077 == 0
 
 
 # ── Caducidad ───────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ def test_un_token_que_expira_en_tres_segundos_ya_esta_caducado():
 
 
 # ── La rotación: donde se pierde la sesión si se hace mal ───────────────────
-def _oura_de_tokens(monkeypatch, respuesta, registrar=None):
+def _fake_token_endpoint(monkeypatch, respuesta, registrar=None):
     def postear(data):
         if registrar is not None:
             registrar.append(data)
@@ -133,7 +133,7 @@ def test_refrescar_guarda_antes_de_devolver(monkeypatch):
     entre la respuesta y el guardado hay una ventana en la que el viejo ya murió
     y el nuevo no existe en disco. Esta prueba fija que sea lo más corta
     posible: al momento de devolver, ya está guardado."""
-    _oura_de_tokens(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
+    _fake_token_endpoint(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
                                   "expires_in": 3600, "scope": "daily"})
     devuelta = cr.refresh(_cred(), "id", "secreto")
     en_disco = cr.load()
@@ -143,7 +143,7 @@ def test_refrescar_guarda_antes_de_devolver(monkeypatch):
 
 def test_el_refresco_manda_el_token_viejo(monkeypatch):
     enviados = []
-    _oura_de_tokens(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
+    _fake_token_endpoint(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
                                   "expires_in": 3600}, registrar=enviados)
     cr.refresh(_cred(refresh_token="R1"), "id", "secreto")
     assert enviados[0]["grant_type"] == "refresh_token"
@@ -155,18 +155,18 @@ def test_si_otro_proceso_ya_refresco_la_sesion_no_se_da_por_perdida(monkeypatch)
     la carrera ve un 400 aunque la sesión esté viva, ya renovada por el otro."""
     cr.save(cr.Credentials(access=Secret("A9"), refresh_token=Secret("R9"),
                                expires_at=time.time() + 3600, scopes=("daily",)))
-    _oura_de_tokens(monkeypatch, OuraError("Oura rechazó el canje (400)"))
+    _fake_token_endpoint(monkeypatch, OuraError("Oura rechazó el canje (400)"))
     recuperada = cr.refresh(_cred(refresh_token="R1"), "id", "secreto")
     assert recuperada.access.reveal() == "A9"
 
 
-def test_si_falla_y_no_hay_nada_guardado_se_propaga(monkeypatch):
-    _oura_de_tokens(monkeypatch, OuraError("Oura rechazó el canje (400)"))
+def test_if_it_fails_and_nothing_is_saved_it_propagates(monkeypatch):
+    _fake_token_endpoint(monkeypatch, OuraError("Oura rechazó el canje (400)"))
     with pytest.raises(OuraError, match="400"):
         cr.refresh(_cred(), "id", "secreto")
 
 
-def test_sin_refresh_token_se_dice_que_hay_que_autorizar(monkeypatch):
+def test_without_a_refresh_token_it_says_to_authorize(monkeypatch):
     with pytest.raises(OuraError, match="authorize again"):
         cr.refresh(_cred(refresh_token=None), "id", "secreto")
 
@@ -174,21 +174,21 @@ def test_sin_refresh_token_se_dice_que_hay_que_autorizar(monkeypatch):
 def test_se_guardan_los_alcances_concedidos_no_los_pedidos(monkeypatch):
     """La pantalla de consentimiento devuelve lo que el usuario ACEPTÓ, que no
     siempre es lo que se pidió. El autodiagnóstico se apoya en esto."""
-    _oura_de_tokens(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
+    _fake_token_endpoint(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
                                   "expires_in": 3600, "scope": "daily personal"})
     nueva = cr.refresh(_cred(scopes=("daily", "heartrate", "spo2")), "id", "s")
     assert nueva.scopes == ("daily", "personal")
 
 
-def test_una_respuesta_sin_access_token_es_un_error(monkeypatch):
-    _oura_de_tokens(monkeypatch, {"token_type": "Bearer"})
+def test_a_response_without_access_token_is_an_error(monkeypatch):
+    _fake_token_endpoint(monkeypatch, {"token_type": "Bearer"})
     with pytest.raises(OuraError, match="without `access_token`"):
         cr.refresh(_cred(), "id", "secreto")
 
 
 def test_canjear_codigo_tambien_guarda(monkeypatch):
     enviados = []
-    _oura_de_tokens(monkeypatch, {"access_token": "A1", "refresh_token": "R1",
+    _fake_token_endpoint(monkeypatch, {"access_token": "A1", "refresh_token": "R1",
                                   "expires_in": 3600}, registrar=enviados)
     cr.exchange_code("el-codigo", "id", "secreto")
     assert enviados[0]["grant_type"] == "authorization_code"
@@ -196,7 +196,7 @@ def test_canjear_codigo_tambien_guarda(monkeypatch):
     assert cr.load().access.reveal() == "A1"
 
 
-def test_el_redirect_por_defecto_lleva_diagonal_final():
+def test_the_default_redirect_has_a_trailing_slash():
     """No es estilo: el portal de Oura rechaza `…/callback` con
     `invalid_redirect_uri` y acepta `…/callback/`."""
     assert cr.DEFAULT_REDIRECT.endswith("/callback/")
@@ -210,8 +210,8 @@ def test_una_ruta_relativa_pelada_no_truena(tmp_path, monkeypatch):
     se arrancó el server — que en un client MCP no es el que uno cree."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("OURA_CREDENTIALS", "cred.json")
-    ruta = cr.save(_cred())
-    assert os.path.isabs(ruta)
+    path = cr.save(_cred())
+    assert os.path.isabs(path)
     assert cr.load().refresh_token.reveal() == "R1"
 
 

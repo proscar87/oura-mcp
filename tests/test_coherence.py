@@ -39,7 +39,7 @@ def _version_declarada() -> str:
 
 
 # ── La versión, en todos lados ──────────────────────────────────────────────
-def test_server_json_coincide_con_pyproject():
+def test_server_json_matches_pyproject():
     """El registro de MCP valida que la versión exacta exista en PyPI. Si no
     coinciden, la publicación falla a medio camino: el paquete sube y el
     registro lo rechaza."""
@@ -49,19 +49,19 @@ def test_server_json_coincide_con_pyproject():
     assert s["packages"][0]["version"] == v
 
 
-def test_el_plugin_coincide_con_pyproject():
+def test_the_plugin_matches_pyproject():
     v = _version_declarada()
     assert _leer_json(".claude-plugin/plugin.json")["version"] == v
     assert _leer_json(".claude-plugin/marketplace.json")["plugins"][0]["version"] == v
 
 
-def test_el_handshake_anuncia_la_version_instalada():
+def test_the_handshake_announces_the_installed_version():
     from oura_mcp.server import _version
     assert _version() != "desconocida"
 
 
 # ── Lo que el registro exige y es fácil borrar sin querer ──────────────────
-def test_el_readme_conserva_la_prueba_de_propiedad():
+def test_the_readme_keeps_the_ownership_proof():
     """El registro de MCP comprueba que quien publica el server controla el
     paquete buscando esta línea en el README publicado en PyPI. Sin ella,
     `mcp-publisher publish` devuelve un 400."""
@@ -70,7 +70,7 @@ def test_el_readme_conserva_la_prueba_de_propiedad():
     assert f"mcp-name: {nombre}" in readme
 
 
-def test_el_readme_trae_la_politica_de_privacidad():
+def test_the_readme_carries_the_privacy_policy():
     """El directorio de conectores de Claude rechaza de inmediato si falta o
     está incompleta. Tiene que cubrir seis cosas.
 
@@ -103,7 +103,7 @@ def _docs() -> dict[str, str]:
     return docs
 
 
-def test_el_codigo_fuente_tampoco_repite_la_frase():
+def test_the_source_does_not_repeat_the_phrase_either():
     """La prueba de abajo sólo miraba los documentos, y la frase también vivía en
     el docstring de `client.py`. Los comentarios envejecen igual que el README y
     engañan igual — con la diferencia de que nadie los relee."""
@@ -112,7 +112,7 @@ def test_el_codigo_fuente_tampoco_repite_la_frase():
         assert "más completo de todos no pagina" not in texto, f.name
 
 
-def test_ningun_documento_repite_la_frase_que_dejo_de_ser_cierta():
+def test_no_document_repeats_the_phrase_that_stopped_being_true():
     """«El más completo de todos no pagina» era verdad y dejó de serlo:
     benngermin/oura-mcp pagina, con cursor reanudable. Una afirmación sobre la
     competencia que cualquiera puede verificar en un minuto es la más cara de
@@ -128,7 +128,7 @@ def test_ningun_documento_promete_cuatro_herramientas():
         assert "cuatro tools" not in texto.lower(), nombre
 
 
-def test_el_numero_de_colecciones_es_el_mismo_en_todos_lados():
+def test_the_collection_count_matches_everywhere():
     from oura_mcp.collections import COLLECTIONS
     assert len(COLLECTIONS) == 19
     for nombre, texto in _docs().items():
@@ -136,7 +136,7 @@ def test_el_numero_de_colecciones_es_el_mismo_en_todos_lados():
             assert equivocado not in texto, f"{nombre}: {equivocado}"
 
 
-def test_las_mediciones_se_citan_igual_en_todos_lados():
+def test_the_measurements_are_quoted_the_same_everywhere():
     """1,231 muestras en 2 páginas. Es un número medido; si se copia mal a otro
     file, la próxima persona no sabe cuál creer. El README está en inglés, así
     que ahí la unidad se llama «pages»."""
@@ -148,7 +148,7 @@ def test_las_mediciones_se_citan_igual_en_todos_lados():
         assert "1,250 muestras en 2 páginas" not in texto, nombre
 
 
-def test_lo_de_cara_al_mundo_esta_en_ingles():
+def test_the_outward_facing_files_are_in_english():
     """README y llms.txt son lo primero que ve un desconocido y lo que lee quien
     revisa el directorio de Claude. Los documentos internos siguen en español a
     propósito; mezclarlos es lo que hay que evitar."""
@@ -165,7 +165,7 @@ def test_lo_de_cara_al_mundo_esta_en_ingles():
     assert "Parameter names are in Spanish" in readme
 
 
-def test_ningun_documento_manda_a_crear_un_token_personal():
+def test_no_document_sends_you_to_create_a_personal_token():
     """Oura dejó de emitirlos en diciembre de 2025. Mandar a esa página deja a
     quien llegue atorado sin saber por qué."""
     for nombre, texto in _docs().items():
@@ -174,7 +174,7 @@ def test_ningun_documento_manda_a_crear_un_token_personal():
             assert "diciembre de 2025" in texto, f"{nombre} manda a la página sin advertir"
 
 
-def test_la_descripcion_cabe_en_el_registro():
+def test_the_description_fits_the_registry():
     """El registro de MCP topa `description` en 100 characters. La v0.2.0 se
     publicó en PyPI y falló en el registro por seis characters de más — con PyPI
     ya subido, que es la mitad irreversible."""
@@ -182,6 +182,6 @@ def test_la_descripcion_cabe_en_el_registro():
     assert len(d) <= 100, f"{len(d)} characters: {d}"
 
 
-def test_el_nombre_del_servidor_cabe():
+def test_the_server_name_fits():
     """Mismo tope de la misma familia; más vale enterarse aquí."""
     assert len(_leer_json("server.json")["name"]) <= 200
