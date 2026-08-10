@@ -69,7 +69,7 @@ export function createServer(): McpServer {
     { instructions: INSTRUCTIONS },
   );
 
-  srv.registerTool("oura_colecciones", {
+  srv.registerTool("oura_collections", {
     title: "Oura collection catalog",
     description:
       "The 19 Oura collections, what each one carries and which parameters it " +
@@ -83,7 +83,7 @@ export function createServer(): McpServer {
     return { content: [{ type: "text", text: JSON.stringify(catalog, null, 2) }] };
   });
 
-  srv.registerTool("oura_consultar", {
+  srv.registerTool("oura_query", {
     title: "Query an Oura collection",
     description:
       "Fetches a COMPLETE Oura collection over the requested range, following " +
@@ -94,7 +94,7 @@ export function createServer(): McpServer {
       "collections exclude the last day and others don't, and `workout` is " +
       "skewed to UTC — but that is corrected here.",
     inputSchema: {
-      collection: z.string().describe("Nombre exacto. Ver `oura_colecciones`."),
+      collection: z.string().describe("Nombre exacto. Ver `oura_collections`."),
       day: z.string().optional().describe("Shorthand for a single day: equivalent to start=end=day."),
       start: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
       end: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
@@ -113,7 +113,7 @@ export function createServer(): McpServer {
     return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
   });
 
-  srv.registerTool("oura_revisar", {
+  srv.registerTool("oura_check", {
     title: "Self-check of the Oura connection",
     description:
       "Which credential are you using, which scopes do you have, and does Oura " +
@@ -143,7 +143,7 @@ export async function query(a: QueryArgs): Promise<Record<string, unknown>> {
   if (!(a.collection in COLLECTIONS)) {
     return {
       error: `«${a.collection}» is not an Oura collection`,
-      las_que_hay: Object.keys(COLLECTIONS).sort(),
+      available: Object.keys(COLLECTIONS).sort(),
     };
   }
   let { start, end } = a;
@@ -190,13 +190,13 @@ async function oauthState(): Promise<Record<string, unknown>> {
     const cred = await load();
     if (!cred) return {};
     return {
-      alcances_concedidos: [...cred.scopes],
-      alcances_no_concedidos: SCOPES.filter((a) => !cred.scopes.includes(a)),
-      el_acceso_caduca_en_segundos: Math.round((cred.expiresAt - Date.now()) / 1000),
-      se_renueva_solo: cred.refreshToken !== null,
+      granted_scopes: [...cred.scopes],
+      ungranted_scopes: SCOPES.filter((a) => !cred.scopes.includes(a)),
+      access_expires_in_seconds: Math.round((cred.expiresAt - Date.now()) / 1000),
+      refreshes_itself: cred.refreshToken !== null,
     };
   } catch (e) {
-    return { credenciales: `unreadable: ${(e as Error).message}` };
+    return { credentials: `unreadable: ${(e as Error).message}` };
   }
 }
 
@@ -205,7 +205,7 @@ export async function check(): Promise<Record<string, unknown>> {
     // In sandbox there is no token to check and it mustn't look like there is:
     // whoever reads this response has to know the data they will see is made up.
     const out: Record<string, unknown> = {
-      modo: "sandbox",
+      mode: "sandbox",
       data: "synthetic, from Oura, not yours",
       base: base(),
     };
@@ -214,15 +214,15 @@ export async function check(): Promise<Record<string, unknown>> {
       // sandbox does not serve, and asking for it would report an API as down
       // when it is up.
       const r = await fetchAll("daily_sleep", { start: "2026-01-01", end: "2026-01-03" });
-      out["oura_responde"] = true;
+      out["oura_responds"] = true;
       const data = r["data"] as Record<string, unknown>[];
-      out["campos_de_ejemplo"] = data.length ? Object.keys(data[0]!).sort() : [];
+      out["sample_fields"] = data.length ? Object.keys(data[0]!).sort() : [];
     } catch (e) {
-      out["oura_responde"] = false;
+      out["oura_responds"] = false;
       out["error"] = (e as Error).message;
     }
-    out["no_disponible_en_sandbox"] = ["personal_info"];
-    out["siguiente_paso"] = "drop OURA_SANDBOX and set your own credential to see your data";
+    out["unavailable_in_sandbox"] = ["personal_info"];
+    out["next_step"] = "drop OURA_SANDBOX and set your own credential to see your data";
     return out;
   }
 
@@ -230,23 +230,23 @@ export async function check(): Promise<Record<string, unknown>> {
   try {
     t = await token();
   } catch (e) {
-    return { token_presente: false, siguiente_paso: (e as Error).message };
+    return { token_present: false, next_step: (e as Error).message };
   }
   const out: Record<string, unknown> = {
-    token_presente: true,
-    token_largo: t.largo,
-    modo: authMode(),
+    token_present: true,
+    token_length: t.largo,
+    mode: authMode(),
     ...(await oauthState()),
   };
   try {
     const r = await fetchAll("personal_info");
-    out["oura_responde"] = true;
+    out["oura_responds"] = true;
     // The field NAMES, not their values: confirms the API answers without
     // dumping anyone's profile into a log.
     const data = r["data"] as Record<string, unknown>[];
-    out["campos_del_perfil"] = data.length ? Object.keys(data[0]!).sort() : [];
+    out["profile_fields"] = data.length ? Object.keys(data[0]!).sort() : [];
   } catch (e) {
-    out["oura_responde"] = false;
+    out["oura_responds"] = false;
     out["error"] = (e as Error).message;
   }
   return out;

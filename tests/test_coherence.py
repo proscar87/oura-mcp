@@ -188,3 +188,27 @@ def test_no_document_sends_you_to_create_a_personal_token():
             # Only allowed when accompanied by the warning.
             assert "December 2025" in text or "diciembre de 2025" in text, \
                 f"{name} points at the page without warning"
+
+
+def test_the_mcpb_manifest_matches_pyproject():
+    """The bundle declares its own version, and Claude Desktop shows that one.
+    A `.mcpb` claiming a version the package never published makes a bug report
+    impossible to place."""
+    m = _read_json("ts/manifest.json")
+    assert m["version"] == _declared_version()
+    assert _read_json("ts/package.json")["version"] == _declared_version()
+
+
+def test_the_mcpb_declares_the_three_tools():
+    """The directory review syncs tools from the manifest. Declaring a tool the
+    server doesn't expose — or missing one it does — is caught here rather than
+    by a reviewer."""
+    from oura_mcp.collections import COLLECTIONS  # noqa: F401  (import guard)
+    declared = {t["name"] for t in _read_json("ts/manifest.json")["tools"]}
+    assert declared == {"oura_collections", "oura_query", "oura_check"}
+
+
+def test_the_mcpb_carries_a_privacy_policy_url():
+    """«Missing or incomplete privacy policies result in immediate rejection.»"""
+    urls = _read_json("ts/manifest.json")["privacy_policies"]
+    assert urls and all(u.startswith("https://") for u in urls)

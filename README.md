@@ -142,7 +142,17 @@ claude plugin install oura@oura-mcp
 
 ### Connecting it to Claude Desktop
 
-In `~/Library/Application Support/Claude/claude_desktop_config.json`:
+**One click:** download `oura-mcp.mcpb` from the
+[releases page](https://github.com/proscar87/oura-mcp/releases) and double-click
+it. Claude Desktop installs it — no terminal, no JSON, no Python. It ships with
+sample data turned on, so it works before you have any credential at all.
+
+One caveat worth stating plainly: **the OAuth2 flow needs a terminal.** A server
+that speaks over stdin/stdout can't open a browser or ask you anything, so
+`oura-mcp --authorize` is a command you run once, elsewhere. From the extension
+you get either the sample data or a personal token you already had.
+
+**Or by hand,** in `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {

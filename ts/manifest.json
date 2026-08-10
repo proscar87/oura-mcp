@@ -1,0 +1,78 @@
+{
+  "manifest_version": "0.2",
+  "name": "oura-mcp",
+  "display_name": "Oura",
+  "version": "0.3.0",
+  "description": "The Oura v2 API as an MCP server. Paginates, fixes the date range, warns when data is missing.",
+  "long_description": "Oura's API does not return errors when it can't give you what you asked for. It returns something different, shaped like a correct response. This server corrects the four ways that happens, all measured against the real API:\n\n1. Not following `next_token` returns a fraction — one local day of heart rate is 1,231 samples across 2 pages, and a client that doesn't paginate gets 81% of them with no warning.\n2. `end_date` is inconsistent across collections, and `workout` filters by UTC date while reporting its day in local time. Asking for a single day used to return zero records.\n3. `latest=true` on a collection that doesn't support it returns the entire collection, with no error.\n4. A field name that doesn't exist is silently ignored, and the projection never happens.\n\nIt deliberately performs no analysis: no correlations, no anomaly detection, no period comparison. An average computed inside the server reaches the model as a number without its method.\n\nCREDENTIALS: Oura stopped issuing Personal Access Tokens in December 2025. Out of the box this extension runs in sandbox mode, which serves Oura's official synthetic data and needs no account at all — good for seeing what the tools return. To read your own data you either paste a personal token you already had, or run `oura-mcp --authorize` once in a terminal, which is the OAuth2 flow. That last step cannot happen from this window: a server that speaks over stdin/stdout cannot ask you anything.",
+  "author": {
+    "name": "Oscar Pacheco",
+    "url": "https://github.com/proscar87"
+  },
+  "homepage": "https://github.com/proscar87/oura-mcp",
+  "documentation": "https://github.com/proscar87/oura-mcp#readme",
+  "support": "https://github.com/proscar87/oura-mcp/issues",
+  "icon": "icon.png",
+  "license": "MIT",
+  "keywords": ["oura", "health", "sleep", "wearables", "heart rate"],
+  "privacy_policies": [
+    "https://github.com/proscar87/oura-mcp#privacy-policy"
+  ],
+  "server": {
+    "type": "node",
+    "entry_point": "server/dist/main.js",
+    "mcp_config": {
+      "command": "node",
+      "args": ["${__dirname}/server/dist/main.js"],
+      "env": {
+        "OURA_SANDBOX": "${user_config.sandbox}",
+        "OURA_PAT": "${user_config.personal_token}",
+        "OURA_CREDENTIALS": "${user_config.credentials_file}"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "oura_collections",
+      "description": "All 19 Oura collections, what each one carries and which parameters it takes."
+    },
+    {
+      "name": "oura_query",
+      "description": "Fetches a complete Oura collection over a range, paginating to the end."
+    },
+    {
+      "name": "oura_check",
+      "description": "Self-check: which credential is in use, which scopes were granted, and whether Oura responds. Returns neither the token nor any health value."
+    }
+  ],
+  "tools_generated": false,
+  "user_config": {
+    "sandbox": {
+      "type": "boolean",
+      "title": "Use sample data",
+      "description": "Oura's official synthetic data. No account needed. Leave this on to see what the tools return; turn it off once you have set up a credential below.",
+      "default": true,
+      "required": false
+    },
+    "personal_token": {
+      "type": "string",
+      "title": "Personal Access Token",
+      "description": "Only if you already had one — Oura stopped issuing new ones in December 2025. Leave empty if you use OAuth2.",
+      "sensitive": true,
+      "required": false
+    },
+    "credentials_file": {
+      "type": "string",
+      "title": "OAuth2 credentials file",
+      "description": "Path to the file written by `oura-mcp --authorize`. Leave empty to use the default location (~/.config/oura-mcp/credentials.json).",
+      "required": false
+    }
+  },
+  "compatibility": {
+    "claude_desktop": ">=0.10.0",
+    "platforms": ["darwin", "win32", "linux"],
+    "runtimes": {
+      "node": ">=20.0.0"
+    }
+  }
+}
