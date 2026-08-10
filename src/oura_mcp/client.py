@@ -613,16 +613,31 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
             # ONE EXIT ONLY. With two, the truncated response left without going
             # through the formatting or the warnings — and it's precisely the
             # response that most needs everything it says to be believed.
+            # `continue_from` USED TO BE THIS next_token, and there is no
+            # parameter to hand a token back through — deliberately, since
+            # taking a cursor would make pagination the model's job, which is
+            # what this package exists to prevent. So the response told the
+            # model to continue from something it could not use: an instruction
+            # that reads as actionable and isn't.
+            #
+            # A day is usable with the parameters that already exist.
+            cursor = day_of(data[-1]) if data else None
             truncated = (f"stopped at {page_limit} pages and Oura was offering "
-                         f"more; shorten the range or continue from `continue_from`")
-            cursor = next_token
+                         f"more. The data reaches through {cursor}; ask again "
+                         f"with `start` set to the following day."
+                         if cursor else
+                         f"stopped at {page_limit} pages and Oura was offering "
+                         f"more; narrow the range and ask again.")
             break
 
     data, discarded = _trim(data, start, end, s)
     out = {"collection": collection, "n": len(data), "pages": pages, "data": data}
     if truncated:
         out["truncated"] = truncated
-        out["continue_from"] = cursor
+        # Only when there IS a day. `continue_from: null` reads as "resuming is
+        # possible and the value is missing", which is worse than not offering it.
+        if cursor:
+            out["continue_from"] = cursor
     if cycle:
         out["pagination_cycle"] = cycle
     if format == "csv":

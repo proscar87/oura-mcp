@@ -3,9 +3,30 @@
 The [Oura](https://ouraring.com) v2 API as an [MCP](https://modelcontextprotocol.io)
 server. All 19 collections, three tools, no dependencies beyond the MCP SDK.
 
-**What sets it apart: Oura under-delivers without saying so, in four distinct
-ways, and this server corrects all four.** That sounds minor and it is the whole
-point — see below.
+### One local day of heart rate is 1,231 samples across 2 pages
+
+A client that doesn't follow Oura's `next_token` returns **1,000 of them — 81%,
+looking complete, with nothing saying otherwise.** Measured against the real API
+on 9 August 2026, one person, one ring, 24 hours.
+
+**The test to apply to any Oura MCP server, including this one:** does it take
+`next_token` — or a `cursor`, or a `limit` — as a tool parameter? If it does,
+pagination is the model's job, and a model that forgets to ask again produces a
+confident answer off partial data. This server paginates to exhaustion before it
+returns, and tells you how many pages it took.
+
+That's one of **four** ways Oura under-delivers without saying so. All four are
+measured below, and all four are corrected here.
+
+### Install
+
+Download **`oura-mcp.mcpb`** from the
+[latest release](https://github.com/proscar87/oura-mcp/releases/latest) and
+double-click it. Claude Desktop does the rest — no terminal, no Python, no Node.
+It runs on Oura's official sample data out of the box, and every sample response
+says so, so nothing can pass for your own sleep.
+
+Prefer the command line? `uvx --from mcp-oura oura-mcp`.
 
 ---
 
@@ -54,7 +75,7 @@ request goes out.
 `fields=does_not_exist` returns the **complete** record — the projection never
 happens — and `fields=score,does_not_exist` applies the good one and drops the
 bad one without a word. Here, fields that never appeared are reported under
-`campos_ignorados`.
+`ignored_fields`.
 
 **The pattern is always the same:** you ask for one thing, you get another, and
 nothing warns you. That's why this package would rather shout than quietly
@@ -202,10 +223,10 @@ keep it that way.
 | `formato` | `json` or `csv`. Savings vary by collection: 55% on `heartrate`, 10% on `daily_sleep` |
 
 And what the response tells you when something didn't come out clean:
-`truncado` with `continuar_desde` to resume, `ciclo_de_paginacion` if Oura
-repeats a token, `campos_ignorados`, `descartados_fuera_de_rango`,
-`columnas_desiguales`, `vacio` when a query comes back empty, and
-`respuesta_grande` when what's returned is heavy enough to matter.
+`truncated` with `continue_from` naming the last day reached, `pagination_cycle` if Oura
+repeats a token, `ignored_fields`, `discarded_out_of_range`,
+`uneven_columns`, `empty` when a query comes back empty, and
+`large_response` when what's returned is heavy enough to matter.
 
 That last one comes from measuring: **30 days of `daily_activity` is 252,000
 characters**, and 87% of it is a single field, `met`, a per-minute MET series.
