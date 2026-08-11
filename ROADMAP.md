@@ -1566,6 +1566,113 @@ That last one is now permanent. The bundle verification runs under
 rather than reaching someone mid-authorization. Under the default mode it would
 be a warning on stderr that nobody reads.
 
+### Round 16: nothing, and that is the finding
+
+Four classes swept in Python, the way round 15 swept TypeScript, and every one
+came back clean:
+
+- **Swallowed exceptions.** All eight `except Exception` blocks are narrow in
+  purpose: a version lookup falling back to "unknown", an unreadable error body
+  becoming "", a browser that won't open, `keyring` absent. None hides a failure
+  that matters.
+- **Resource lifecycle.** The HTTP server is shut down, joined and closed on
+  *every* exit path, including the timeout and the state-mismatch — which is the
+  exact bug found in TypeScript one round earlier, absent here.
+- **Port release.** After a timeout, both implementations free the port and a
+  retry works. Untested until now, and a plausible way for a second attempt to
+  fail for a reason nothing explained.
+- **The listener timeout**, in both. Correct, and now exercised rather than
+  assumed.
+
+Nothing was found. Under the stopping rule set before the round began, that ends
+the audit.
+
+---
+
+## The audit, closed — 10 August 2026
+
+Sixteen rounds over roughly eight hours, fifteen of them producing a real
+finding. Every one is written up above with what was broken, what it cost, and
+how it was verified.
+
+### What was actually wrong
+
+Ordered by what it would have done to somebody:
+
+| | |
+|---|---|
+| Two concurrent queries spent the single-use refresh token twice; one failed and could lock the account out | round 10 |
+| A callback with a wrong `state` — which any web page can send — **crashed the server** | round 13 |
+| A machine without `xdg-open` **crashed the server** when asked to authorize | round 14 |
+| "What was my heart rate on January 1st" returned nothing, and blamed Oura | round 3 |
+| Sample data reached a model with nothing saying whose it was | rounds 1–2 |
+| An occupied port reported in 2 ms and then hung for five minutes | round 15 |
+| A lone carriage return shifted every CSV column after it | round 8 |
+| A recovered rate limit left no trace, so the next query walked into the ceiling | round 1 |
+| A 403 said "Forbidden" while the package knew exactly which scope was missing | round 9 |
+| `fields="day,score"` — the likeliest mistake here — answered with a validator dump | round 2 |
+| `continue_from` handed back a token no parameter accepts | round 6 |
+| Cold-start errors advised deleting a file the person had no permission to delete | round 11 |
+| The "no credentials" message assumed a terminal the `.mcpb` user doesn't have | round 12 |
+| Four dead vocabularies in the docs: flags, response keys, parameters, return values | rounds 1, 3–5 |
+| The handoff document sent the next reader to directories that don't exist | round 12 |
+
+### What changed about how this is tested
+
+Test count went from 124+35 to **215 Python + 87 TypeScript**, coverage from 78%
+to 89% — but the counts are the least interesting part.
+
+**`tools/mutate.py`** breaks each core guarantee on purpose and reports which
+ones no test notices. It found two with nothing behind them in a repository that
+already had 255 passing tests. *A green suite says the tests pass; it does not
+say they would fail if the product broke.*
+
+**`tests/test_public_surface.py`** pins every name a client can see. Four classes
+of name had broken one at a time, each guard written after the fact and none
+generalizing.
+
+**The bundle verification** now completes a handshake, issues a real `tools/call`,
+reads the resource, and runs under `--unhandled-rejections=strict` — so the next
+floating promise fails the build instead of reaching someone mid-authorization.
+
+### Three habits that produced most of the findings
+
+1. **Test the claims the code makes about itself.** Comments saying "never",
+   "always", "before", "atomic" are untested hypotheses. Checking them found two
+   crashes.
+2. **Sweep the class, don't chase the instance.** The same async hazard was hit
+   twice by accident before being enumerated deliberately — and the sweep found a
+   third.
+3. **A surviving mutant is a question, not a verdict.** One survives correctly,
+   because a `chmod` makes the line it targets redundant. Chasing the number
+   would have added a test asserting something already guaranteed twice.
+
+### What was NOT reviewed, and why
+
+- **Anything needing a real Oura account.** The headline measurements — 1,231
+  samples across 2 pages, 252,000 characters for 30 days of `daily_activity` —
+  date from 9 August and were not re-measured. Re-checking them means handling
+  someone's heart rate to verify a README, which is not a trade worth making.
+  The arithmetic between them *is* now tested.
+- **`end_datetime` inclusivity.** Still unmeasured; the code hedges toward losing
+  one second rather than contaminating a day, and says so.
+- **Cross-process credential races.** One process cannot lock against another.
+  The recovery covers it; the limit is stated in the code.
+- **Real Claude Desktop installation.** The bundle is verified by running it, not
+  by installing it. Gatekeeper's behaviour on a downloaded `.mcpb` is unknown.
+
+### What is Oscar's
+
+1. **Install the `.mcpb`** and confirm macOS doesn't block it. Nothing here can
+   test that.
+2. **Submit to the Claude extension directory** — a Google Form behind a sign-in.
+   `SUBMISSION.md` has every answer written out.
+3. **Decide on 0.3.2.** It is unreleased and unlabelled, and carries sixteen
+   rounds of fixes including three that crash or lock out. Publishing is
+   `git tag v0.3.2 && git push origin v0.3.2`.
+4. **The two third-party filings** — `awesome-mcp-servers` PR #11833 and mcp.so
+   issue #3503 — are open and awaiting his call on whether they stay.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`
