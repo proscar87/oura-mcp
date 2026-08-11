@@ -1446,6 +1446,44 @@ path it mentions — records the four decisions this week produced that must not
 reverted, and leads its testing section with the instruction to run the mutation
 tool before believing a green suite.
 
+### Round 13: the `state` check crashed the server it was defending
+
+The code claims, in a comment, that the callback listener starts **before** the
+client is told to open anything — because a fast user reaching the callback with
+nothing listening produces a failure that looks like Oura's rather than ours.
+
+Reading the statement order doesn't prove it. `listen()` is asynchronous and the
+socket doesn't accept until its `listening` event fires, so the claim could be
+false while the code reads correctly. It was tested by connecting to the port
+from inside the elicitation callback — the exact instant the client is being
+told — and **the claim held**.
+
+The test crashed the process anyway.
+
+A callback with a mismatched `state`, arriving while the prompt is still open,
+rejected a promise **nobody was awaiting yet**: the flow had started the listener
+and moved on to waiting for the client's answer. In Node an unhandled rejection
+kills the process.
+
+Which inverts the entire purpose of the check. `state` exists because **any page
+the user visits can hit `localhost:9876`**, and rejecting those callbacks is the
+whole defense. Crashing on them made the defense the vulnerability — a denial of
+service any web page could trigger, against the MCP server, at the one moment the
+user is mid-authorization.
+
+The fix is one line and it is about **when**, not whether: the rejection is
+claimed at creation instead of whenever someone gets around to awaiting it.
+Attaching a handler marks the original as handled without consuming it, so the
+`await` further down still sees the rejection and still throws.
+
+A narrower version of this same fix was written earlier for the declined-prompt
+path. That one treated the symptom it had seen; this window was always the real
+shape of it.
+
+**Python was never affected** — its callback wait is synchronous, raises, and the
+process lives. This is an async-language hazard, and TypeScript is the
+implementation inside the `.mcpb`. The half that ships had the bug.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

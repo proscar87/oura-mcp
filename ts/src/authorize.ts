@@ -167,12 +167,25 @@ export function waitForCallback(port: number, state: string,
 
     srv.listen(port, "127.0.0.1");
   });
-  // Nobody awaits this promise on the cancelled path — the caller throws its own
-  // error instead — and in Node an unhandled rejection kills the process. So
-  // declining the prompt took the whole MCP server down with it. Claiming the
-  // rejection here says out loud that cancellation is handled, not ignored.
-  const cancelAndSilence = () => { promise.catch(() => {}); cancel(); };
-  return Object.assign(promise, { cancel: cancelAndSilence });
+  // CLAIMED IMMEDIATELY, not only when someone gets around to awaiting it.
+  //
+  // In Node an unhandled rejection kills the process, and this promise can
+  // reject while nobody is awaiting it yet: `authorizeByElicitation` starts the
+  // listener and then waits on the client's answer, so ANY request arriving at
+  // the callback port during that window — a wrong `state`, a probe, a page the
+  // user happened to open — rejected into nothing and took the whole MCP server
+  // down.
+  //
+  // That inverts the `state` check. It exists because any page can hit
+  // localhost, and rejecting those callbacks is the entire defense; crashing on
+  // them turns the defense into the vulnerability.
+  //
+  // Attaching a handler marks the original as handled WITHOUT consuming it: the
+  // `await` further down still sees the rejection and still throws. Cancelling
+  // needed this too, which is how the narrower version of this fix got written
+  // first.
+  promise.catch(() => {});
+  return Object.assign(promise, { cancel });
 }
 
 export function portOf(redirect: string): number {

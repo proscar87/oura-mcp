@@ -658,3 +658,68 @@ describe("a refused scope", () => {
       .rejects.not.toThrow(/scope/);
   });
 });
+
+// ── The callback listener, and a crash any web page could trigger ──────────
+describe("the authorization listener", () => {
+  it("is already accepting before the client is told to open anything", async () => {
+    // The code says so in a comment: "the listener starts BEFORE the client is
+    // told to open anything. Told first, a fast user reaches the callback before
+    // there is anything listening." Reading the statement order does not prove
+    // it — `listen()` is asynchronous, and the socket does not accept until its
+    // `listening` event fires. So this connects to the port from inside the
+    // elicitation callback, which is the exact moment the client is being told.
+    const { authorizeByElicitation } = await import("../src/authorize.js");
+    process.env.OURA_CLIENT_ID = "id";
+    process.env.OURA_CLIENT_SECRET = "secreto";
+
+    let reachable = false;
+    await authorizeByElicitation(
+      async () => {
+        try {
+          await fetch("http://127.0.0.1:9869/callback/?code=X&state=mal");
+          reachable = true;
+        } catch { reachable = false; }
+        return { action: "decline" };
+      },
+      undefined,
+      "http://localhost:9869/callback/",
+    ).catch(() => {});
+
+    expect(reachable).toBe(true);
+  });
+
+  it("survives a callback with the wrong state while the prompt is open", async () => {
+    // THIS CRASHED THE SERVER. The listener rejects a mismatched `state`, and
+    // that rejection landed while nobody was awaiting the promise yet — the flow
+    // was still waiting on the client's answer. In Node an unhandled rejection
+    // kills the process.
+    //
+    // Which inverts the whole point of `state`: it exists because ANY page the
+    // user visits can hit localhost, and rejecting those callbacks is the
+    // defense. Crashing on them made the defense the vulnerability — a denial of
+    // service any web page could trigger.
+    const { authorizeByElicitation } = await import("../src/authorize.js");
+    process.env.OURA_CLIENT_ID = "id";
+    process.env.OURA_CLIENT_SECRET = "secreto";
+
+    const errors: unknown[] = [];
+    const onUnhandled = (e: unknown) => errors.push(e);
+    process.on("unhandledRejection", onUnhandled);
+    try {
+      await authorizeByElicitation(
+        async () => {
+          await fetch("http://127.0.0.1:9870/callback/?code=X&state=impostor");
+          return { action: "decline" };
+        },
+        undefined,
+        "http://localhost:9870/callback/",
+      ).catch(() => {});
+      // Give the event loop a turn: an unhandled rejection is reported late.
+      await new Promise((r) => setTimeout(r, 50));
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+    }
+
+    expect(errors).toEqual([]);
+  });
+});
