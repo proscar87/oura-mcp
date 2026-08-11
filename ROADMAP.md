@@ -1406,6 +1406,46 @@ There's also a test that `~37,000` keeps its tilde. It's extrapolation —
 1,231 × 30 is 36,930 — and every other number in that paragraph was measured. A
 reader has no way to tell them apart if the mark that says so gets tidied away.
 
+### Round 12: the handoff document sent the next reader to directories that don't exist
+
+Three things were checked and found sound, and are recorded here as negative
+results because knowing what was looked at is worth as much as knowing what was
+found:
+
+- **Malformed stdio.** Invalid JSON, an unknown method, an unknown tool, wrong
+  argument types, missing required arguments. Nothing crashed, the server stayed
+  alive through all of it, and each got a proper answer — `-32601` for the
+  method, `isError` for the tool, a validation message for the types.
+- **Undeclared collections.** Sixteen plausible names probed against Oura's
+  sandbox. Every one 404s except the one already declared. `check_drift.py`
+  covers the other direction.
+- **`llms.txt`** carried every response key. It was missing only the new
+  resource, which is now listed.
+
+Two real findings:
+
+**The «no credentials» message was written for someone with a terminal.** It
+offered `OURA_SANDBOX=1` and `oura-mcp --authorize`. Whoever installed the
+`.mcpb` has **no `oura-mcp` command anywhere** — the bundle ships node and a dist
+directory, nothing on the PATH — and `OURA_SANDBOX=1` is a checkbox in their
+settings, not an environment variable. Both instructions were unfollowable for
+exactly the audience the flagship install path creates. Same shape as round 11:
+a fix that cannot be applied is not a fix. The message now names both routes, and
+quotes the checkbox by its real title so renaming it in the manifest breaks a
+test rather than someone's afternoon.
+
+**And `AGENTS.md` — the file whose entire job is to orient whoever arrives
+next — was stale in the way that matters.** It sent the reader to
+`herramientas/check_drift.py` and `.github/workflows/deriva.yml`: a directory
+and a workflow renamed during the translation. **Dead commands in the one
+document written to be followed.** It also listed the `.mcpb` as pending work,
+claimed 124 tests, and never mentioned `tools/mutate.py`.
+
+It now names paths that exist — verified by a test that walks every repo-relative
+path it mentions — records the four decisions this week produced that must not be
+reverted, and leads its testing section with the instruction to run the mutation
+tool before believing a green suite.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

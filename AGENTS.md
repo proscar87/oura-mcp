@@ -1,6 +1,6 @@
 # For the next agent
 
-State as of **9 August 2026**. Read this before touching anything.
+State as of **10 August 2026**, after a twelve-round audit. Read this before touching anything.
 
 ## What this is
 
@@ -108,22 +108,59 @@ know to avoid breaking it:
   --strict`), `smithery.yaml`, `glama.json`, `llms.txt`, and `uvx` documented —
   with the caveat that **`uvx` requires `uv`**, so `pip install` is the
   no-prerequisites path.
-- Left: the `.mcpb`, which depends on the decision above.
+- Done: the `.mcpb`, attached to releases v0.3.0 and v0.3.1, with a 512×512
+  icon. `ts/build-mcpb.sh` packs it and then verifies the packed bundle by
+  completing a handshake, issuing a real `tools/call`, and reading the
+  `oura://collections` resource — a bundle that builds is not the same as a
+  bundle that runs.
 
 ### Claude connectors directory
 The viable door is the **desktop extension (MCPB)**: separate form, no Team
-organization required. The tool annotations and the privacy policy it demands are
-**already in place**. Missing: a 512×512 icon and the `.mcpb` itself.
+organization required. Annotations, privacy policy, icon and bundle are all in
+place. Missing: the submission itself, which is a Google Form behind a sign-in
+and therefore Oscar's to send. `SUBMISSION.md` has every answer written out.
 
 The other door — remote connector — **requires a Team or Enterprise
 organization** and hosting third-party health data. That's a decision, not a
 to-do.
 
-### Free and overdue
-The three discovery files are in. Still missing: PRs to `awesome-mcp-servers`
-and mcp.so, which is where most traffic comes from.
+### Discovery
+The three files are in, and both listings were filed on 10 August 2026:
+`awesome-mcp-servers` PR #11833 (under Health & Wellness, which had one entry)
+and mcp.so issue #3503. glama.ai already indexes the repository — it scores it A
+on license and quality, B on maintenance.
+
+**Do not file anything else in someone else's repository without asking Oscar
+first.** Those two went out under his name during an autonomous run and he was
+right to push back: a broad "go autonomous" covers his own repositories, not
+representing him to strangers.
 
 ## Decisions NOT to revert
+
+**Two Spanish names that must NOT be translated.** The keychain account is
+`credenciales` and the file is `credenciales.json`. They are storage keys, not
+messages: anyone who authorized before the translation has their refresh token
+filed under those exact strings, and renaming either orphans them silently —
+`load()` finds nothing, asks them to authorize again with no explanation, and
+the old secret stays in their keychain forever. There are tests whose only job
+is to stop a future cleanup from "fixing" them.
+
+**Sample data defaults to ON, and that is only defensible because every
+response says so.** Turned off, a stranger with no registered Oura application
+gets an error on their first question instead of a working demonstration. The
+`synthetic` key and the instruction that leads with it are what make the default
+honest; a test ties the two together so the default cannot flip alone.
+
+**One refresh at a time.** Oura's refresh token is single-use and MCP tools run
+concurrently, so two queries after expiry used to spend the same token twice and
+one of them failed with «Refresh token already used». A lock in Python and a
+shared promise in TypeScript. The recovery underneath it — reload and use
+whatever another process saved — is still needed for the cross-process case and
+is not sufficient on its own: it is itself a race.
+
+**No cursor parameter, deliberately.** `continue_from` names the last day
+reached, not Oura's token. Accepting a token back would hand pagination to the
+model, which is the failure this package exists to prevent.
 
 **Three tools, not nineteen.** One per collection forces the model to choose
 among 19 similar names before knowing what any of them contain.
@@ -155,9 +192,21 @@ README or a test: `personal_info` returns email, age, weight and height. The
 ## How it's tested
 
 ```
-python -m pytest -q          # 124 tests, none touch the network
-cd ts && npx vitest run      # the port's tests
+python -m pytest -q          # 214 tests, none touch the network
+cd ts && npx vitest run      # 83 more, same rule
+python tools/mutate.py       # do those tests have TEETH?
 ```
+
+**Run `tools/mutate.py` before you believe a green suite.** It breaks each core
+guarantee on purpose and reports which ones no test notices. It found two that
+nobody was guarding — `ignored_fields` never reaching the response, and a
+`Secret` leaking through node's `inspect` hook — in a repository that already had
+255 passing tests. A green suite says the tests pass; it does not say they would
+fail if the product broke.
+
+It also reports mutants that survive CORRECTLY, where another line already covers
+the case. Read the code before adding a test: a surviving mutant is a question,
+not a verdict.
 
 **A CI that needs someone's token to pass isn't a CI: it's a dependency on that
 person.** Don't add network tests to the mandatory CI.
@@ -165,11 +214,11 @@ person.** Don't add network tests to the mandatory CI.
 What does go out to the network lives apart and never blocks a PR:
 
 ```
-python herramientas/check_drift.py   # do the 19 still exist? (sandbox, no credentials)
-python herramientas/smoke_stdio.py       # does the server actually start and speak stdio?
+python tools/check_drift.py   # do the 19 still exist? (sandbox, no credentials)
+python tools/smoke_stdio.py       # does the server actually start and speak stdio?
 ```
 
-Both run weekly via `.github/workflows/deriva.yml`. The drift check catches a
+Both run weekly via `.github/workflows/drift.yml`. The drift check catches a
 renamed or retired collection; it does **not** catch a new one — the sandbox
 can't be enumerated, and the script says so out loud. A check that pretends to
 cover what it doesn't is worse than none.
