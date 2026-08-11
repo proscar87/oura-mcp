@@ -212,9 +212,20 @@ async function oauthToken(): Promise<Secret> {
     // is the one that works, and the sandbox comes first because it lets you
     // srv andar sin conseguir credencial alguna.
     throw new OuraError(
+      // WRITTEN FOR SOMEONE WITH A TERMINAL, which the flagship install path
+      // does not have. Whoever installed the `.mcpb` has no `oura-mcp` command
+      // anywhere — the bundle ships node and a dist directory, nothing on the
+      // PATH — and `OURA_SANDBOX=1` is a checkbox in their settings, not an
+      // environment variable. Both instructions were unfollowable for exactly
+      // the people most likely to read them. THIS FILE IS THE ONE INSIDE THE
+      // BUNDLE.
       "no credentials. Three paths, from least to most paperwork:\n" +
-      "  1. OURA_SANDBOX=1 — sample data, no signup of any kind\n" +
-      "  2. oura-mcp --authorize — OAuth2, once, in the browser\n" +
+      "  1. Sample data, no signup of any kind. In the Claude Desktop " +
+      "extension: turn on «Use sample data» in its settings. From a terminal: " +
+      "OURA_SANDBOX=1\n" +
+      "  2. Your own data, via OAuth2, once, in the browser. In the extension: " +
+      "paste an Oura client ID and secret in its settings and ask again — it " +
+      "opens Oura's page for you. From a terminal: oura-mcp --authorize\n" +
       "  3. OURA_PAT / OURA_PAT_FILE — only if you already had a personal token: " +
       "Oura stopped issuing them in December 2025",
     );

@@ -30,6 +30,11 @@ All three are read-only. There is no POST, PUT or DELETE in the package.
 Parameter names match Oura's own API: `collection`, `day`, `start`, `end`,
 `fields`, `latest`, `format`.
 
+## Resource
+
+- `oura://collections` — the same catalog as `oura_collections`, attachable
+  instead of called. Static: no network, no credentials, no health data.
+
 ## Warning keys in the response
 
 - `truncated` + `continue_from` — data is missing; `continue_from` is the last

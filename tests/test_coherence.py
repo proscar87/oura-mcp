@@ -515,3 +515,18 @@ def test_the_month_estimate_is_marked_as_one():
     if "37,000" in readme:
         i = readme.index("37,000")
         assert readme[i - 1] == "~", "an extrapolation is presented as a measurement"
+
+
+def test_the_handoff_document_names_paths_that_exist():
+    """AGENTS.md is the file whose entire job is to orient whoever arrives next,
+    and it sent them to `herramientas/check_drift.py` and
+    `.github/workflows/deriva.yml` — a directory and a workflow renamed during
+    the translation. Dead commands in the one document written to be followed.
+
+    Checks every repo-relative path it mentions.
+    """
+    text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+    rutas = set(re.findall(r"`?((?:tools|src|tests|ts|\.github)/[\w./-]+\.(?:py|ts|yml|sh|json))`?", text))
+    assert rutas, "the handoff names no paths at all — did it lose its commands?"
+    for r in sorted(rutas):
+        assert (ROOT / r).exists(), f"AGENTS.md points at {r}, which does not exist"

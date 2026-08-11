@@ -251,3 +251,33 @@ def test_both_implementations_write_to_the_same_file():
     py = (ROOT / "src" / "oura_mcp" / "credentials.py").read_text(encoding="utf-8")
     assert '"oura-mcp", "credenciales.json"' in ts
     assert '"oura-mcp", "credenciales.json"' in py
+
+
+def test_the_no_credentials_message_serves_both_audiences():
+    """It was written for someone with a terminal, and the flagship install path
+    doesn't have one.
+
+    Whoever installed the `.mcpb` has no `oura-mcp` command anywhere — the bundle
+    ships node and a dist directory, nothing on the PATH — and `OURA_SANDBOX=1`
+    is a checkbox in their settings, not an environment variable. Both
+    instructions were unfollowable for exactly the people most likely to read
+    them, which is the same failure round 11 found in the cold-start errors: a
+    fix that cannot be applied is not a fix.
+
+    The checkbox is quoted by its real title, so renaming it in the manifest
+    without updating this breaks here rather than in front of someone stuck.
+    """
+    import json as _json
+    manifest = _json.loads((ROOT / "ts" / "manifest.json").read_text(encoding="utf-8"))
+    titulo = manifest["user_config"]["sandbox"]["title"]
+
+    for f in ("src/oura_mcp/client.py", "ts/src/client.ts"):
+        text = (ROOT / f).read_text(encoding="utf-8")
+        i = text.find("no credentials. Three paths")
+        assert i != -1, f
+        block = text[i:i + 1400]
+        assert "extension" in block, f"{f}: no route for the extension user"
+        assert "Use sample data" in block, f"{f}: the checkbox is not named"
+        assert "terminal" in block, f"{f}: the terminal route disappeared"
+        assert titulo.startswith("Use sample data"), \
+            "the manifest renamed the checkbox; the message now points at nothing"
