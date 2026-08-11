@@ -91,6 +91,8 @@ TYPESCRIPT = [
        '[Symbol.for("nodejs.util.inspect.custom")](): string {\n    return this.#valor;')]),
     ("CSV quotes what would shift a column", "ts/src/client.ts",
      [("""/[",\\n\\r]/.test(s)""", "/never-matches/.test(s)")]),
+    ("a missing browser opener does not kill the process", "ts/src/authorize.ts",
+     [('    child.on("error", () => { /* the URL is on stderr; that is the fallback */ });\n', "")]),
     ("a stray callback does not kill the process", "ts/src/authorize.ts",
      [("  promise.catch(() => {});", "")]),
     ("one refresh at a time", "ts/src/credentials.ts",
