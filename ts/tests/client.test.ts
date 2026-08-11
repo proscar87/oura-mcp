@@ -753,3 +753,34 @@ describe("openBrowser", () => {
     expect(errors).toEqual([]);
   });
 });
+
+// ── An error must also STOP things, not only report them ───────────────────
+describe("the listener's cleanup", () => {
+  it("stops waiting when the port is already taken", async () => {
+    // It rejected and left everything running. The success path clears the
+    // timeout and this one did not, so an occupied port printed «could not
+    // listen (EADDRINUSE)» in two milliseconds and then held the process open
+    // for the full five-minute timeout: an error, and a terminal that never
+    // comes back.
+    //
+    // The test asserts on the TIMER rather than the message, because the
+    // message was always right. What was wrong was that nothing stopped.
+    const { createServer } = await import("node:http");
+    const { waitForCallback } = await import("../src/authorize.js");
+
+    const blocker = createServer(() => {});
+    await new Promise<void>((r) => blocker.listen(9863, "127.0.0.1", () => r()));
+    // Fake timers so the assertion can be exact: how many are still armed after
+    // the rejection? Real timers cannot be counted, and "did it hang" is not
+    // something a unit test should wait five minutes to find out.
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      await expect(waitForCallback(9863, "estado", 300_000))
+        .rejects.toThrow(/EADDRINUSE/);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+      await new Promise<void>((r) => blocker.close(() => r()));
+    }
+  });
+});
