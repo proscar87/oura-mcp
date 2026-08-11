@@ -193,13 +193,30 @@ export function portOf(redirect: string): number {
   return p ? Number(p) : 80;
 }
 
-async function openBrowser(url: string): Promise<void> {
-  const { spawn } = await import("node:child_process");
-  const cmd = process.platform === "darwin" ? "open"
-            : process.platform === "win32" ? "start" : "xdg-open";
+/**
+ * Opens the URL in the user's browser, and CANNOT take the process down.
+ *
+ * The comment here used to say "failing to open isn't fatal: the URL was
+ * already printed", and that was false. `spawn` does not throw when the command
+ * is missing — it emits an `error` EVENT — so the try/catch below caught
+ * nothing, and an `error` event with no listener is an uncaught exception in
+ * Node. On any machine without `xdg-open`, which is most minimal Linux
+ * installs, asking to authorize killed the process instead of printing a URL.
+ *
+ * The call site marks it `void`, so a rejection here would be unhandled as
+ * well. Both routes out are closed: the listener catches the event, and the
+ * whole body is wrapped for the dynamic import.
+ */
+export async function openBrowser(url: string): Promise<void> {
   try {
-    spawn(cmd, [url], { detached: true, stdio: "ignore" }).unref();
-  } catch { /* failing to open isn't fatal: the URL was already printed */ }
+    const { spawn } = await import("node:child_process");
+    const cmd = process.platform === "darwin" ? "open"
+              : process.platform === "win32" ? "start" : "xdg-open";
+    const child = spawn(cmd, [url], { detached: true, stdio: "ignore" });
+    // NOT optional. Without it, a missing command is an uncaught exception.
+    child.on("error", () => { /* the URL is on stderr; that is the fallback */ });
+    child.unref();
+  } catch { /* the URL was already printed, which is the actual fallback */ }
 }
 
 async function readLine(): Promise<string> {

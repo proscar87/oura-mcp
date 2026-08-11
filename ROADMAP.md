@@ -1484,6 +1484,45 @@ shape of it.
 process lives. This is an async-language hazard, and TypeScript is the
 implementation inside the `.mcpb`. The half that ships had the bug.
 
+### Round 14: the comments are hypotheses, and one of them was wrong
+
+Round 13's lesson generalized: **an assertion a comment makes about its own code
+is an untested claim.** It reads like a fact and it's the opinion of whoever
+wrote it, possibly years and several refactors ago. So every "never", "always",
+"before", "atomic", "cannot" in both codebases was collected and the testable
+ones were tested.
+
+Four held, and are now known rather than assumed:
+
+- **«The listener waits for THE CALLBACK, not the first request.»** A real
+  browser asks for `/favicon.ico` on its own; serving one request would let the
+  favicon take the turn and the real callback get *connection refused*.
+  Verified with favicon, `/`, and Chrome's devtools probe ahead of the callback:
+  all 404, callback delivered.
+- **«`keyring` is NEVER a dependency.»** Absent from both dependency
+  declarations.
+- **«All three tools are read-only, and that isn't a promise.»** No POST, PUT or
+  DELETE anywhere near the data API.
+- **«The path is ALWAYS absolute.»** A bare `OURA_CREDENTIALS=cred.json`
+  resolves against the working directory in both.
+
+One was false, and it was the same shape as round 13:
+
+    catch { /* failing to open isn't fatal: the URL was already printed */ }
+
+**`spawn` does not throw when the command is missing.** It emits an `error`
+EVENT, so that `catch` caught nothing — and in Node an `error` event with no
+listener is an uncaught exception. On any machine without `xdg-open`, which is
+most minimal Linux installs, **asking to authorize killed the process** instead
+of printing a URL. The call site marks the call `void`, so a rejection had
+nowhere to go either; both routes out were open.
+
+Two crashes in two rounds, both in TypeScript, both from a promise or an event
+nobody was listening to, both in the half that ships inside the `.mcpb`. Python
+was safe in both: `webbrowser.open()` catches `OSError` internally, and its
+callback wait is synchronous. **This is an async-language hazard and the audit
+should have gone looking for it as a class, not found it twice by accident.**
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

@@ -723,3 +723,33 @@ describe("the authorization listener", () => {
     expect(errors).toEqual([]);
   });
 });
+
+// ── Opening the browser must not be able to kill the server ────────────────
+describe("openBrowser", () => {
+  it("survives a machine with no opener installed", async () => {
+    // The comment here used to say "failing to open isn't fatal: the URL was
+    // already printed". It was false. `spawn` does NOT throw when the command
+    // is missing — it emits an `error` EVENT — so the try/catch caught nothing,
+    // and an `error` event with no listener is an uncaught exception in Node.
+    //
+    // On any machine without `xdg-open`, which is most minimal Linux installs,
+    // asking to authorize killed the process instead of printing a URL. The
+    // call site marks it `void`, so the rejection had nowhere to go either.
+    const { openBrowser } = await import("../src/authorize.js");
+
+    const errors: unknown[] = [];
+    const onUncaught = (e: unknown) => errors.push(e);
+    process.on("uncaughtException", onUncaught);
+    const previo = process.env.PATH;
+    process.env.PATH = "/nonexistent-on-purpose";
+    try {
+      await expect(openBrowser("http://example.invalid/")).resolves.toBeUndefined();
+      await new Promise((r) => setTimeout(r, 100));   // the event arrives late
+    } finally {
+      process.env.PATH = previo;
+      process.off("uncaughtException", onUncaught);
+    }
+
+    expect(errors).toEqual([]);
+  });
+});
