@@ -141,12 +141,27 @@ export function waitForCallback(port: number, state: string,
     });
 
     srv.on("error", (e: NodeJS.ErrnoException) => {
+      // IT REJECTED AND LEFT EVERYTHING RUNNING. The success path clears the
+      // timer and this one did not, so an occupied port printed
+      // «could not listen on port 9876 (EADDRINUSE)» in two milliseconds and
+      // then held the process open for the full five-minute timeout. From the
+      // outside: an error, and a terminal that never comes back. The report was
+      // right and the behaviour was wrong, which is this package's subject
+      // applied to itself.
+      if (done) return;
+      done = true;
+      clearTimeout(timer);
+      // Only if it ever listened. Closing a server that never bound emits
+      // another `error`, straight back into this handler.
+      if (srv.listening) srv.close();
       reject(new OuraError(
         `could not listen on port ${port} (${e.code}). ` +
         `Is another authorization running?`));
     });
 
-    const timer = setTimeout(() => {
+    // Declared with `let` above its assignment because the error handler above
+    // needs to clear it, and handlers run later than this line either way.
+    const timer: NodeJS.Timeout = setTimeout(() => {
       if (done) return;
       done = true;
       srv.close();

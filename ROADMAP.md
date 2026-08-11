@@ -1523,6 +1523,49 @@ was safe in both: `webbrowser.open()` catches `OSError` internally, and its
 callback wait is synchronous. **This is an async-language hazard and the audit
 should have gone looking for it as a class, not found it twice by accident.**
 
+### Round 15: sweeping the class instead of tripping over it again
+
+Rounds 13 and 14 each found a process crash in TypeScript, both from a promise
+or an event nobody was listening to. Finding the same class twice by accident is
+not auditing. So this round enumerated it: every `EventEmitter` created
+(`createServer`, `spawn`, `createInterface`, `listen`), every promise created and
+awaited late or marked `void`, every async callback handed to an API that doesn't
+await, every timer with an async body.
+
+Most of it was already sound. The HTTP server has an `error` listener, the child
+process got one last round, no timer body is async, and the success path clears
+what it armed.
+
+**One was broken, and it's the same idea from the other side.** The `error`
+handler rejected and left everything running:
+
+    error reported in 2 ms
+    …still alive after 25 s
+
+An occupied port — something else on 9876 — printed «could not listen on port
+9876 (EADDRINUSE)» in two milliseconds and then **held the process open for the
+full five-minute timeout**. The success path clears the timer; this one didn't.
+From outside: an error message, and a terminal that never comes back.
+
+The report was right and the behaviour was wrong. **An error has to stop things,
+not only describe them** — which is this package's subject, applied to itself
+from an angle the previous fourteen rounds hadn't looked from.
+
+Closing the server needed a guard too: closing one that never bound emits another
+`error`, straight back into the same handler.
+
+### Two clean results, and one durable change
+
+`--authorize --manual` with **stdin closed** — a script rather than a person —
+exits in about a second instead of waiting forever on a prompt nobody will
+answer. And the whole server run under `--unhandled-rejections=strict` answered
+every request with **empty stderr**: no hidden rejections anywhere.
+
+That last one is now permanent. The bundle verification runs under
+`--unhandled-rejections=strict`, so the next floating promise fails the build
+rather than reaching someone mid-authorization. Under the default mode it would
+be a warning on stderr that nobody reads.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`
