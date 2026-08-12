@@ -38,6 +38,19 @@ import urllib.request
 from .client import OuraError, Secret
 
 TOKEN_URL = "https://api.ouraring.com/oauth/token"
+
+TOKEN_URL_NEW_PORTAL = "https://moi.ouraring.com/oauth/v2/ext/oauth-token"
+"""The token endpoint for apps registered on `developer.ouraring.com`.
+
+Undocumented, and live: verified 12 August 2026 to exist and to answer a bogus
+refresh with a proper OAuth2 `invalid_client`. Apps from the newer portal are
+rejected by the legacy endpoint above on EVERY refresh, so without this a recent
+registration works exactly once — until the first access token expires — and then
+fails forever with nothing explaining why.
+"""
+
+_TOKEN_URL_EN_USO = TOKEN_URL
+"""Which endpoint answered last. Process-local, and sticky on purpose."""
 AUTORIZAR_URL = "https://cloud.ouraring.com/oauth/authorize"
 REVOCAR_URL = "https://api.ouraring.com/oauth/revoke"
 
@@ -231,31 +244,79 @@ def forget() -> None:
 
 
 # ── The exchange, which is where the session is lost if done wrong ──────────
-def _post(data: dict) -> dict:
-    cuerpo = urllib.parse.urlencode(data).encode()
+def _detail_of_token_error(e: urllib.error.HTTPError) -> str:
+    """Oura's `error_description` — the actionable half — or the raw body.
+
+    Burying "Invalid client_id." inside a JSON payload forces whoever is already
+    stuck to parse it to find out what they mistyped.
+    """
+    try:
+        crudo = e.read().decode("utf-8", "replace")
+        cuerpo = json.loads(crudo)
+        desc = cuerpo.get("error_description") or cuerpo.get("error")
+        return f": {desc}" if desc else f": {crudo[:200]}"
+    except Exception:
+        return ""
+
+
+def _post_to(url: str, data: dict) -> dict:
+    """One POST to one token endpoint. Raises with the endpoint's own words."""
     req = urllib.request.Request(
-        TOKEN_URL, data=cuerpo,
+        url, data=urllib.parse.urlencode(data).encode(),
         headers={"Content-Type": "application/x-www-form-urlencoded",
                  "Accept": "application/json"},
     )
     try:
         with urllib.request.urlopen(req, timeout=30) as r:
             return json.load(r)
-    except urllib.error.HTTPError as e:
-        # Oura contesta `{"error": "...", "error_description": "..."}`. La
-        # description is the actionable part — "Invalid client_id." — and
-        # burying it inside raw JSON forces whoever is already stuck to read it.
-        detalle = ""
-        try:
-            crudo = e.read().decode("utf-8", "replace")
-            cuerpo = json.loads(crudo)
-            desc = cuerpo.get("error_description") or cuerpo.get("error")
-            detalle = f": {desc}" if desc else f": {crudo[:200]}"
-        except Exception:
-            pass
-        raise OuraError(f"Oura rejected the exchange ({e.code}){detalle}") from None
     except urllib.error.URLError as e:
-        raise OuraError(f"could not reach Oura: {e.reason}") from None
+        if not isinstance(e, urllib.error.HTTPError):
+            raise OuraError(f"could not reach Oura: {e.reason}") from None
+        raise OuraError(
+            f"Oura rejected the exchange ({e.code}){_detail_of_token_error(e)}"
+        ) from None
+
+
+def _post(data: dict) -> dict:
+    """Exchange or refresh, against whichever token endpoint this app belongs to.
+
+    OURA RUNS TWO PORTALS AND TWO TOKEN ENDPOINTS. Applications registered on
+    the newer `developer.ouraring.com` are rejected by the legacy endpoint —
+    reported in the field as `400 invalid_request` on every single refresh, which
+    means every collection fails at once, forever, for anyone who registered
+    recently. Both endpoints are live and speak OAuth2; verified 12 August 2026.
+
+    So: try the legacy one, and on a 400 try the new one. On success the choice
+    STICKS for the rest of the process, because paying a doubled request on every
+    refresh to re-learn the same answer is waste.
+
+    WHAT THIS DOES DIFFERENTLY from the fallback that reported the bug: when both
+    endpoints reject, the LEGACY error is what propagates. A 400 is also what a
+    genuinely mistyped client ID produces, and the legacy endpoint answers that
+    with «Invalid client_id.» while the new one answers a bare `invalid_client`.
+    Retrying must not cost someone the better sentence.
+
+    NOT VERIFIED HERE: that the new endpoint accepts a new-portal application.
+    That needs an application registered on that portal, which this repository
+    does not have. What is verified is that the endpoint exists, speaks OAuth2,
+    that the fallback fires, and that the legacy error survives it.
+    """
+    global _TOKEN_URL_EN_USO
+
+    if _TOKEN_URL_EN_USO != TOKEN_URL:
+        return _post_to(_TOKEN_URL_EN_USO, data)     # already switched; go direct
+
+    try:
+        return _post_to(TOKEN_URL, data)
+    except OuraError as legado:
+        if "(400)" not in str(legado):
+            raise                                     # 401, 5xx, unreachable: not this
+        try:
+            respuesta = _post_to(TOKEN_URL_NEW_PORTAL, data)
+        except OuraError:
+            raise legado from None                    # the better sentence wins
+        _TOKEN_URL_EN_USO = TOKEN_URL_NEW_PORTAL
+        return respuesta
 
 
 def _from_response(r: dict, alcances_previos: tuple[str, ...] = ()) -> Credentials:

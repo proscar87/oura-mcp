@@ -19,6 +19,25 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { OuraError, Secret } from "./client.js";
 
 export const TOKEN_URL = "https://api.ouraring.com/oauth/token";
+
+/**
+ * The token endpoint for apps registered on `developer.ouraring.com`.
+ *
+ * Undocumented, and live: verified 12 August 2026 to exist and answer a bogus
+ * refresh with a proper OAuth2 `invalid_client`. Apps from the newer portal are
+ * rejected by the legacy endpoint on EVERY refresh, so without this a recent
+ * registration works exactly once — until the first access token expires — and
+ * then fails forever with nothing explaining why.
+ */
+export const TOKEN_URL_NEW_PORTAL = "https://moi.ouraring.com/oauth/v2/ext/oauth-token";
+
+/** Which endpoint answered last. Process-local, and sticky on purpose. */
+let tokenUrlInUse: string = TOKEN_URL;
+
+/** Test seam: forget which endpoint answered, as a fresh process would. */
+export function resetTokenUrl(): void {
+  tokenUrlInUse = TOKEN_URL;
+}
 export const AUTHORIZE_URL = "https://cloud.ouraring.com/oauth/authorize";
 export const REVOKE_URL = "https://api.ouraring.com/oauth/revoke";
 
@@ -160,10 +179,14 @@ export async function forget(): Promise<void> {
 }
 
 // ── The exchange, which is where the session is lost if done wrong ────────
-export async function post(data: Record<string, string>): Promise<Record<string, unknown>> {
+/**
+ * One POST to one token endpoint. Throws with that endpoint's own words.
+ */
+async function postTo(url: string,
+                        data: Record<string, string>): Promise<Record<string, unknown>> {
   let r: Response;
   try {
-    r = await fetch(TOKEN_URL, {
+    r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded", Accept: "application/json" },
       body: new URLSearchParams(data).toString(),
@@ -184,6 +207,50 @@ export async function post(data: Record<string, string>): Promise<Record<string,
     detail = c.error_description ?? c.error ?? detail;
   } catch { /* se queda el raw */ }
   throw new OuraError(`Oura rejected the exchange (${r.status}): ${detail}`);
+}
+
+/**
+ * Exchange or refresh, against whichever token endpoint this app belongs to.
+ *
+ * OURA RUNS TWO PORTALS AND TWO TOKEN ENDPOINTS. Applications registered on the
+ * newer `developer.ouraring.com` are rejected by the legacy endpoint — reported
+ * in the field as `400 invalid_request` on every single refresh, which means
+ * every collection fails at once, forever, for anyone who registered recently.
+ * Both endpoints are live and speak OAuth2; verified 12 August 2026.
+ *
+ * So: try the legacy one, and on a 400 try the new one. On success the choice
+ * STICKS for the rest of the process — paying a doubled request on every refresh
+ * to re-learn the same answer is waste.
+ *
+ * WHAT THIS DOES DIFFERENTLY from the fallback that reported the bug: when both
+ * reject, the LEGACY error propagates. A 400 is also what a genuinely mistyped
+ * client ID produces, and the legacy endpoint answers that with «Invalid
+ * client_id.» while the new one answers a bare `invalid_client`. Retrying must
+ * not cost someone the better sentence.
+ *
+ * NOT VERIFIED HERE: that the new endpoint accepts a new-portal application.
+ * That needs an application registered on that portal, which this repository
+ * does not have. What is verified is that the endpoint exists, speaks OAuth2,
+ * that the fallback fires, and that the legacy error survives it.
+ */
+export async function post(data: Record<string, string>): Promise<Record<string, unknown>> {
+  if (tokenUrlInUse !== TOKEN_URL) return postTo(tokenUrlInUse, data);
+
+  try {
+    return await postTo(TOKEN_URL, data);
+  } catch (legacy) {
+    if (!(legacy instanceof OuraError) || !String(legacy.message).includes("(400)")) {
+      throw legacy;              // 401, 5xx, unreachable: not this problem
+    }
+    let answer: Record<string, unknown>;
+    try {
+      answer = await postTo(TOKEN_URL_NEW_PORTAL, data);
+    } catch {
+      throw legacy;              // the better sentence wins
+    }
+    tokenUrlInUse = TOKEN_URL_NEW_PORTAL;
+    return answer;
+  }
 }
 
 function fromResponse(r: Record<string, unknown>, previous: readonly string[] = []): Credentials {

@@ -9,6 +9,8 @@ token the moment it is exchanged; getting this wrong locks the user out of their
 own account until they authorize from the browser again.
 """
 
+import email.message
+import urllib.error
 import io
 import json
 import os
@@ -27,6 +29,16 @@ def _isolate(tmp_path, monkeypatch):
     monkeypatch.setenv("OURA_CREDENTIALS", str(tmp_path / "cred.json"))
     monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
     return tmp_path
+
+
+class _RespuestaFalsa(io.BytesIO):
+    """A urlopen response: a BytesIO that works as a context manager."""
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *a):
+        self.close()
 
 
 def _cred(refresh_token="R1", expires_at=None, scopes=("daily",)):
@@ -470,3 +482,83 @@ def test_a_broken_file_never_reaches_the_caller_as_a_traceback(_isolate, conteni
     with pytest.raises(OuraError) as e:
         cr.load()
     assert "authorize again" in str(e.value)
+
+
+# ── Oura runs two portals and two token endpoints ──────────────────────────
+# Applications registered on the newer `developer.ouraring.com` are rejected by
+# the legacy token endpoint — reported in the field as `400 invalid_request` on
+# every refresh, which means every collection fails at once, forever, for anyone
+# who registered recently. Both endpoints are live; verified 12 August 2026.
+def _endpoints(monkeypatch, respuestas):
+    """Fake both token endpoints. `respuestas[url]` is a dict or an HTTPError."""
+    vistos = []
+
+    def urlopen(req, timeout=None):  # noqa: ARG001
+        vistos.append(req.full_url)
+        r = respuestas[req.full_url]
+        if isinstance(r, urllib.error.HTTPError):
+            raise r
+        return _RespuestaFalsa(json.dumps(r).encode())
+
+    monkeypatch.setattr(cr.urllib.request, "urlopen", urlopen)
+    monkeypatch.setattr(cr, "_TOKEN_URL_EN_USO", cr.TOKEN_URL)
+    return vistos
+
+
+def _http(codigo, cuerpo):
+    return urllib.error.HTTPError("u", codigo, "x", email.message.Message(),
+                                  io.BytesIO(json.dumps(cuerpo).encode()))
+
+
+BUENA = {"access_token": "A", "refresh_token": "R", "expires_in": 3600}
+
+
+def test_a_legacy_portal_app_never_touches_the_new_endpoint(monkeypatch):
+    """The overwhelming majority. They must not pay a second request, and the
+    fallback must never fire for them."""
+    vistos = _endpoints(monkeypatch, {cr.TOKEN_URL: BUENA})
+    assert cr._post({"grant_type": "refresh_token"})["access_token"] == "A"
+    assert vistos == [cr.TOKEN_URL]
+
+
+def test_a_new_portal_app_falls_back_and_then_goes_direct(monkeypatch):
+    """The bug: without this, a recent registration works exactly ONCE — until
+    the first access token expires — and then fails forever with nothing saying
+    why."""
+    vistos = _endpoints(monkeypatch, {
+        cr.TOKEN_URL: _http(400, {"error": "invalid_request"}),
+        cr.TOKEN_URL_NEW_PORTAL: BUENA,
+    })
+    assert cr._post({"grant_type": "refresh_token"})["access_token"] == "A"
+    assert vistos == [cr.TOKEN_URL, cr.TOKEN_URL_NEW_PORTAL]
+
+    # And it STICKS: re-learning the same answer on every refresh is waste.
+    vistos.clear()
+    assert cr._post({"grant_type": "refresh_token"})["access_token"] == "A"
+    assert vistos == [cr.TOKEN_URL_NEW_PORTAL]
+
+
+def test_a_mistyped_client_id_keeps_the_better_error(monkeypatch):
+    """THE POINT OF DOING THIS DIFFERENTLY. A 400 is also what a genuinely wrong
+    client ID produces. The legacy endpoint answers that with «Invalid
+    client_id.» and the new one with a bare `invalid_client` — so a fallback
+    that lets the second error win costs the person the sentence that would have
+    told them what they mistyped."""
+    _endpoints(monkeypatch, {
+        cr.TOKEN_URL: _http(400, {"error": "invalid_client",
+                                  "error_description": "Invalid client_id."}),
+        cr.TOKEN_URL_NEW_PORTAL: _http(401, {"error": "invalid_client"}),
+    })
+    with pytest.raises(OuraError) as e:
+        cr._post({"grant_type": "refresh_token"})
+    assert "Invalid client_id." in str(e.value), str(e.value)
+
+
+def test_only_a_400_triggers_the_fallback(monkeypatch):
+    """A 401, a 500 or an outage say nothing about which portal the app belongs
+    to. Retrying them doubles the traffic and delays the real answer."""
+    for codigo in (401, 500):
+        vistos = _endpoints(monkeypatch, {cr.TOKEN_URL: _http(codigo, {"error": "x"})})
+        with pytest.raises(OuraError):
+            cr._post({"grant_type": "refresh_token"})
+        assert vistos == [cr.TOKEN_URL], codigo
