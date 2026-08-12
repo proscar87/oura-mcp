@@ -724,14 +724,20 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
             # the answer all along; it just wasn't consulted at the one moment
             # somebody was asking.
             if "403" in str(e):
+                # TWO CAUSES, and this named only one. Oura's spec says a 403
+                # «usually means the user's subscription to Oura has expired» —
+                # so telling that person to re-authorize a scope sends them to
+                # re-approve a permission they already hold, which is advice
+                # that cannot work. Both are named, subscription first, because
+                # Oura says that is the common one.
+                sub = ("Oura's own documentation says a 403 «usually means the user's subscription to Oura has expired and their data is not available via the API» — check that first, because no amount of re-authorizing fixes a lapsed membership.")
                 hint = _missing_scope(collection)
-                if hint:
-                    raise OuraError(
-                        f"Oura refused `{collection}` with 403. {hint}") from None
+                falta = hint or (
+                    f"It may also lack the `{SCOPE_OF.get(collection, '?')}` scope "
+                    f"this collection needs.")
                 raise OuraError(
-                    f"Oura refused `{collection}` with 403. That usually means "
-                    f"the credential lacks the `{SCOPE_OF.get(collection, '?')}` "
-                    f"scope for it — not that there is no data.") from None
+                    f"Oura refused `{collection}` with 403. This is NOT «no data». "
+                    f"{sub} {falta}") from None
             raise
         pages += 1
 

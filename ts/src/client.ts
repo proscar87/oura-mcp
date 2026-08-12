@@ -658,13 +658,22 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
       // A 403 IS OURA ANSWERING «did you grant that permission?», and the reply
       // used to be the status code restated.
       if (e instanceof OuraError && String(e.message).includes("403")) {
+        // TWO CAUSES, and this named only one. Oura's spec says a 403 «usually
+        // means the user's subscription to Oura has expired» — so telling that
+        // person to re-authorize a scope sends them to re-approve a permission
+        // they already hold, which is advice that cannot work.
+        const sub =
+          "Oura's own documentation says a 403 «usually means the user's " +
+          "subscription to Oura has expired and their data is not available via " +
+          "the API» — check that first, because no amount of re-authorizing " +
+          "fixes a lapsed membership.";
         const hint = await missingScope(collection);
+        const falta = hint ??
+          `It may also lack the \`${SCOPE_OF[collection] ?? "?"}\` scope this ` +
+          `collection needs.`;
         throw new OuraError(
-          hint
-            ? `Oura refused \`${collection}\` with 403. ${hint}`
-            : `Oura refused \`${collection}\` with 403. That usually means the ` +
-              `credential lacks the \`${SCOPE_OF[collection] ?? "?"}\` scope for ` +
-              `it — not that there is no data.`);
+          `Oura refused \`${collection}\` with 403. This is NOT «no data». ` +
+          `${sub} ${falta}`);
       }
       throw e;
     }

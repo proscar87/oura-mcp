@@ -644,7 +644,12 @@ describe("a refused scope", () => {
     await expect(fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" }))
       .rejects.toThrow(/`workout` scope/);
     await expect(fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" }))
-      .rejects.toThrow(/not that there is no data/);
+      .rejects.toThrow(/NOT «no data»/);
+    // BOTH DOCUMENTED CAUSES. Oura's spec says a 403 «usually means the user's
+    // subscription to Oura has expired» — naming only the scope sends that
+    // person to re-approve a permission they already hold.
+    await expect(fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" }))
+      .rejects.toThrow(/subscription/);
   });
 
   it("leaves a 401 talking about the token, not about scopes", async () => {

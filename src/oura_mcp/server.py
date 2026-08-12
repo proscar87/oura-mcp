@@ -19,10 +19,11 @@ handed over; the analysis belongs where the method can be cited.
 from __future__ import annotations
 
 import os
+import pathlib
 from typing import Annotated
 
 from mcp.server.mcpserver import MCPServer
-from mcp.types import ToolAnnotations
+from mcp.types import Icon, ToolAnnotations
 from pydantic import Field
 
 from .client import OuraError, fetch
@@ -55,9 +56,35 @@ def _version() -> str:
         return "unknown"
 
 
+def _icon() -> list:
+    """The ring, embedded, or nothing at all.
+
+    EMBEDDED RATHER THAN LINKED, deliberately. An `https://…` icon makes every
+    client fetch it from GitHub on every session — a request that says «somebody
+    is using this right now» to a third party, from a health server that
+    promises no telemetry. 16 KB down a local pipe, once, is the cheaper end of
+    that trade.
+
+    On the SERVER only, not on each tool: four copies of the same ring is three
+    copies of nothing.
+
+    Returns an empty list if the file isn't there. An icon is decoration and
+    must never be the reason a server fails to start.
+    """
+    import base64
+    ruta = pathlib.Path(__file__).parent / "icon.png"
+    try:
+        b64 = base64.b64encode(ruta.read_bytes()).decode()
+    except OSError:
+        return []
+    return [Icon(src=f"data:image/png;base64,{b64}",
+                 mime_type="image/png", sizes=["512x512"])]
+
+
 server = MCPServer(
     name="oura",
     version=_version(),
+    icons=_icon(),
     # WHAT A MODEL CANNOT GUESS. Verified by simulating the questions a user
     # actually asks ("how did I sleep last night?", "am I recovered?", "how was
     # my heart rate during yesterday's workout?") and seeing what they were

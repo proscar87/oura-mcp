@@ -314,3 +314,36 @@ def test_the_typescript_handshake_reports_the_real_version():
     ts = (ROOT / "ts" / "src" / "server.ts").read_text(encoding="utf-8")
     assert 'export const VERSION = "' not in ts, "the version is hand-typed again"
     assert "package.json" in ts, "it no longer reads the version from anywhere"
+
+
+def test_the_server_carries_an_embedded_icon():
+    """In a registry with ~8 Oura entries a client picker renders icons, and the
+    512×512 PNG already existed for the `.mcpb`.
+
+    EMBEDDED, not linked. An `https://…` icon makes every client fetch it from
+    GitHub on every session — a request telling a third party «somebody is using
+    this right now», from a health server that promises no telemetry. 16 KB down
+    a local pipe, once, is the cheaper end of that trade.
+    """
+    from oura_mcp.server import _icon
+
+    iconos = _icon()
+    assert len(iconos) == 1
+    src = iconos[0].src
+    assert src.startswith("data:image/png;base64,"), "the icon is fetched, not carried"
+    assert "http" not in src.split(",", 1)[1][:200], "an external URL crept in"
+
+
+def test_the_icon_ships_inside_the_installed_package():
+    """It lives next to the code, not only in the repository: a `pip install`
+    that leaves it behind would silently drop the icon for everyone who didn't
+    clone."""
+    import json as _json
+    assert (ROOT / "src" / "oura_mcp" / "icon.png").exists()
+    texto = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert "icon.png" in texto, "setuptools will not package it"
+    # And the TypeScript half must find it from the packed layout too.
+    ts = (ROOT / "ts" / "src" / "server.ts").read_text(encoding="utf-8")
+    assert "../icon.png" in ts and "../../icon.png" in ts, \
+        "only one layout is tried; the bundle puts it at a different depth"
+    _json  # noqa: B018

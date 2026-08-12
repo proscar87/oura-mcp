@@ -1036,7 +1036,11 @@ def test_a_403_names_the_scope_instead_of_restating_the_status(monkeypatch):
         client.fetch("workout", "2026-01-01", "2026-01-05")
     msg = str(e.value)
     assert "`workout` scope" in msg, msg
-    assert "not that there is no data" in msg, "the two must not be confusable"
+    assert "NOT «no data»" in msg, "the two must not be confusable"
+    # BOTH DOCUMENTED CAUSES. Oura's spec says a 403 «usually means the user's
+    # subscription to Oura has expired» — so naming only the scope sends that
+    # person to re-approve a permission they already hold.
+    assert "subscription" in msg, msg
 
 
 def test_a_403_with_oauth_says_which_scopes_you_actually_have(monkeypatch, tmp_path):
@@ -1183,3 +1187,25 @@ def test_latest_alone_still_works(monkeypatch):
     llamadas = _fake_oura([[{"timestamp": "2026-07-03T10:00:00+00:00"}]], monkeypatch)
     r = client.fetch("heartrate", latest=True)
     assert r["n"] == 1 and "latest=true" in llamadas[0]
+
+
+def test_a_403_names_the_subscription_before_the_scope(monkeypatch):
+    """Oura's own spec: «Usually means the user's subscription to Oura has
+    expired.» We told people to grant a scope — the less likely cause — and
+    someone whose membership lapsed cannot fix that by re-authorizing anything.
+
+    Order matters, so this asserts it: subscription first, because Oura says
+    that is the common one.
+    """
+    def urlopen(req, timeout=None):  # noqa: ARG001
+        raise urllib.error.HTTPError(req.full_url, 403, "Forbidden",
+                                     email.message.Message(), io.BytesIO(b"{}"))
+
+    monkeypatch.setattr(client.urllib.request, "urlopen", urlopen)
+    monkeypatch.setenv("OURA_PAT", "x" * 32)
+    monkeypatch.delenv("OURA_SANDBOX", raising=False)
+
+    with pytest.raises(OuraError) as e:
+        client.fetch("workout", "2026-01-01", "2026-01-05")
+    msg = str(e.value)
+    assert msg.index("subscription") < msg.index("scope"), msg

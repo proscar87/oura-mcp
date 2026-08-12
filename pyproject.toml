@@ -28,3 +28,6 @@ oura-mcp = "oura_mcp.__main__:cli"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/oura_mcp"]
+
+[tool.setuptools.package-data]
+oura_mcp = ["icon.png"]
