@@ -1,6 +1,46 @@
 # Changelog
 
-## 0.3.2 — unreleased
+## 0.3.2 — 12 August 2026
+
+Then a sixteen-round audit, a wave of parallel agents, and one piece of field
+intelligence:
+
+**Oura runs two portals now.** Applications registered on the newer
+`developer.ouraring.com` are rejected by the legacy token endpoint on **every**
+refresh — so such a registration worked exactly once, until the first access
+token expired, and then failed forever. The exchange tries the legacy endpoint
+and falls back to the new one, keeping the legacy error message when both
+reject, because a 400 is also what a mistyped client ID produces.
+
+**Two concurrent queries spent the single-use refresh token twice**, and one of
+them failed with «Refresh token already used» — a message nobody can act on, on
+a query that had nothing wrong with it. One refresh at a time now.
+
+**Two process crashes**, both in TypeScript, both from something nobody was
+listening to: a callback with a wrong `state` (which any web page can send), and
+a machine without `xdg-open`. The bundle build now runs under
+`--unhandled-rejections=strict`.
+
+**Impossible dates answered confidently.** `2026-02-29` — not a leap year —
+rolled over to March 1st and came back «Oura has no records in that range».
+`2026-13-01` became December. Both refuse now, before the network.
+
+**`latest=true` silently discarded the dates**, answering «my most recent heart
+rate on July 3rd» with the most recent sample ever.
+
+**A 403 named only one of its two documented causes.** Oura's spec says it
+usually means an expired subscription — so telling that person to grant a scope
+sent them to re-approve a permission they already held.
+
+Plus: heart rate for a single day returned nothing and blamed Oura; a lone
+carriage return shifted every CSV column after it; a recovered rate limit left
+no trace; four divergences between the two implementations, including a
+handshake reporting a version two releases stale.
+
+The drift check now reads Oura's official OpenAPI spec, so a NEW collection is
+detected instead of waiting for someone to read release notes. `tools/mutate.py`
+breaks each guarantee on purpose and reports which ones no test would notice.
+246 Python tests, 108 TypeScript.
 
 Found by a 20-hour audit, and all of one family: a response that looks right and
 is not.

@@ -121,9 +121,36 @@ function elicitationChannel() {
   };
 }
 
+/**
+ * The ring, embedded, or nothing at all.
+ *
+ * EMBEDDED RATHER THAN LINKED, deliberately. An `https://…` icon makes every
+ * client fetch it from GitHub on every session — a request that tells a third
+ * party «somebody is using this right now», from a health server that promises
+ * no telemetry. 16 KB down a local pipe, once, is the cheaper end of that trade.
+ *
+ * On the SERVER only, not on each tool: four copies of the same ring is three
+ * copies of nothing.
+ *
+ * Returns undefined if the file isn't there — the packed bundle and the source
+ * tree put it at different depths. An icon is decoration and must never be the
+ * reason a server fails to start.
+ */
+function icons(): { src: string; mimeType: string; sizes: string[] }[] | undefined {
+  for (const ruta of ["../icon.png", "../../icon.png"]) {
+    try {
+      const aqui = dirname(fileURLToPath(import.meta.url));
+      const b64 = readFileSync(join(aqui, ruta)).toString("base64");
+      return [{ src: `data:image/png;base64,${b64}`,
+                mimeType: "image/png", sizes: ["512x512"] }];
+    } catch { /* try the next layout */ }
+  }
+  return undefined;
+}
+
 export function createServer(): McpServer {
   const srv = new McpServer(
-    { name: "oura", version: VERSION },
+    { name: "oura", version: VERSION, icons: icons() },
     { instructions: INSTRUCTIONS },
   );
 
