@@ -1673,6 +1673,69 @@ floating promise fails the build instead of reaching someone mid-authorization.
 4. **The two third-party filings** — `awesome-mcp-servers` PR #11833 and mcp.so
    issue #3503 — are open and awaiting his call on whether they stay.
 
+## The Fable wave — 11 August 2026
+
+Three agents in parallel on separate ground: behaviour bugs, tests without
+teeth, and unexploited capability. Every finding below was re-verified here
+before being acted on; agent reports are leads, not conclusions.
+
+### Wrong answers that looked right
+
+**An impossible date became a confident «no data».** `2026-02-29` — 2026 is not
+a leap year, and a model asking for February 29th is not rare. TypeScript's
+`Date.UTC` **rolls over** instead of failing: the window was built around March
+1st, the trim then discarded every record because none was stamped 2026-02-29,
+and the answer was `n: 0` with *"the query succeeded; Oura has no records in that
+range"*. Every word false. `2026-13-01` became **December**.
+
+Python passed it through and let Oura's 422 explain — defensible, and it spent a
+round trip to say what is knowable offline. Both refuse now, with the same
+sentence, before anything reaches the network. A real leap day still works.
+
+**`latest=true` silently discarded the dates.** «My most recent heart rate on
+July 3rd» sent `?latest=true` and answered with the most recent sample *ever*,
+presented as an answer to the dated question, with no warning key. That is the
+family this package refuses `latest` on seventeen collections for, committed by
+the parameter that refusal was about. The combination is now a refusal that says
+which half to drop.
+
+### Four divergences between the halves
+
+| | |
+|---|---|
+| The handshake reported **0.3.0** while everything else said 0.3.2 | the version is read from `package.json` now |
+| `rate_limited` printed **milliseconds with an `s`** — «waiting 1000s» for a one-second pause | the old test used `Retry-After: 0`, where the bug is invisible |
+| The size warning summed **values only**, undercounting by ~2× | both count the record, with the separators that actually travel |
+| «Today» was computed in **UTC** | anyone west of it in the evening lost the "the ring hasn't synced" explanation |
+
+And a fifth, from Python: `Retry-After: -1` reached `time.sleep(-1)` and died
+with a raw `ValueError` the tool handler doesn't catch.
+
+**`tests/test_parity.py`** now asks both implementations the same question and
+compares — size warning, CSV escaping, date shifting, impossible dates, and
+which day a record belongs to. Differential testing has been the highest-yield
+technique in this repository and it had never been automated.
+
+### A fifth vocabulary
+
+The `collection` parameter's **description** read «Nombre exacto. Ver
+`oura_collections`.» — sent to every client in `tools/list`, in both halves.
+`test_public_surface.py` pins names; descriptions were the class nobody had
+thought of. Four vocabularies broke one at a time in rounds 1–5, each guard
+written after the fact; this is the fifth, found by asking what else a client
+can see.
+
+### Six guarantees that had no teeth
+
+A mutation sweep beyond what `tools/mutate.py` knew found six behaviours no test
+would have noticed breaking — including the actionable half of the 401 message
+(the tests asserted "says 401" and "doesn't say scope", which the generic
+fallback also satisfies), the missing-scope reason on an *empty* response, and
+`OURA_SANDBOX=0` in TypeScript, where removing the normalization silently serves
+sample data to someone trying to turn it **off**.
+
+All six now have tests, and all eleven new mutations are in `tools/mutate.py`.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

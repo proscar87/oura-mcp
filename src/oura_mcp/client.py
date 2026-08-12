@@ -209,7 +209,7 @@ def _requested_wait(e: urllib.error.HTTPError, attempt: int) -> float:
     header = (e.headers.get("Retry-After") or "").strip() if e.headers else ""
     if header:
         try:
-            return min(float(header), MAX_WAIT)
+            return min(max(float(header), 0.0), MAX_WAIT)
         except ValueError:
             pass
         try:
@@ -351,17 +351,26 @@ def _widen_end(value: str | None) -> str | None:
 
 
 def _shift_days(date: str, days: int) -> str:
-    """`YYYY-MM-DD` ± days. If it doesn't parse, it's returned untouched.
+    """`YYYY-MM-DD` ± days. A date that isn't on the calendar is REFUSED here.
 
-    A failure to parse isn't worth raising here: a malformed date is rejected by
-    Oura with a 422 that explains what it expected, and that message is more
-    useful than anything we could invent.
+    It used to be returned untouched, on the reasoning that Oura's 422 explains
+    itself better than anything invented locally. That was defensible and it
+    cost a round trip to say what can be known offline — and the TypeScript half,
+    which rolled the date over instead, answered `2026-02-29` with a confident
+    «Oura has no records in that range» built from a window around March 1st.
+
+    Refusing here is the rule this package already applies to a made-up
+    collection name: it has to blow up BEFORE the request, not turn into a
+    response somebody has to interpret.
     """
     try:
         return (datetime.date.fromisoformat(date[:10])
                 + datetime.timedelta(days=days)).isoformat()
     except ValueError:
-        return date
+        raise OuraError(
+            f"`{date[:10]}` is not a real date on the calendar. Check the month "
+            f"and the day — February has 28 days in {date[:4]}."
+        ) from None
 
 
 def to_csv(data: list) -> tuple[str, list[str], bool]:
@@ -494,8 +503,12 @@ def _size_warning(data: list, fields: list[str] | None) -> dict | None:
     """
     if fields or len(data) < 2:
         return None                     # they already chose columns, or there's no volume
-    total = sum(len(json.dumps(r, ensure_ascii=False)) for r in data
-                if isinstance(r, dict))
+    # COMPACT SEPARATORS, matching what actually goes over the wire and what
+    # `JSON.stringify` counts on the other side. The default `, ` and `: ` add
+    # two characters per field per record that nobody ever transmits, and made
+    # the two implementations disagree about the size of the same response.
+    total = sum(len(json.dumps(r, ensure_ascii=False, separators=(",", ":")))
+                for r in data if isinstance(r, dict))
     if total < SIZE_WARNING:
         return None
     weights: dict[str, int] = {}
@@ -630,6 +643,21 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
     if fields:
         params["fields"] = ",".join(fields)
 
+    if latest and (start or end):
+        # IT USED TO DROP THEM WITHOUT A WORD. `latest=true` skips the date
+        # block entirely, so «my most recent heart rate ON JULY 3rd» sent
+        # `?latest=true` and answered with the most recent sample EVER,
+        # presented as an answer to the dated question.
+        #
+        # Exactly the family this package rejects `latest` on seventeen
+        # collections for — you asked for one thing, got another, nothing warned
+        # you — committed by the parameter that fix was about. Refused before the
+        # request, like a made-up collection name.
+        raise OuraError(
+            "`latest` and a date range are a contradiction: `latest` asks Oura "
+            "for the most recent record it has, ignoring any range. Drop "
+            "`latest` to get the newest record WITHIN those dates, or drop the "
+            "dates to get the newest one overall.")
     if s in WITH_DATE and not latest:
         if not start or not end:
             raise OuraError(f"{collection} needs start and end")

@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inspect } from "node:util";
 
 import {
-  OuraError, Secret, toCsv, sizeWarning, ignoredFields, shiftDays, dayOf,
+  OuraError, Secret, toCsv, inSandbox, sizeWarning, ignoredFields, shiftDays, dayOf,
   requestedWait, detailOf, fetchAll,
 } from "../src/client.js";
 
@@ -656,6 +656,11 @@ describe("a refused scope", () => {
       .rejects.toThrow(/401/);
     await expect(fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" }))
       .rejects.not.toThrow(/scope/);
+    // THE ACTIONABLE HALF, which was unguarded: deleting the whole 401 branch
+    // left the generic `Oura responded 401` fallback, and that satisfied both
+    // assertions above. A status code is not advice.
+    await expect(fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" }))
+      .rejects.toThrow(/expire/);
   });
 });
 
@@ -782,5 +787,90 @@ describe("the listener's cleanup", () => {
       vi.useRealTimers();
       await new Promise<void>((r) => blocker.close(() => r()));
     }
+  });
+});
+
+// ── Wiring the mutation run found unguarded ────────────────────────────────
+describe("warnings that reach the response", () => {
+  it("puts large_response on the response, not just in the helper", async () => {
+    // `sizeWarning` had a unit test and nothing checked that its result reached
+    // the caller — the same "helper tested, wiring not" shape that let
+    // `ignored_fields` go missing. A warning that never arrives is
+    // indistinguishable from a query with nothing to warn about.
+    const gordo = Array.from({ length: 400 }, (_, i) => ({
+      day: "2026-01-01", i, met: "x".repeat(200),
+    }));
+    fakeOura([gordo]);
+    const r = await fetchAll("daily_activity", { start: "2026-01-01", end: "2026-01-02" });
+    expect(r["large_response"]).toBeDefined();
+  });
+
+  it("puts uneven_columns on the response too", async () => {
+    // In CSV an empty cell is either an absent field or a null value, and the
+    // reader cannot tell. Saying so is the whole point of the key.
+    fakeOura([[{ day: "2026-01-01", score: 70 }, { day: "2026-01-02", extra: 1 }]]);
+    const r = await fetchAll("daily_sleep",
+      { start: "2026-01-01", end: "2026-01-03", format: "csv" });
+    expect(r["uneven_columns"]).toBeDefined();
+  });
+});
+
+describe("the sandbox switch", () => {
+  it.each(["0", "no", "false", ""])("treats %o as OFF", (valor) => {
+    // Nothing tested these. With the normalization removed, `OURA_SANDBOX=0`
+    // silently serves Oura's sample data — synthetic numbers read as someone's
+    // own, which is the exact failure this package exists to prevent, reached
+    // by someone trying to turn the thing OFF.
+    process.env.OURA_SANDBOX = valor;
+    expect(inSandbox()).toBe(false);
+  });
+
+  it.each(["1", "yes", "true", "sí"])("treats %o as ON", (valor) => {
+    process.env.OURA_SANDBOX = valor;
+    expect(inSandbox()).toBe(true);
+  });
+});
+
+// ── Two contradictions that used to answer confidently ─────────────────────
+describe("impossible requests", () => {
+  it("refuses a date that is not on the calendar", async () => {
+    // `Date.UTC` ROLLS OVER. `2026-02-29` — 2026 is not a leap year — became
+    // March 1st, the window was built around the wrong day, the trim discarded
+    // every record because none was stamped 2026-02-29, and the answer was
+    // `n: 0` with «Oura has no records in that range». Every word false.
+    // `2026-13-01` became December.
+    const urls: string[] = [];
+    fakeOura([[]], urls);
+    for (const malo of ["2026-02-29", "2026-06-31", "2026-13-01"]) {
+      await expect(fetchAll("daily_sleep", { start: malo, end: malo }))
+        .rejects.toThrow(/not a real date/);
+    }
+    expect(urls).toEqual([]);   // none of them reached the network
+  });
+
+  it("still accepts a real leap day", async () => {
+    fakeOura([[{ day: "2024-02-29" }]]);
+    const r = await fetchAll("daily_sleep", { start: "2024-02-29", end: "2024-02-29" });
+    expect(r["n"]).toBe(1);
+  });
+
+  it("refuses `latest` together with a date range", async () => {
+    // It used to drop the dates silently: «my most recent heart rate ON JULY
+    // 3rd» sent `?latest=true` and answered with the most recent sample EVER,
+    // presented as an answer to the dated question.
+    const urls: string[] = [];
+    fakeOura([[]], urls);
+    await expect(fetchAll("heartrate",
+      { start: "2026-07-03", end: "2026-07-03", latest: true }))
+      .rejects.toThrow(/contradiction/);
+    expect(urls).toEqual([]);
+  });
+
+  it("still accepts `latest` on its own", async () => {
+    const urls: string[] = [];
+    fakeOura([[{ timestamp: "2026-07-03T10:00:00+00:00" }]], urls);
+    const r = await fetchAll("heartrate", { latest: true });
+    expect(r["n"]).toBe(1);
+    expect(urls[0]).toContain("latest=true");
   });
 });

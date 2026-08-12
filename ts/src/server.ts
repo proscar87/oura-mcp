@@ -13,12 +13,30 @@
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
 import { OuraError, base, inSandbox, fetchAll, token } from "./client.js";
 import { SCOPE_OF, COLLECTIONS, WITH_DATE, shape, shapeName } from "./collections.js";
 
-export const VERSION = "0.3.0";
+// READ FROM package.json, never typed here. This constant said 0.3.0 while
+// every other declaration said 0.3.2, and it is the one the MCP handshake
+// reports — so the bundle told each client a version that had not existed for
+// two releases. Exactly the bug the audit fixed in Python ("the server lied
+// about its version"), recurring in the half that ships inside the .mcpb,
+// because the coherence test pinned the manifest and package.json and not this.
+export const VERSION: string = (() => {
+  try {
+    const here = dirname(fileURLToPath(import.meta.url));
+    return JSON.parse(readFileSync(join(here, "..", "package.json"), "utf8")).version;
+  } catch {
+    // Packed layouts move package.json around; an honest "unknown" beats a
+    // confident wrong number in a bug report.
+    return "unknown";
+  }
+})();
 
 /**
  * ALL THREE ARE READ-ONLY, and that isn't a promise: there is no POST, PUT or
@@ -152,7 +170,7 @@ export function createServer(): McpServer {
       "collections exclude the last day and others don't, and `workout` is " +
       "skewed to UTC — but that is corrected here.",
     inputSchema: {
-      collection: z.string().describe("Nombre exacto. Ver `oura_collections`."),
+      collection: z.string().describe("Exact name. See `oura_collections` if you are unsure."),
       day: z.string().optional().describe("Shorthand for a single day: equivalent to start=end=day."),
       start: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
       end: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
