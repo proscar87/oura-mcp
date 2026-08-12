@@ -1736,6 +1736,51 @@ sample data to someone trying to turn it **off**.
 
 All six now have tests, and all eleven new mutations are in `tools/mutate.py`.
 
+### Field intelligence: Oura runs two portals and two token endpoints
+
+Oscar forwarded release notes from an unrelated Home Assistant Oura integration,
+reporting that applications registered on the newer `developer.ouraring.com`
+**fail every token refresh** against the legacy
+`https://api.ouraring.com/oauth/token` with `400 invalid_request` — all their
+endpoints failing at once, on every update cycle.
+
+This repository used that same legacy endpoint, so the same bug was here.
+
+**Verified before acting on it**, because a third party's release notes are a
+lead and not a conclusion. Probed 12 August 2026: both portals answer 200, and
+both token endpoints are live and speak OAuth2. Bogus credentials get:
+
+    api.ouraring.com/oauth/token       400  {"error":"invalid_client",
+                                             "error_description":"Invalid client_id."}
+    moi.ouraring.com/oauth/v2/ext/…    401  {"error":"invalid_client"}
+
+That comparison is the one thing the release notes don't contain, and it changed
+the design. Their fallback retries on any 400 and lets the second endpoint's
+error propagate. **A 400 is also what a genuinely mistyped client ID produces** —
+and the legacy endpoint answers that with «Invalid client_id.» while the new one
+answers a bare `invalid_client`. Retrying must not cost someone the sentence that
+tells them what they typed wrong.
+
+So: try legacy, on a 400 try the new one, and **if both reject, the legacy error
+is what propagates**. On success the choice sticks for the process, because
+paying a doubled request on every refresh to re-learn the same answer is waste.
+A 401 or a 5xx says nothing about which portal an app belongs to and is never
+retried.
+
+Put in `_post` rather than in the refresh path alone, so the initial code
+exchange is covered too — the reporting project fixed only refresh.
+
+**What is NOT verified, and is stated in the code:** that the new endpoint
+accepts a new-portal application. That needs an application registered on that
+portal, which this repository does not have. What is verified is that the
+endpoint exists, speaks OAuth2, that the fallback fires, that it sticks, and that
+the legacy error survives it.
+
+The severity is worth naming: without this, someone who registers today gets a
+server that works **exactly once** — until the first access token expires, an
+hour later — and then fails forever, with an error that names neither the cause
+nor the fix.
+
 ### Checked and deliberately not adopted
 
 **Argument completion** (`completion/complete`). `oura_query`'s `collection`

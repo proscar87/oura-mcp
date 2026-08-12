@@ -116,6 +116,14 @@ still work; new ones can't be created. So there are two paths:
 with the redirect `http://localhost:9876/callback/` — **the trailing slash is
 required**, the portal rejects the other form with `invalid_redirect_uri`.
 
+> **If you registered on `developer.ouraring.com` instead**, your app belongs to
+> Oura's newer portal, whose token endpoint is a different one. The legacy
+> endpoint rejects those apps on **every** refresh — so the registration works
+> exactly once, until the first access token expires, and then fails forever
+> with nothing explaining why. This server tries the legacy endpoint and falls
+> back to the new one automatically; nothing to configure either way.
+
+
 ```bash
 export OURA_CLIENT_ID="…"
 export OURA_CLIENT_SECRET="…"

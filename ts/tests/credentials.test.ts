@@ -363,3 +363,77 @@ describe("an empty response and a throttled one", () => {
     expect(String(r["rate_limited"])).toContain("waiting 1s");
   });
 });
+
+// ── Oura runs two portals and two token endpoints ──────────────────────────
+describe("the new developer portal", () => {
+  // Applications registered on `developer.ouraring.com` are rejected by the
+  // legacy token endpoint — reported in the field as `400 invalid_request` on
+  // every refresh, so every collection fails at once, forever, for anyone who
+  // registered recently. Both endpoints are live; verified 12 August 2026.
+  const BUENA = { access_token: "A", refresh_token: "R", expires_in: 3600 };
+
+  function endpoints(respuestas: Record<string, [number, unknown]>) {
+    const seen: string[] = [];
+    vi.stubGlobal("fetch", async (url: string) => {
+      seen.push(String(url));
+      const [status, body] = respuestas[String(url)] ?? [404, {}];
+      return new Response(JSON.stringify(body), { status });
+    });
+    return seen;
+  }
+
+  beforeEach(async () => {
+    const { resetTokenUrl } = await import("../src/credentials.js");
+    resetTokenUrl();
+  });
+
+  it("never touches the new endpoint for a legacy-portal app", async () => {
+    // The overwhelming majority. They must not pay a second request.
+    const { TOKEN_URL } = await import("../src/credentials.js");
+    const seen = endpoints({ [TOKEN_URL]: [200, BUENA] });
+    await expect(post({ grant_type: "refresh_token" })).resolves.toMatchObject(
+      { access_token: "A" });
+    expect(seen).toEqual([TOKEN_URL]);
+  });
+
+  it("falls back for a new-portal app and then goes direct", async () => {
+    // Without this, a recent registration works exactly ONCE — until the first
+    // access token expires — and then fails forever with nothing saying why.
+    const { TOKEN_URL, TOKEN_URL_NEW_PORTAL } = await import("../src/credentials.js");
+    const seen = endpoints({
+      [TOKEN_URL]: [400, { error: "invalid_request" }],
+      [TOKEN_URL_NEW_PORTAL]: [200, BUENA],
+    });
+    await expect(post({ grant_type: "refresh_token" })).resolves.toMatchObject(
+      { access_token: "A" });
+    expect(seen).toEqual([TOKEN_URL, TOKEN_URL_NEW_PORTAL]);
+
+    seen.length = 0;
+    await post({ grant_type: "refresh_token" });
+    expect(seen).toEqual([TOKEN_URL_NEW_PORTAL]);   // sticky
+  });
+
+  it("keeps the better error when the client ID is simply wrong", async () => {
+    // THE POINT OF DOING THIS DIFFERENTLY. A 400 is also what a mistyped client
+    // ID produces. The legacy endpoint answers that with «Invalid client_id.»
+    // and the new one with a bare `invalid_client`, so letting the second error
+    // win costs the person the sentence that tells them what they mistyped.
+    const { TOKEN_URL, TOKEN_URL_NEW_PORTAL } = await import("../src/credentials.js");
+    endpoints({
+      [TOKEN_URL]: [400, { error: "invalid_client",
+                           error_description: "Invalid client_id." }],
+      [TOKEN_URL_NEW_PORTAL]: [401, { error: "invalid_client" }],
+    });
+    await expect(post({ grant_type: "refresh_token" }))
+      .rejects.toThrow(/Invalid client_id\./);
+  });
+
+  it.each([401, 500])("does not retry a %i", async (status) => {
+    // Those say nothing about which portal the app belongs to. Retrying doubles
+    // the traffic and delays the real answer.
+    const { TOKEN_URL } = await import("../src/credentials.js");
+    const seen = endpoints({ [TOKEN_URL]: [status, { error: "x" }] });
+    await expect(post({ grant_type: "refresh_token" })).rejects.toThrow();
+    expect(seen).toEqual([TOKEN_URL]);
+  });
+});
