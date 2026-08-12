@@ -1080,4 +1080,106 @@ def test_a_401_still_talks_about_the_token_not_about_scopes(monkeypatch):
 
     with pytest.raises(OuraError) as e:
         client.fetch("workout", "2026-01-01", "2026-01-05")
-    assert "401" in str(e.value) and "scope" not in str(e.value)
+    msg = str(e.value)
+    assert "401" in msg and "scope" not in msg
+    # THE ACTIONABLE HALF, which was unguarded: deleting the whole 401 branch
+    # left the generic `Oura responded 401` fallback, and that satisfied both
+    # assertions above. A status code is not advice.
+    assert "expire" in msg, msg
+
+
+def test_an_empty_response_names_the_scope_you_did_not_grant(monkeypatch, tmp_path):
+    """The 403 path had a test and this one did not.
+
+    They are different Oura behaviours: a 403 is a refusal, an empty 200 is
+    silence. `_missing_scope` was extracted precisely so the refusal could reuse
+    what the silence already knew — and the silence was the untested half.
+
+    Someone staring at `n: 0` has two possible worlds, «there is no data» and
+    «you never granted that permission», and this sentence is the only thing
+    that tells them which one they are in.
+    """
+    monkeypatch.setenv("OURA_CREDENTIALS", str(tmp_path / "c.json"))
+    monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
+    monkeypatch.delenv("OURA_PAT", raising=False)
+    monkeypatch.delenv("OURA_PAT_FILE", raising=False)
+    monkeypatch.delenv("OURA_SANDBOX", raising=False)
+
+    from oura_mcp import credentials as cr
+    cr.save(cr.Credentials(client.Secret("A"), client.Secret("R"),
+                           time.time() + 3600, ("daily",)))
+
+    _fake_oura([[]], monkeypatch)
+    monkeypatch.delenv("OURA_PAT", raising=False)      # _fake_oura sets one
+    r = client.fetch("workout", "2026-01-01", "2026-01-05")
+
+    razones = " ".join(r["empty"]["what_we_know"])
+    assert "`workout` scope" in razones, razones
+    assert "--authorize" in razones, "it has to say what to do next"
+
+
+def test_a_negative_retry_after_does_not_crash(monkeypatch):
+    """`Retry-After: -1` reached `time.sleep(-1)`, which raises ValueError — not
+    an OuraError, so the tool's handler didn't catch it and the call died with a
+    raw traceback. A hostile or buggy header should never be able to do that."""
+    m = email.message.Message()
+    m["Retry-After"] = "-1"
+    e = urllib.error.HTTPError("u", 429, "x", m, io.BytesIO(b"{}"))
+    espera = client._requested_wait(e, 0)
+    assert espera >= 0, espera
+    time.sleep(espera)      # the actual call that used to raise
+
+
+def test_an_impossible_date_is_refused_before_the_request(monkeypatch):
+    """`2026-02-29` is not a date. 2026 is not a leap year, and a model asking
+    for «February 29th» is not rare.
+
+    TypeScript rolled it over to March 1st, built the window around the wrong
+    day, discarded every record in the trim because none was stamped
+    2026-02-29, and answered `n: 0` with «the query succeeded; Oura has no
+    records in that range». Every word of that false. `2026-13-01` became
+    December.
+
+    Python passed it through and let Oura's 422 explain — defensible, and it
+    spent a round trip to say what is knowable offline. Both refuse now, with
+    the same sentence, before anything reaches the network.
+    """
+    llamadas = _fake_oura([[]], monkeypatch)
+    for malo in ("2026-02-29", "2026-06-31", "2026-13-01"):
+        with pytest.raises(OuraError) as e:
+            client.fetch("daily_sleep", malo, malo)
+        assert "not a real date" in str(e.value), malo
+    assert llamadas == [], "an impossible date reached the network"
+
+
+def test_a_real_leap_day_still_works(monkeypatch):
+    """2024 WAS a leap year. Refusing the impossible must not refuse the real."""
+    _fake_oura([[{"day": "2024-02-29"}]], monkeypatch)
+    r = client.fetch("daily_sleep", "2024-02-29", "2024-02-29")
+    assert r["n"] == 1
+
+
+def test_latest_with_a_date_is_a_contradiction_and_says_so(monkeypatch):
+    """It used to drop the dates without a word.
+
+    `latest=true` skips the date block entirely, so «my most recent heart rate
+    ON JULY 3rd» sent `?latest=true` and answered with the most recent sample
+    EVER — presented as an answer to the dated question, with no warning key.
+
+    That is the exact family this package refuses `latest` on seventeen
+    collections for, committed by the parameter that refusal was about.
+    """
+    llamadas = _fake_oura([[{"timestamp": "2026-07-03T10:00:00+00:00"}]], monkeypatch)
+    with pytest.raises(OuraError) as e:
+        client.fetch("heartrate", "2026-07-03", "2026-07-03", latest=True)
+    msg = str(e.value)
+    assert "contradiction" in msg
+    assert "Drop `latest`" in msg, "it has to say what to do instead"
+    assert llamadas == [], "the contradictory query reached the network"
+
+
+def test_latest_alone_still_works(monkeypatch):
+    """Refusing the combination must not break the parameter."""
+    llamadas = _fake_oura([[{"timestamp": "2026-07-03T10:00:00+00:00"}]], monkeypatch)
+    r = client.fetch("heartrate", latest=True)
+    assert r["n"] == 1 and "latest=true" in llamadas[0]

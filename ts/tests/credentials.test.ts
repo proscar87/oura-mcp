@@ -317,3 +317,49 @@ describe("concurrent refresh", () => {
     expect(ok.refreshToken?.reveal()).toBe("R3");
   });
 });
+
+// ── What the mutation run and the audit left unguarded ─────────────────────
+describe("an empty response and a throttled one", () => {
+  it("names the scope you did not grant when the answer is empty", async () => {
+    // The 403 path had a test and this one did not. They are different Oura
+    // behaviours: a 403 is a refusal, an empty 200 is silence. `missingScope`
+    // was extracted so the refusal could reuse what the silence already knew —
+    // and the silence was the untested half. Someone staring at `n: 0` has two
+    // possible worlds and this sentence is the only thing that says which.
+    const { fetchAll } = await import("../src/client.js");
+    delete process.env.OURA_PAT;
+    delete process.env.OURA_PAT_FILE;
+    delete process.env.OURA_SANDBOX;
+    await save(cred("R1", undefined, ["daily"]));
+
+    vi.stubGlobal("fetch", async () =>
+      new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    const r = await fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" });
+
+    const razones = JSON.stringify((r["empty"] as Record<string, unknown>)["what_we_know"]);
+    expect(razones).toContain("`workout` scope");
+    expect(razones).toContain("--authorize");
+  });
+
+  it("reports the throttled wait in seconds, not milliseconds", async () => {
+    // `requestedWait` returns MILLISECONDS and the message printed them with an
+    // `s`. With `Retry-After: 1` it read «waiting 1000s in total» — a model told
+    // the server just spent seventeen minutes throttled will refuse the next
+    // query or shrink it to nothing. The old test used `Retry-After: 0`, where
+    // the bug is invisible; this one uses 1, where it is the whole point.
+    const { fetchAll } = await import("../src/client.js");
+    process.env.OURA_PAT = "token-de-prueba";
+    delete process.env.OURA_SANDBOX;
+
+    let n = 0;
+    vi.stubGlobal("fetch", async () => {
+      if (n++ < 1) {
+        return new Response("{}", { status: 429, headers: { "Retry-After": "1" } });
+      }
+      return new Response(JSON.stringify({ data: [{ day: "2026-01-01" }] }));
+    });
+
+    const r = await fetchAll("daily_sleep", { start: "2026-01-01", end: "2026-01-02" });
+    expect(String(r["rate_limited"])).toContain("waiting 1s");
+  });
+});

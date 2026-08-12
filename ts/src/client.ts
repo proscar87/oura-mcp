@@ -172,6 +172,25 @@ export function shiftDays(fecha: string, dias: number): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(fecha);
   if (!m) return fecha;
   const d = new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!));
+
+  // `Date.UTC` ROLLS OVER instead of failing, and that turned a typo into a
+  // confident lie. `2026-02-29` — 2026 is not a leap year, and a model asking
+  // for "February 29th" is not rare — became March 1st: the window was built
+  // around the wrong day, the trim then discarded every record because none was
+  // stamped 2026-02-29, and the answer was `n: 0` with «the query succeeded;
+  // Oura has no records in that range». Every word false. `2026-13-01` became
+  // December.
+  //
+  // The check is a round trip: if the date the shift STARTED from doesn't
+  // format back to what was passed in, it never existed.
+  const normalizado = new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!))
+    .toISOString().slice(0, 10);
+  if (normalizado !== m[0]) {
+    throw new OuraError(
+      `\`${m[0]}\` is not a real date on the calendar. Check the month and the ` +
+      `day — February has 28 days in ${m[1]}.`);
+  }
+
   d.setUTCDate(d.getUTCDate() + dias);
   return d.toISOString().slice(0, 10);
 }
@@ -411,13 +430,21 @@ export function ignoredFields(fields: string[] | undefined, data: Row[]): string
  */
 export function sizeWarning(data: Row[], fields: string[] | undefined) {
   if (fields?.length || data.length < 2) return null;
+  // TOTAL THE WHOLE RECORD, the way Python does. This summed the VALUES only —
+  // no keys, no quotes, no punctuation — and undercounted real collections by
+  // roughly half. A response of 60,000 characters warned in Python and passed in
+  // silence here, and when it did fire, the `characters` number described
+  // something the model never received.
+  //
+  // The per-key weights stay value-only on purpose: they answer "which field is
+  // the bulk of this", and a key name repeated once per record is noise in that
+  // question.
   let total = 0;
   const weights = new Map<string, number>();
   for (const r of data) {
+    total += JSON.stringify(r)?.length ?? 0;
     for (const [k, v] of Object.entries(r)) {
-      const n = JSON.stringify(v)?.length ?? 0;
-      weights.set(k, (weights.get(k) ?? 0) + n);
-      total += n;
+      weights.set(k, (weights.get(k) ?? 0) + (JSON.stringify(v)?.length ?? 0));
     }
   }
   if (total < SIZE_WARNING) return null;
@@ -464,7 +491,15 @@ function trim(data: Row[], start: string | undefined, end: string | undefined,
  * the network.
  */
 async function whyEmpty(collection: string, start?: string, end?: string) {
-  const today = new Date().toISOString().slice(0, 10);
+  // THE USER'S TODAY, not UTC's. `toISOString()` is UTC, so anyone west of it in
+  // the evening — every US timezone after about 5pm — asked about "last night"
+  // and got «nothing further to report» instead of «the ring hasn't synced yet»,
+  // which is the entire reason the `empty` key exists. East of UTC in the
+  // morning it went the other way and called their today "in the future".
+  //
+  // `sv-SE` because its locale format IS `YYYY-MM-DD`; the alternative is
+  // assembling it from getFullYear/getMonth/getDate by hand.
+  const today = new Date().toLocaleDateString("sv-SE");
   const reasons: string[] = [];
   if (start && end) {
     if (start.slice(0, 10) > today) reasons.push("the requested range is in the future");
@@ -556,6 +591,30 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
     params.set("latest", "true");
   }
   if (fields?.length) params.set("fields", fields.join(","));
+
+  if (latest && (start || end)) {
+
+    // IT USED TO DROP THEM WITHOUT A WORD. `latest=true` skips the date
+
+    // block, so «my most recent heart rate ON JULY 3rd» sent `?latest=true`
+
+    // and answered with the most recent sample EVER, presented as an answer
+
+    // to the dated question — the family this package rejects `latest` on
+
+    // seventeen collections for, committed by that same parameter.
+
+    throw new OuraError(
+
+      "`latest` and a date range are a contradiction: `latest` asks Oura " +
+
+      "for the most recent record it has, ignoring any range. Drop `latest` " +
+
+      "to get the newest record WITHIN those dates, or drop the dates to " +
+
+      "get the newest one overall.");
+
+  }
 
   if (WITH_DATE.has(f) && !latest) {
     if (!start || !end) throw new OuraError(`${collection} necesita start y end`);
@@ -679,7 +738,12 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
     // this is not the same bug as the other four — but being throttled means
     // the NEXT query may fail, and a model that does not know it was just
     // refused will happily fire off another fifty pages.
-    const total = waits.reduce((a, b) => a + b, 0);
+    // `requestedWait` returns MILLISECONDS and this printed them with an `s`.
+    // With `Retry-After: 1` the message read «waiting 1000s in total» — a model
+    // told the server just spent seventeen minutes throttled will refuse the
+    // next query or shrink it to nothing. The existing test used `Retry-After: 0`,
+    // where the bug is invisible.
+    const total = waits.reduce((a, b) => a + b, 0) / 1000;
     out["rate_limited"] =
       `Oura refused ${waits.length} time(s) with 429 and this recovered after ` +
       `waiting ${total.toFixed(0)}s in total. The data is complete. You are ` +

@@ -139,7 +139,7 @@ def collections_resource() -> str:
                annotations=ToolAnnotations(title="Query an Oura collection",
                                            **_SOLO_LECTURA))
 def oura_query(
-    collection: Annotated[str, Field(description="Nombre exacto. Ver `oura_collections`.")],
+    collection: Annotated[str, Field(description="Exact name. See `oura_collections` if you are unsure.")],
     start: Annotated[str | None, Field(description="YYYY-MM-DD, or ISO 8601 with time")] = None,
     end: Annotated[str | None, Field(description="YYYY-MM-DD, or ISO 8601 with time")] = None,
     day: Annotated[str | None, Field(

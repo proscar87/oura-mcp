@@ -281,3 +281,36 @@ def test_the_no_credentials_message_serves_both_audiences():
         assert "terminal" in block, f"{f}: the terminal route disappeared"
         assert titulo.startswith("Use sample data"), \
             "the manifest renamed the checkbox; the message now points at nothing"
+
+
+def test_no_parameter_description_is_in_spanish():
+    """A FIFTH VOCABULARY. The lock pins NAMES, and the `collection` parameter's
+    DESCRIPTION still read «Nombre exacto. Ver `oura_collections`.» — sent to
+    every client in `tools/list`, in both implementations.
+
+    Four classes of name broke one at a time and each guard was written after the
+    fact; descriptions were the class nobody had thought of yet. Same shape,
+    found by asking what else a client can see.
+    """
+    marcadores = ("Nombre", "exacto", "Ver `", "colección", "obligatorio",
+                  "opcional", "sólo", "Devuelve")
+    for f in ("src/oura_mcp/server.py", "ts/src/server.ts"):
+        text = (ROOT / f).read_text(encoding="utf-8")
+        for m in re.finditer(r'(?:description=|\.describe\()"([^"]{8,})"', text):
+            for marcador in marcadores:
+                assert marcador not in m.group(1), f"{f}: «{m.group(1)[:60]}»"
+
+
+def test_the_typescript_handshake_reports_the_real_version():
+    """It said 0.3.0 while everything else said 0.3.2, and it is the number the
+    MCP handshake reports — so the bundle told every client a version that had
+    not existed for two releases.
+
+    The same bug the audit fixed in Python, recurring in the half that ships in
+    the `.mcpb`, because the coherence test pinned the manifest and package.json
+    and not this constant. It is read from package.json now, so there is nothing
+    left to drift.
+    """
+    ts = (ROOT / "ts" / "src" / "server.ts").read_text(encoding="utf-8")
+    assert 'export const VERSION = "' not in ts, "the version is hand-typed again"
+    assert "package.json" in ts, "it no longer reads the version from anywhere"
