@@ -80,8 +80,30 @@ jobs:
       # accepting it, so this step goes AFTER publishing to PyPI.
       - name: Install the publisher
         run: |
-          curl -sL "https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_amd64.tar.gz" \
-            | tar xz mcp-publisher
+          # NOT PIPED STRAIGHT INTO TAR. It was, and when the download came back
+          # as anything other than a tarball — a 404 page, a rate-limit body, a
+          # redirect that didn't resolve — the whole job died with
+          #
+          #     gzip: stdin: not in gzip format
+          #
+          # which names neither what was being fetched nor why it failed. It
+          # happened once on a release where the URL was provably fine: the
+          # transient failure looked identical to a broken URL.
+          #
+          # Download, check what arrived, retry, and say which it was.
+          url="https://github.com/modelcontextprotocol/registry/releases/latest/download/mcp-publisher_$(uname -s | tr '[:upper:]' '[:lower:]')_amd64.tar.gz"
+          for intento in 1 2 3; do
+            curl -sSL --retry 3 --retry-delay 5 -o publisher.tgz "$url" && \
+              file publisher.tgz | grep -q gzip && break
+            echo "attempt $intento: what arrived is not a tarball —" \
+                 "$(head -c 120 publisher.tgz | tr -d '\0')"
+            sleep 10
+          done
+          file publisher.tgz | grep -q gzip || {
+            echo "::error::could not download mcp-publisher from $url"
+            exit 1
+          }
+          tar xzf publisher.tgz mcp-publisher
       - name: Publish
         run: |
           ./mcp-publisher login github-oidc
