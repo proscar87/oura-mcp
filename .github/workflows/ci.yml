@@ -17,9 +17,46 @@ jobs:
         with:
           python-version: ${{ matrix.python }}
       - run: python -m pip install -e ".[dev]"
+      # NODE IS HERE FOR THE PARITY TESTS. They skip themselves without it and
+      # without a compiled `ts/dist`, and no workflow installed either — so the
+      # `16 skipped` on every job, every push, was the entire differential
+      # suite. It never ran once.
+      #
+      # That suite is the highest-yield technique in this repository: it found
+      # the lone carriage return, `rate_limited` missing on one side,
+      # milliseconds printed as seconds, a version constant two releases stale.
+      # It runs on BOTH interpreters on purpose — the divergence it last caught
+      # existed only on 3.10.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ts/package-lock.json
+      - run: npm ci
+        working-directory: ts
+      - run: npm run build
+        working-directory: ts
       # No network and no token: the tests never call Oura. A CI that needs
       # someone's PAT to pass isn't a CI, it's a dependency on that person.
       - run: python -m pytest -q
+
+  typescript:
+    name: TypeScript
+    runs-on: ubuntu-latest
+    # 108 tests that had never run here either. The TypeScript half is what
+    # ships in the `.mcpb` — the install path the README puts first — so it was
+    # the less tested half of the two, and the one most people actually get.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ts/package-lock.json
+      - run: npm ci
+        working-directory: ts
+      - run: npm test
+        working-directory: ts
 
   garita:
     name: Garita
