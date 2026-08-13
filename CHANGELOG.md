@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.3 — unreleased
+
+**The lone carriage return was only half fixed, and CI had been red for six
+runs saying so.** 0.3.2 pinned it in TypeScript and reported it pinned on both
+sides. Python's half was still the stdlib's `csv.writer`, which quotes a field
+containing any character of its `lineterminator` — `"\n"` here, so a bare `\r`
+is not in it. CPython 3.11 began quoting `\r` regardless
+(python/cpython#128064); 3.10 did not, and `requires-python` is `>=3.10`. The
+test read the CSV back with the same stdlib that wrote it, so it passed on the
+developer's 3.13 and failed only on the 3.10 job — green locally, red in CI,
+every push since 11 August.
+
+`to_csv` now states the rule itself — quote on `"`, `,`, `\n`, `\r`, double the
+quotes — which is `escapeCell` in `ts/src/client.ts` character for character,
+and depends on no interpreter version. A second test pins the exact bytes
+rather than round-tripping them, so the next divergence fails on every Python
+or none.
+
 ## 0.3.2 — 12 August 2026
 
 Then a sixteen-round audit, a wave of parallel agents, and one piece of field

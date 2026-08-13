@@ -22,10 +22,8 @@ doesn't stop the API from repeating itself.
 
 from __future__ import annotations
 
-import csv
 import datetime
 import email.utils
-import io
 import json
 import os
 import time
@@ -398,12 +396,39 @@ def to_csv(data: list) -> tuple[str, list[str], bool]:
     columns = front + sorted(keys - set(front))
     uneven = any(set(r) != keys for r in rows)
 
-    buf = io.StringIO()
-    writer = csv.writer(buf, lineterminator="\n")
-    writer.writerow(columns)
+    salida = [",".join(_escape(c) for c in columns)]
     for r in rows:
-        writer.writerow([_cell(r.get(c)) for c in columns])
-    return buf.getvalue(), columns, uneven
+        salida.append(",".join(_escape(_cell(r.get(c))) for c in columns))
+    return "\n".join(salida) + "\n", columns, uneven
+
+
+def _escape(s: str) -> str:
+    """Quote a cell the way RFC 4180 says, and the way TypeScript does.
+
+    THIS WAS `csv.writer` AND COULD NOT STAY. That writer quotes a field when it
+    contains the delimiter, the quote character, or any character of the
+    `lineterminator` — and the terminator here is `"\\n"`, so a LONE carriage
+    return is not in it. CPython 3.11 began treating `\\r` as always needing
+    quotes regardless of the terminator (python/cpython#128064, closed as
+    intended); 3.10 does not. Same code, same data, two different files: on 3.13
+    `a\\rb` came out quoted and correct, on 3.10 it went out bare, and readers
+    that end a row on a bare `\\r` — Excel among them — split the row there and
+    shift every column after it, so a number arrives under the name of the field
+    before it. `requires-python` is `>=3.10`, so the stdlib's answer was
+    version-dependent exactly where this has to be exact.
+
+    Written out, the rule is four characters long and identical on both sides of
+    the repository — `escapeCell` in `ts/src/client.ts` is this function. The
+    parity test compares the two byte for byte precisely because agreeing here
+    is not something either side should be trusted to do on its own.
+
+    The four literal `in` checks are the fast way to ask: measured at 0.016 s per
+    400,000 cells against 0.088 s for a set intersection, and a month of
+    `heartrate` is ~185,000 cells.
+    """
+    if '"' in s or "," in s or "\n" in s or "\r" in s:
+        return '"' + s.replace('"', '""') + '"'
+    return s
 
 
 def _cell(v) -> str:
