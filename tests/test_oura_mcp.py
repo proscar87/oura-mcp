@@ -981,10 +981,12 @@ def test_the_secret_stays_hidden_through_every_escape_route():
     ("CRLF", "a\r\nb"),
     ("a lone quote", '"'),
     ("a semicolon and tab", "a;b\tc"),
-    # A LONE CARRIAGE RETURN. Python quotes it because its csv module counts
-    # `\r` as part of a line terminator; the TypeScript half did not, and a
-    # reader that ends a row on a bare `\r` split the row and shifted every
-    # later column. Pinned on both sides now.
+    # A LONE CARRIAGE RETURN, the one that reached CI red. A reader that ends a
+    # row on a bare `\r` — Excel among them — splits the row and shifts every
+    # later column. TypeScript let it through first; then Python did too, on
+    # 3.10 only, because `csv.writer` began quoting it in 3.11. This assertion
+    # fires only on the version that gets it wrong — green on the developer's
+    # 3.13, red in CI for six runs — so the one below pins the bytes instead.
     ("a lone carriage return", "a\rb"),
 ])
 def test_csv_survives_free_text_and_reads_back_identical(nombre, valor):
@@ -999,6 +1001,29 @@ def test_csv_survives_free_text_and_reads_back_identical(nombre, valor):
     assert set(filas[0]) == set(columnas), f"{nombre}: the columns shifted"
     assert filas[0]["comment"] == valor, f"{nombre}: the value came back changed"
     assert filas[0]["score"] == "73", f"{nombre}: a NUMBER moved column"
+
+
+@pytest.mark.parametrize("nombre,valor,esperado", [
+    ("a lone carriage return", "a\rb", '"a\rb"'),
+    ("a newline", "a\nb", '"a\nb"'),
+    ("CRLF", "a\r\nb", '"a\r\nb"'),
+    ("a comma", "a,b", '"a,b"'),
+    ("a quote", 'a"b', '"a""b"'),
+    # Quoting what needs no quotes is not free: `heartrate` is ~37,000 records a
+    # month and two characters a cell is real weight in a context window.
+    ("nothing worth quoting", "a;b\tc", "a;b\tc"),
+])
+def test_csv_quotes_exactly_these_bytes(nombre, valor, esperado):
+    """THE BYTES, not the round trip.
+
+    The test above reads the CSV back with the same stdlib that wrote it, so
+    when the writer stopped quoting `\\r` on Python 3.10 the failure only
+    appeared on 3.10 — green here, red in CI, for six runs. Written as the exact
+    expected output it fails on every interpreter or none, which is the only
+    useful way to state a rule two implementations have to agree on.
+    """
+    texto, _, _ = client.to_csv([{"day": "2026-01-01", "comment": valor}])
+    assert texto == f"day,comment\n2026-01-01,{esperado}\n", nombre
 
 
 def test_csv_keeps_nested_structures_in_one_cell():
