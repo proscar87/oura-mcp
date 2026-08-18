@@ -2,9 +2,12 @@
 
 THEY NEVER TOUCH THE NETWORK. They only read files from the repository.
 
-The version is declared in SIX places — pyproject, server.json twice,
-plugin.json, marketplace.json, and the MCP handshake's `serverInfo` — and they
-drift apart silently. It already happened: the server announced itself as 0.1.0
+The version is declared in TEN places — pyproject, server.json twice,
+plugin.json, marketplace.json twice, ts/package.json, ts/manifest.json,
+package-lock.json twice — plus `__version__` and the MCP handshake's
+`serverInfo`, which are read rather than typed so they cannot drift. It said SIX
+here while four of the ten went unpinned, and two of those four had already
+drifted. They drift apart silently. It already happened: the server announced itself as 0.1.0
 while `pyproject.toml` was at 0.2.0, and a stdio smoke test caught it, not the
 function tests. The number a client sees comes from the handshake, which no
 function test looks at.
@@ -50,9 +53,42 @@ def test_server_json_matches_pyproject():
 
 
 def test_the_plugin_matches_pyproject():
+    """`marketplace.json` declares the version TWICE — once in `metadata`, once in
+    the plugin entry — and this test pinned only the second for three releases."""
     v = _declared_version()
     assert _read_json(".claude-plugin/plugin.json")["version"] == v
-    assert _read_json(".claude-plugin/marketplace.json")["plugins"][0]["version"] == v
+    mk = _read_json(".claude-plugin/marketplace.json")
+    assert mk["plugins"][0]["version"] == v
+    assert mk["metadata"]["version"] == v
+
+
+def test_the_lockfile_matches_pyproject():
+    """`npm install` rewrites the lockfile from `package.json`, so nobody edits it
+    by hand and nobody read it either: it said 0.3.0 while everything else said
+    0.3.2, two releases behind, and no test looked. It is what `npm ci` installs
+    in the TypeScript job, and it declares the version in two places."""
+    v = _declared_version()
+    lock = _read_json("ts/package-lock.json")
+    assert lock["version"] == v
+    assert lock["packages"][""]["version"] == v
+
+
+def test_the_package_does_not_hand_type_its_version():
+    """`oura_mcp.__version__` said 0.1.0 while `pyproject.toml` was at 0.3.2 — the
+    conventional way to ask a Python package what it is, answering with a version
+    retired three releases earlier. Nothing caught it because nothing read it.
+
+    Read from `importlib.metadata`, never typed, which is the fix the handshake
+    got in Python and `VERSION` got in TypeScript. Asserted as «no literal
+    version is assigned» rather than pinning a number, so the guard cannot go
+    stale the way the thing it guards did."""
+    text = (ROOT / "src" / "oura_mcp" / "__init__.py").read_text(encoding="utf-8")
+    m = re.search(r'__version__\s*=\s*"\d', text)
+    assert not m, "the version is hand-typed again"
+    assert "importlib.metadata" in text, "it no longer reads the version from anywhere"
+
+    import oura_mcp
+    assert oura_mcp.__version__ == _declared_version()
 
 
 def test_the_handshake_announces_the_installed_version():
