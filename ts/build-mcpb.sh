@@ -49,7 +49,16 @@ if ! (cd "$STAGE/server" && npm install --omit=dev --no-audit --no-fund \
 fi
 
 echo "==> packing"
-npx mcpb pack "$STAGE" "$OUT"
+# THE PACKAGE IS SCOPED; the binary it installs is not. `npx mcpb` resolves only
+# where the tool is already installed — globally, or in a node_modules nearby.
+# Anywhere else npx asks the registry for a package literally named `mcpb`, gets
+# a 404, and the build of the artifact the README recommends first dies on a
+# machine that has done nothing wrong. It built here for three releases and
+# failed on the first machine that had not installed it by hand.
+#
+# Major-pinned: `pack` writes the bundle every client then installs, and a v3
+# free to change what that means is not something a release should discover.
+npx --yes @anthropic-ai/mcpb@2 pack "$STAGE" "$OUT"
 
 echo
 echo "==> verifying the packed bundle actually starts"
