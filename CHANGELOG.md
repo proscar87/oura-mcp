@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.3 — unreleased
+## 0.3.3 — 17 August 2026
 
 **The lone carriage return was only half fixed, and CI had been red for six
 runs saying so.** 0.3.2 pinned it in TypeScript and reported it pinned on both
@@ -17,6 +17,28 @@ quotes — which is `escapeCell` in `ts/src/client.ts` character for character,
 and depends on no interpreter version. A second test pins the exact bytes
 rather than round-tripping them, so the next divergence fails on every Python
 or none.
+
+**The differential suite had never run in CI, and neither had TypeScript's 108
+tests.** `test_parity.py` skips itself without Node and a compiled `ts/dist`,
+and no workflow installed either — so the `16 skipped` that every job reported
+on every push was the entire suite, silent since it was written. It is the
+comparison the file itself calls the highest-yield technique here: it found the
+carriage return above, `rate_limited` missing on one side, milliseconds printed
+as seconds, a version constant two releases stale. It now runs on both
+interpreters on purpose, because the divergence it last caught existed only on
+3.10. The TypeScript half had no CI at all — 108 tests, never executed, in the
+implementation that ships as the `.mcpb` the README recommends first.
+
+**And the version was wrong in two more places, both of them unpinned.** The
+number lives in ten declarations; the coherence test pinned six. Of the four it
+did not, `ts/package-lock.json` said **0.3.0** — two releases behind, and it is
+what `npm ci` installs — and `oura_mcp.__version__` said **0.1.0**, retired
+three releases earlier. Nothing caught either one because nothing read them:
+`__version__` is the conventional way to ask a Python package what it is, and no
+test or line of code ever did. Both are read now rather than typed —
+`importlib.metadata` and `package.json`, the same fix the handshake got in 0.3.1
+and `VERSION` got in 0.3.2 — and the four unpinned declarations are pinned, so
+the drift that hid here twice has nowhere left to hide.
 
 ## 0.3.2 — 12 August 2026
 
