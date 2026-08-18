@@ -56,9 +56,17 @@ echo "==> packing"
 # machine that has done nothing wrong. It built here for three releases and
 # failed on the first machine that had not installed it by hand.
 #
-# Major-pinned: `pack` writes the bundle every client then installs, and a v3
-# free to change what that means is not something a release should discover.
-npx --yes @anthropic-ai/mcpb@2 pack "$STAGE" "$OUT"
+# PINNED EXACTLY, not to a major. `pack` decides the bytes every client
+# installs, and a minor is free to change which files go in — so `@2` promised
+# «a release never discovers a packer change» and did not deliver it. Bumping
+# this is one reviewable line, which is the point.
+#
+# NPM_CACHE reaches here too. This is the script's only registry download, and
+# the failure path above advertises `NPM_CACHE=$(mktemp -d)` as THE remedy for a
+# broken cache — advice that got you past `npm install` and then died ten lines
+# later against the same poisoned cache.
+npx ${NPM_CACHE:+--cache "$NPM_CACHE"} --yes @anthropic-ai/mcpb@2.1.2 \
+    pack "$STAGE" "$OUT"
 
 echo
 echo "==> verifying the packed bundle actually starts"
@@ -73,7 +81,13 @@ printf '%s\n' \
   '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"oura_query","arguments":{"collection":"daily_sleep","day":"2026-01-15"}}}' \
   '{"jsonrpc":"2.0","id":3,"method":"resources/read","params":{"uri":"oura://collections"}}' \
   | OURA_SANDBOX=1 node --unhandled-rejections=strict \
-        "$VERIFY/server/dist/main.js" >"$VERIFY/out.jsonl" 2>"$VERIFY/err"
+        "$VERIFY/server/dist/main.js" >"$VERIFY/out.jsonl" 2>"$VERIFY/err" || true
+# `|| true` IS THE POINT, under `set -euo pipefail`. Without it a bundle that
+# dies at startup takes the script down on this very line, and the three checks
+# below — each with its own message and one with `cat "$VERIFY/err"` — never run.
+# The build failed silently in exactly the case they were written for, which is
+# the failure this file says at the top it exists to prevent. The greps decide
+# pass or fail; node's exit code adds nothing they do not already catch.
 
 grep -q '"serverInfo"' "$VERIFY/out.jsonl" \
   || { echo "the bundle did not complete the handshake" >&2; cat "$VERIFY/err" >&2; exit 1; }
