@@ -1789,6 +1789,109 @@ takes exactly 19 valid values and a model has to know them or call
 available: the protocol scopes completions to prompt arguments and resource
 template arguments, never tool arguments. Verified against the SDK's own types.
 
+## Cutting 0.3.3 found four more bugs than it shipped to fix — 17–19 August 2026
+
+0.3.3 was supposed to ship one thing: the CSV lone-carriage-return fix, pinned
+in TypeScript in 0.3.2 but only reported pinned — Python's half was still the
+stdlib's own `csv.writer`, which quotes `\r` only from CPython 3.11 on, so the
+same test read the file back with the writer that wrote it and passed on 3.13
+while failing on the 3.10 job the repo requires. Six runs, red, since 11 August.
+
+Fixing it surfaced that the mechanism meant to catch exactly this kind of thing
+had never run.
+
+### The suite that had never run once
+
+`tests/test_parity.py` — the file that itself calls differential testing the
+highest-yield technique here — skips itself without Node and a compiled
+`ts/dist`. No workflow installed either. So the `16 skipped` that every job
+reported on every push, since the file was written, was not a handful of edge
+cases: it was the entire suite. The TypeScript half had no CI at all — 108
+vitest tests, unexecuted, in the implementation that ships as the `.mcpb` the
+README recommends first.
+
+Both gaps are closed the same way: Node 22 and a `ts/dist` build now run
+alongside the Python matrix, on **both** 3.10 and 3.13 on purpose — the
+carriage-return divergence existed only on one of them — and TypeScript gets its
+own job. Result on this release: **254 passed, 0 skipped**, on both
+interpreters, plus **108 passed** in TypeScript.
+
+### Ten places declare the version; six were pinned
+
+| Declaration | Said | Should have said |
+|---|---|---|
+| `ts/package-lock.json` (root + `packages[""]`) | **0.3.0** | 0.3.2 |
+| `oura_mcp.__version__` | **0.1.0** | 0.3.2 |
+| `marketplace.json` `metadata.version` | 0.3.2 (agreed, unguarded) | — |
+
+Both wrong copies share a cause: nobody reads them. Nobody hand-edits a
+lockfile, and `npm ci` is the only consumer; and `import oura_mcp;
+oura_mcp.__version__` is the conventional way to ask a Python package what it
+is, which makes it the one number a curious user is likeliest to read and the
+one nothing here ever did. This is the third and fourth arrival of a bug this
+repository had already fixed twice — the handshake announced 0.1.0 at 0.2.0,
+then TypeScript's `VERSION` announced 0.3.0 at 0.3.2.
+
+Both are read now, never typed — `importlib.metadata`, mirroring
+`package.json` — and the coherence test, which said it pinned six places and
+covered four of them by accident, now pins and states all ten. The
+`__version__` guard asserts *no literal version is assigned* rather than a
+digit, so it can't go stale the way the thing it guards did — checked both
+ways: it flags `= "0.1.0"`, it lets `"unknown"` (the no-package-installed
+fallback) pass, and it would have caught the 0.3.0 lockfile.
+
+### The one-click bundle could not be built anywhere but one laptop
+
+`ts/build-mcpb.sh` calls `npx mcpb pack`, and `npx` resolves package names, not
+binary names — the package is `@anthropic-ai/mcpb`; a package literally named
+`mcpb` 404s on the registry. So the command only ever worked on the one machine
+that already had it installed globally, and died everywhere else with an error
+naming a package this repository never intended to install. It had built for
+three releases and broken on the first laptop that hadn't installed the tool by
+hand — the `.mcpb` is attached to every release manually, and `Publish` doesn't
+build it, so nothing had ever exercised this path but that one machine.
+
+Fixed by naming the real package, pinned to an exact version rather than a
+floating major (a minor is still free to change which files a bundle contains,
+which a release should not discover mid-cut).
+
+A second bug turned up reviewing the first fix: the script's own verification
+step — which unpacks the bundle and runs a real handshake — sat inside a
+pipeline under `set -euo pipefail`. A bundle that fails to start took the whole
+script down on that line, before the three checks written for exactly that case
+could print anything. The build had a mode that failed in total silence, in the
+one scenario its own diagnostics exist for — which the file's opening comment
+already names as the failure this repository is about. Reproduced by pointing
+the check at a bundle that cannot start (silence, before; the intended message
+plus Node's real error, after), then fixed with `|| true` on the pipeline,
+since the `grep` checks after it already decide pass or fail.
+
+Neither bug was the kind a reader catches by inspection — both are "this only
+breaks on a machine I don't have." A fourth job, `Bundle`, now builds and
+verifies the `.mcpb` on every push and PR, on a runner that starts as clean as
+the laptop that first broke it: 2149 files packed, handshake completed, sandbox
+data confirmed to announce itself, `oura://collections` answering.
+
+### One process lesson, for free
+
+The CSV fix and the CI-parity work were two stacked pull requests — the second
+based on the first's branch rather than on `main`, so GitHub could retarget it
+once the first merged. It didn't: this repository has `deleteBranchOnMerge:
+false`, and GitHub only retargets a stacked PR when its base branch is deleted.
+Both PRs showed **MERGED** on GitHub; `main` had only the first one. Re-landed
+by cherry-picking the rebased commit onto a fresh branch off `main` rather than
+merging the stale one, which would have duplicated a commit `main` already had.
+Worth knowing before stacking PRs here again.
+
+### Result
+
+`v0.3.3` is the first tag since `v0.3.1` where `Publish` went green —
+`v0.3.2`'s tag push had failed with `not in gzip format` fetching the MCP
+publisher binary, fixed on `main` but never exercised by an actual release
+until this one. PyPI carries `mcp-oura==0.3.3` as latest; the MCP registry
+entry for `io.github.proscar87/oura-mcp` is marked `isLatest`; the GitHub
+Release carries the rebuilt, re-verified `.mcpb`.
+
 ## Execution order — reprioritized 10 August 2026
 
 Rewritten after reading the WHOOP ecosystem and counting the field. The old
