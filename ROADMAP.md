@@ -1892,6 +1892,75 @@ until this one. PyPI carries `mcp-oura==0.3.3` as latest; the MCP registry
 entry for `io.github.proscar87/oura-mcp` is marked `isLatest`; the GitHub
 Release carries the rebuilt, re-verified `.mcpb`.
 
+## Sixty near-identical repos later, three competitors did what we declined — 31 August 2026
+
+Prompted by a usage check that found nothing: zero GitHub stars, zero `.mcpb`
+downloads across all four releases, one page view in fourteen days. Before
+spending effort on features, worth confirming the gap is distribution and not
+something the field has since solved better. It hadn't — mostly — but three
+projects are worth reading closely.
+
+### The field commoditized
+
+A search for "oura mcp" alone — not "oura ring" — now returns **60+ repositories**,
+almost all 0–1 stars, most created in the three weeks since the original scan.
+The category went from crowded to disposable: dozens of one-weekend personal
+servers, indistinguishable by star count because nobody has any.
+
+The names that mattered on 9 August mostly didn't move. `Th0rgal/open_oura`
+grew 475★ → **502★** and is **still unlicensed**. `daveremy/oura-mcp` hasn't
+pushed since 4 August. `davidmosiah/oura-mcp` keeps committing on GitHub (29
+August) without republishing to the MCP registry, which still shows 0.4.6 —
+a reminder that registry version numbers lag real activity and aren't a
+freshness signal on their own.
+
+### Three that solved a problem we left open
+
+**`loganmurphy/oura-mcp-server`** (2★) built the door this roadmap declined —
+a genuine **remote connector**, on Cloudflare Workers, tested against
+Claude web, desktop, and mobile via `claude.ai/settings/connectors`. It also
+answers the caching question this file left conditional: a D1 cache keyed per
+day, tiered TTL (5m today / 6h yesterday / 24h older), fetching only the
+missing range on a partial hit, and **never caching an empty response** —
+exactly the one invariant this roadmap required before caching could land.
+Concrete prior art, not just an idea.
+
+**`Rajskij/oura-mcp`** (1★, committed the day this was written) is the
+closest thing to a mirror of this project's own strategy: `.mcpb`,
+double-click, and a demo mode that works with **zero setup, no Oura account**
+— which this server already does too, and says so in the same place in its
+own README (the Install section, not a footnote). Not a gap; cross-validation
+that the install-first bet was the right one. What it has and we don't: a
+Docker image on `ghcr.io`, and a README that demonstrates the multi-language
+claim in Russian rather than just asserting it.
+
+**`shimabukuromeg/oura-mcp-go`** (0★, new, Go) ships `get_morning_context` —
+one call returning last night's sleep, today's readiness, the delta against a
+7-day average, and what's missing. It's aggregation, not interpretation, so it
+doesn't cross the line this project draws against analysis — but it does cost
+a tool, in a project whose stated differentiator is **three tools, not
+twelve**.
+
+### What matching any of this would cost, and the one real tension
+
+The remote connector and the caching are separable. Caching is safe to take
+outright: this server is single-user and local, so the rule is simpler than
+loganmurphy's tiered TTL — **a day that has already closed never changes and
+can be cached forever; today is never cached**, because the ring can still
+resync. That alone satisfies both conditions this roadmap already required.
+The remote connector's liability — hosting someone else's health data — is
+avoidable by shipping it **self-hostable** (a Worker script or a Docker image
+the user deploys) rather than as a service we run, which gets the
+no-terminal, works-on-mobile win without the multi-tenant exposure. The Docker
+image is cheap regardless of the other two.
+
+`get_morning_context` is the one with a real trade rather than a checklist
+item: it would work by composing data the existing tools already return, so
+it costs no new analysis — but it does cost the **three tools** figure, the
+one differentiator in this field with an editorial stance behind it. Whether
+that's worth spending is a product-identity call, not an engineering one, and
+belongs with whoever owns that claim — not decided here.
+
 ## Execution order — reprioritized 10 August 2026
 
 Rewritten after reading the WHOOP ecosystem and counting the field. The old
