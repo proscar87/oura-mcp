@@ -198,7 +198,7 @@ describe("the token endpoint", () => {
 
   it("exchanging a code also saves it", async () => {
     fakeToken({ access_token: "A1", refresh_token: "R1", expires_in: 3600 });
-    await exchangeCode("codigo", "id", "secret", "http://localhost:9876/callback/");
+    await exchangeCode("the-code", "id", "secret", "http://localhost:9876/callback/");
     expect(await load()).not.toBeNull();
   });
 });
