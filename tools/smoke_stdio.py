@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """Starts the server FOR REAL and speaks stdio to it, like a client would.
 
-POR QUÉ EXISTE. Las 88 pruebas ejercitan las funciones: `fetch()`, `_token()`,
 WHY IT EXISTS. The unit tests exercise functions: `fetch()`, `_token()`,
 `_trim()`. None of them starts the process. And the ugliest way an MCP server
 fails isn't returning wrong data: it's failing the *handshake*, or writing
@@ -48,7 +47,7 @@ class Cliente:
         try:
             return json.loads(linea)
         except json.JSONDecodeError:
-            # ÉSTE es el fallo que justifica el file: cualquier `print` que se
+            # THIS is the failure that justifies the file: any `print` that
             # slips into the server breaks the channel, and from the client all
             # you see is a server that doesn't show up.
             raise SystemExit(f"the server wrote something that is not JSON-RPC to "

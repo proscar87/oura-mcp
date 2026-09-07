@@ -1,5 +1,5 @@
 /**
- * Cliente de la API v2 de Oura. Sin dependencias fuera del SDK de MCP.
+ * Client for the Oura v2 API. No dependencies beyond the MCP SDK.
  *
  * THIS FILE IS THE PRODUCT. Oura never returns an error when it can't give you
  * what you asked for: it returns something different, shaped like a correct
@@ -229,7 +229,7 @@ async function oauthToken(): Promise<Secret> {
     // and since December 2025 that page issues none: whoever
     // landed there got stuck without knowing why. Now the first option
     // is the one that works, and the sandbox comes first because it lets you
-    // srv andar sin conseguir credencial alguna.
+    // the server run without obtaining any credential at all.
     throw new OuraError(
       // WRITTEN FOR SOMEONE WITH A TERMINAL, which the flagship install path
       // does not have. Whoever installed the `.mcpb` has no `oura-mcp` command
@@ -357,8 +357,8 @@ const cell = (v: unknown): string =>
   typeof v === "object" ? JSON.stringify(v) : String(v);
 
 /**
- * Los registros como CSV. Un mes de `heartrate` son ~37,000 registros; en JSON
- * eso repite las mismas cuatro keys 37,000 veces.
+ * The records as CSV. A month of `heartrate` is ~37,000 records; in JSON
+ * that repeats the same four keys 37,000 times.
  *
  * THE HEADER COMES FROM THE UNION OF ALL KEYS, not from the first record. Taking
  * it from the first is the easiest way to lose data here: one record with an
