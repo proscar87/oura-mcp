@@ -617,7 +617,7 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
   }
 
   if (WITH_DATE.has(f) && !latest) {
-    if (!start || !end) throw new OuraError(`${collection} necesita start y end`);
+    if (!start || !end) throw new OuraError(`${collection} needs start and end`);
     if (start > end) {
       // Caught HERE and not at Oura because the margin changes the dates: Oura
       // would return a 400 quoting two dates the asker never wrote.

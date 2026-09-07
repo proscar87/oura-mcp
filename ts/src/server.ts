@@ -199,16 +199,19 @@ export function createServer(): McpServer {
     inputSchema: {
       collection: z.string().describe("Exact name. See `oura_collections` if you are unsure."),
       day: z.string().optional().describe("Shorthand for a single day: equivalent to start=end=day."),
-      start: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
-      end: z.string().optional().describe("AAAA-MM-DD, o ISO 8601 con hora"),
+      start: z.string().optional().describe("YYYY-MM-DD, or ISO 8601 with time"),
+      end: z.string().optional().describe("YYYY-MM-DD, or ISO 8601 with time"),
       fields: z.union([z.array(z.string()), z.string()]).optional().describe(
-        "Only these fields. Oura trims on its side, so less comes down: " +
-        "use it on long ranges. `day` and `id` always come back."),
+        "Only these fields. Oura trims on its side, so less comes " +
+        "down: use it on long heartrate ranges. `day` and `id` " +
+        "always come back."),
       latest: z.boolean().optional().describe(
         "Only the most recent record. heartrate and ring_battery_level only; " +
         "it needs no range."),
       format: z.enum(["json", "csv"]).optional().describe(
-        "`json` (default) or `csv`. CSV for large volumes."),
+        "`json` (default) or `csv`. CSV for large volumes: " +
+        "a month of heartrate is ~37,000 records and in JSON the " +
+        "keys repeat 37,000 times."),
     },
     annotations: { title: "Query an Oura collection", ...READ_ONLY },
   }, async (args) => {
@@ -262,8 +265,8 @@ export async function query(a: QueryArgs): Promise<Record<string, unknown>> {
   const f = shape(a.collection);
   if (WITH_DATE.has(f) && !a.latest && !(start && end)) {
     return {
-      error: `${a.collection} necesita \`start\` y \`end\``,
-      format: f === "dateRange" ? "AAAA-MM-DD" : "ISO 8601 con hora",
+      error: `${a.collection} needs \`start\` and \`end\``,
+      format: f === "dateRange" ? "YYYY-MM-DD" : "ISO 8601 with time",
     };
   }
   try {

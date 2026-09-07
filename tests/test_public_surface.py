@@ -30,6 +30,7 @@ nothing is called, because calling `oura_check` would reach Oura's sandbox.
 import inspect
 import pathlib
 import re
+import typing
 
 import pytest
 
@@ -139,7 +140,13 @@ def test_the_typescript_surface_matches():
 # ── Messages are surface too ───────────────────────────────────────────────
 SPANISH_MARKERS = ("no se ", " pudo ", "archivo", "vacío", "vacio", " desde ",
                    " hasta ", "porque", "credencial", "está ", " para ",
-                   "fallo", "no hay ")
+                   "fallo", "no hay ",
+                   # Added after «${collection} necesita start y end` shipped in
+                   # the bundle for four releases. The list only ever knows the
+                   # vocabulary of the last bug, which is why the real guard is
+                   # test_both_implementations_describe_every_parameter_identically
+                   # — comparison, not vocabulary. These stay as a cheap net.
+                   "necesita", "con hora", "aaaa-mm-dd")
 
 
 def _user_facing_strings(path: str) -> list[str]:
@@ -155,6 +162,10 @@ def _user_facing_strings(path: str) -> list[str]:
     "src/oura_mcp/client.py", "src/oura_mcp/credentials.py",
     "src/oura_mcp/authorize.py", "src/oura_mcp/server.py",
     "ts/src/client.ts", "ts/src/credentials.ts", "ts/src/authorize.ts",
+    # server.ts was the one file missing from this list, and it was the file
+    # holding the Spanish. Python listed all four of its modules; TypeScript
+    # listed three of four.
+    "ts/src/server.ts",
 ])
 def test_no_error_message_is_in_spanish(path):
     """Three survived the translation — `no se pudo alcanzar Oura` in Python and
@@ -299,6 +310,65 @@ def test_no_parameter_description_is_in_spanish():
         for m in re.finditer(r'(?:description=|\.describe\()"([^"]{8,})"', text):
             for marcador in marcadores:
                 assert marcador not in m.group(1), f"{f}: «{m.group(1)[:60]}»"
+
+
+def _python_parameter_descriptions(tool: str) -> dict[str, str]:
+    """name -> description, read off the real signature, not off the text."""
+    fn = getattr(S, tool)
+    fn = getattr(fn, "fn", fn)
+    out = {}
+    for name, hint in typing.get_type_hints(fn, include_extras=True).items():
+        for meta in getattr(hint, "__metadata__", ()):
+            texto = getattr(meta, "description", None)
+            if texto:
+                out[name] = texto
+    return out
+
+
+_TS_PARAM = re.compile(
+    r'^ {6}(\w+):\s*z\.[^\n]*?\.describe\(\s*'
+    r'((?:"(?:[^"\\]|\\.)*"\s*\+?\s*)+)\)', re.M | re.S)
+
+
+def _typescript_parameter_descriptions() -> dict[str, str]:
+    """The same map, parsed out of the `inputSchema` block TypeScript declares."""
+    text = (ROOT / "ts" / "src" / "server.ts").read_text(encoding="utf-8")
+    out = {}
+    for m in _TS_PARAM.finditer(text):
+        trozos = re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(2))
+        out[m.group(1)] = "".join(trozos)
+    return out
+
+
+def test_both_implementations_describe_every_parameter_identically():
+    """A SIXTH VOCABULARY, and the last one this guard will ever need.
+
+    Every Spanish sweep before this one was a word list, and a word list only
+    knows the vocabulary of the bug that prompted it. `test_no_parameter_
+    description_is_in_spanish` scans this exact file with the right regex and
+    passed anyway, because «AAAA-MM-DD, o ISO 8601 con hora» contains not one
+    of its eight markers. The bundle shipped it to every client in
+    `tools/list` for four releases.
+
+    Descriptions are the only text a model reads before deciding how to call a
+    tool, and the `.mcpb` ships the TypeScript ones. So stop guessing at
+    vocabulary and compare the two sides: they answer the same question and
+    must say so with the same words. This needs no marker list and cannot go
+    stale.
+
+    It found four when it was written, and only two were Spanish. `fields` had
+    quietly dropped `heartrate`, and `format` had lost the entire reason to
+    prefer CSV — the ~37,000 records whose keys repeat — leaving the half that
+    ships in the bundle unable to explain its own advice.
+    """
+    esperado = _python_parameter_descriptions("oura_query")
+    obtenido = _typescript_parameter_descriptions()
+    assert set(esperado) == set(obtenido), "the two declare different parameters"
+    for nombre in sorted(esperado):
+        assert obtenido[nombre] == esperado[nombre], (
+            f"`{nombre}` is described differently:\n"
+            f"  python:     {esperado[nombre]}\n"
+            f"  typescript: {obtenido[nombre]}")
 
 
 def test_the_typescript_handshake_reports_the_real_version():
