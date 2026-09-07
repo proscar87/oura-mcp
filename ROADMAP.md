@@ -1961,6 +1961,155 @@ one differentiator in this field with an editorial stance behind it. Whether
 that's worth spending is a product-identity call, not an engineering one, and
 belongs with whoever owns that claim — not decided here.
 
+## The 115-star repo we never counted, and the download number nobody checked — 6 September 2026
+
+Six days after the last rescan, a re-measurement. Two of the numbers this
+roadmap has been reasoning from were wrong, and both are measurement gaps
+rather than errors of judgement: one metric was never collected, and one
+liveness filter hid the second-largest project in the field.
+
+### The zero-usage premise rested on three numbers, and PyPI was not one of them
+
+The 31 August entry opens on "zero GitHub stars, zero `.mcpb` downloads across
+all four releases, one page view in fourteen days" and reasons from there that
+the gap is distribution. Two of those three still hold. The package index was
+never checked. Measured 6 September, over a window that happens to be the
+package's entire life — `0.1.0` was uploaded 9 August:
+
+| | |
+|---|---|
+| PyPI downloads, mirrors excluded | **950** |
+| PyPI downloads, mirrors included | 3,347 |
+| GitHub clones, 14 days | 211 from 49 uniques |
+| GitHub page views, 14 days | **0** |
+| `.mcpb` downloads, all releases | 1 |
+| Stars / forks / watchers | 0 / 0 / 0 |
+
+**This is not evidence of users, and it should not be written up as if it
+were.** Zero page views alongside 211 clones is machine traffic by definition,
+and the machines that clone also install. `without_mirrors` strips
+bandersnatch-style mirrors and nothing else: it does not strip Glama or
+Smithery, both of which score servers by running the documented install
+command, which for this one is `uvx --from mcp-oura`. The README carries a live
+Glama badge, so that path is not hypothetical.
+
+Our own CI was ruled out and came back clean — `ci.yml`, `drift.yml` and
+`publish.yml` all install `-e .` from the checkout and never the published
+package.
+
+What the breakdown does and does not support:
+
+| Python reported | downloads | System reported | downloads |
+|---|---|---|---|
+| **none** | **750** | **none** | **750** |
+| 3.12 | 90 | Linux | 172 |
+| 3.11 | 33 | Darwin | 28 |
+| 3.10 | 28 | | |
+| 3.13 | 23 | | |
+| 3.14 | 18 | | |
+| 3.9 | 8 | | |
+
+**79% report no interpreter and no operating system at all**, which is the
+signature of something that is not pip. The remaining 200 are the interesting
+part: a single indexer or one CI matrix collapses onto one pinned version and
+Linux, and this does not — it spreads across six minor versions and two
+operating systems, with 28 on macOS and 8 on a 3.9 that cannot satisfy
+`requires-python = ">=3.10"` and would fail at resolution.
+
+The honest reading is that usage is **not literally zero, and nothing here
+confirms a human**. It does not overturn the distribution diagnosis. It does
+mean "nobody is using it" was asserted from three numbers when a fourth was one
+HTTP request away, and that is the part worth not repeating.
+
+### Three repos rank above every tracked name but one, and none were counted
+
+| stars | repo | last push | in this file |
+|---|---|---|---|
+| 513 | `Th0rgal/open_oura` | 31 Aug 2026 | tracked |
+| **115** | `YuzeHao2023/MCP-oura` | 4 May 2026 | **never** |
+| **51** | `elizabethtrykin/oura-mcp` | 16 Mar 2025 | **never** |
+| **38** | `tomekkorbak/oura-mcp-server` | 27 Feb 2025 | **never** |
+| 27 | `mitchhankins01/oura-ring-mcp` | 8 Feb 2026 | registry only |
+
+A liveness filter explains the omission and is a defensible thing to have done:
+all three are four months cold or worse, and two have not been touched since
+early 2025. The scans were looking for competitors that could still move. But
+"nobody in this category has any stars" was the premise underneath *the
+category commoditized* three weeks ago, and it was measured against a
+population these three had already been filtered out of.
+
+### A copy of a dead repo out-stars its source three to one, in three languages
+
+`YuzeHao2023/MCP-oura` is **not a GitHub fork** — the API reports `fork=false`
+with no parent and no source. It is a hard copy of `tomekkorbak/oura-mcp-server`,
+and it still carries the original's badges: the CI badge points at
+`tomekkorbak/oura-mcp-server/workflows`, the PyPI badge at the
+`oura-mcp-server` project. Neither is the copy's own.
+
+It has **115 stars against its source's 38**. Both were last touched over a
+year and four months apart respectively, so neither is winning on maintenance.
+The visible difference is that the copy ships its README in English, 简体中文
+and 한국어, links all three from a table at the top, and has an open issue
+recruiting more translators.
+
+**This is the second independent data point for the same lever.** The 31 August
+entry noted `Rajskij/oura-mcp` demonstrating the multi-language claim in Russian
+rather than asserting it, and filed it as a nice-to-have in a list dominated by
+caching and remote connectors. Two unrelated projects now suggest that
+translated documentation moves stars in this field more reliably than any
+engineering decision recorded in this file.
+
+It stays correlation. Star counts have causes that a README does not explain,
+and neither of these is a controlled comparison. But the cost of testing it is
+translating a document that already exists, against a caching design that costs
+a schema, an invalidation rule and a test matrix. **If distribution is the
+diagnosis, this is the cheapest available prescription, and it is the only item
+in the backlog with two measurements behind it.**
+
+### The remote-connector precedent is four months cold
+
+`loganmurphy/oura-mcp-server` **last pushed 30 April 2026**. The 31 August entry
+presents its Cloudflare Worker and D1 cache as "concrete prior art, not just an
+idea" without dating it, which reads considerably fresher than it is. The prior
+art is still real and the caching invariant it validates still holds. What
+changes is urgency: nobody is racing us to that door, and the one project that
+walked through it stopped walking in April.
+
+### The rest of the field, 31 August → 6 September
+
+- **`Th0rgal/open_oura`**: 502 → **513 stars**, pushed 31 August, and **still
+  unlicensed** at 79 forks. Three scans running.
+- **Movement this week**: `Rajskij/oura-mcp` pushed 4 September and
+  `davidmosiah/oura-mcp` pushed 1 September. They are the only two of the
+  tracked set with commits in the last five days.
+- **MCP registry**: **no new Oura entrant since the last scan.** The most recent
+  is `io.github.AntVsl/oura-mcp` at 0.4.2 on 30 August. `io.github.davidmosiah/ouramcp`
+  still reads 0.4.6 from 29 May while its GitHub repo commits into September,
+  which is the registry-lag point from the last entry, now with a second
+  confirmation.
+- **Ours**: `io.github.proscar87/oura-mcp` 0.3.3, `active`, `isLatest` true. All
+  ten version locations still agree.
+- **Field size**: the repository search returns **104** today. Do not read this
+  against the "60+" recorded on 31 August — the query is not the same
+  measurement, and the delta is not evidence of growth.
+
+### What this changes in the order
+
+Nothing is removed. One thing moves up and one moves down.
+
+**Up: translate the README.** Two data points, no new code, no new failure
+mode, and it is testable — if stars do not move in a month, the hypothesis is
+dead and cost almost nothing. Chinese and Korean are what the 115-star copy
+ships; Spanish is free given who maintains this.
+
+**Down: the remote connector.** The precedent has been static since April and
+the liability analysis is unchanged. It stays on the list and stops being
+urgent.
+
+**Unchanged: caching**, which is still safe to take outright on the closed-day
+rule, and **`get_morning_context`**, which is still a product-identity call
+about the *three tools* figure and still not decided here.
+
 ## Execution order — reprioritized 10 August 2026
 
 Rewritten after reading the WHOOP ecosystem and counting the field. The old
