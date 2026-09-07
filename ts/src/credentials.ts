@@ -96,7 +96,7 @@ export class Credentials {
   }
 
   static fromJson(d: Record<string, unknown>): Credentials {
-    if (typeof d["access"] !== "string") throw new Error("sin `access`");
+    if (typeof d["access"] !== "string") throw new Error("no `access` in the stored credentials");
     return new Credentials(
       new Secret(d["access"]),
       typeof d["refreshToken"] === "string" ? new Secret(d["refreshToken"]) : null,
