@@ -1,5 +1,61 @@
 # Changelog
 
+## 0.3.4 — unreleased
+
+**The `.mcpb` described its own parameters in Spanish, and the three tests
+written to catch exactly that all passed.** `tools/list` from the bundle had
+been answering with «AAAA-MM-DD, o ISO 8601 con hora» as the description of
+`start` and `end` since the TypeScript port landed. Parameter descriptions are
+the only text a model reads before deciding how to call a tool, and the bundle
+is the install path the README leads with.
+
+Worse than the language: `ts/src/authorize.ts` returned the completed OAuth
+result under a key named `alcances_concedidos` where Python returns
+`granted_scopes`. That is API surface, not prose — the two halves answered the
+same call with different field names, and only the Python one matched the
+documentation. TypeScript now returns `granted_scopes`. Anyone reading that key
+out of the bundle's authorize result has to rename it.
+
+Comparing the two implementations also turned up two divergences that were not
+Spanish at all. TypeScript's `fields` description had dropped the word
+`heartrate`, and its `format` description had lost the entire reason to prefer
+CSV — the ~37,000 records of a month whose four keys repeat 37,000 times — so
+the half that ships in the bundle could state the advice but not justify it.
+Both now match Python word for word.
+
+**Why the guards missed it, which is the part worth keeping.** All three were
+word lists. `test_no_parameter_description_is_in_spanish` scans the right file
+with a regex that does match `.describe(...)`, and not one of its eight
+markers appears in that string. `test_no_error_message_is_in_spanish` listed
+four Python modules and three of TypeScript's four; the missing one held the
+Spanish. And `test_no_dict_literal_returns_a_spanish_key` reads only Python and
+compares keys for equality against a list that does contain «alcances», which
+`alcances_concedidos` is not equal to. On top of that, every extractor here
+matched *quoted* keys, and TypeScript object literals do not quote theirs, so
+every object TypeScript returns was invisible to every guard in the file.
+
+A word list only ever knows the vocabulary of the bug that prompted it. Two new
+tests compare the implementations instead: one asserts every `oura_query`
+parameter is described identically in both, the other that the OAuth result
+carries the same keys in both. Neither needs a vocabulary or a file list, so
+neither can go stale against words nobody predicted. The old lists stay as a
+cheap net, with the missing file and markers added.
+
+The rest of the pre-0.3.0 translation is finished in the same release: nine
+comment and docstring blocks in the sources, 39 test names, 18 test docstrings,
+and the fixture values a failing assertion prints. Storage keys are deliberately
+untouched — `credenciales`, `credenciales.json` and `expira_en` — because
+renaming them orphans the credentials of anyone who authorized before the
+translation, which `test_the_keychain_account_name_is_not_renamed` already says
+out loud.
+
+One guard was written wrong on the first try and CI caught it, which is the
+system working. Reading `Field(description=...)` only at the top level of an
+annotation saw all seven parameters on 3.13 and three on 3.10, where
+`get_type_hints` still re-wrapped anything defaulting to `None` as
+`Optional[Annotated[...]]`. It recurses now, and a second test pins the 3.10
+shape by hand.
+
 ## 0.3.3 — 17 August 2026
 
 **The lone carriage return was only half fixed, and CI had been red for six
