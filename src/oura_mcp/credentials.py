@@ -1,6 +1,6 @@
 """Where the OAuth2 tokens live, and how they rotate without losing the session.
 
-POR QUÉ EXISTE ESTE ARCHIVO
+WHY THIS FILE EXISTS
 Oura deprecated Personal Access Tokens in December 2025: new ones can't be
 created. Anyone arriving at this server today has no way to get one, so OAuth2
 stopped being a convenience and became the only door.
@@ -80,12 +80,12 @@ _KEYCHAIN_ACCOUNT = "credenciales"
 def credentials_path() -> str:
     """Where the file lives. `OURA_CREDENTIALS` moves it.
 
-    Siempre absoluta. Una ruta relativa pelada —`OURA_CREDENTIALS=cred.json`,
+    Always absolute. A bare relative path —`OURA_CREDENTIALS=cred.json`,
     which is exactly what someone would write — left the directory as an empty
     string and blew up the save with a `FileNotFoundError: ''` that explains
     nothing. It would also have made the credentials depend on the directory
     the server was started from, which in an MCP client is not the one you
-    el que uno cree.
+    would think it is.
     """
     explicita = (os.environ.get("OURA_CREDENTIALS") or "").strip()
     if explicita:
@@ -147,11 +147,11 @@ def _keyring():
         return None
 
 
-# ── Guardar y load ────────────────────────────────────────────────────────
+# ── Save and load ─────────────────────────────────────────────────────────
 def save(cred: Credentials) -> str:
     """Persists the credentials. Returns where they landed ('keychain' or path).
 
-    Escribe de shape ATÓMICA. Un file de credenciales a medio escribir es
+    Writes ATOMICALLY. A half-written credentials file is
     worse than none: the old refresh token has already been consumed, and the
     new one was the only thing that could have saved the session.
     """
@@ -161,17 +161,17 @@ def save(cred: Credentials) -> str:
     if kr is not None:
         try:
             kr.set_password(_KEYCHAIN_SERVICE, _KEYCHAIN_ACCOUNT, payload)
-            # Si antes hubo file, se borra: `load()` prefiere el llavero,
-            # so that file would never be read again — a dead refresh token
-            # token muerto en disco para siempre. Un secreto que nadie usa sigue
-            # siendo un secreto que alguien puede leer.
+            # If a file existed before, delete it: `load()` prefers the
+            # keychain, so that file would never be read again — a dead
+            # refresh token left on disk forever. A secret nobody uses is
+            # still a secret somebody can read.
             try:
                 os.unlink(credentials_path())
             except OSError:
                 pass
             return "keychain"
         except Exception:
-            pass                        # cae al file, que siempre funciona
+            pass                        # fall back to the file, which always works
 
     ruta = credentials_path()
     os.makedirs(os.path.dirname(ruta), mode=0o700, exist_ok=True)
@@ -191,7 +191,7 @@ def save(cred: Credentials) -> str:
 
 
 def load() -> Credentials | None:
-    """Las credenciales guardadas, o None si no hay."""
+    """The stored credentials, or None if there are none."""
     kr = _keyring()
     if kr is not None:
         try:

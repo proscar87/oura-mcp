@@ -1,5 +1,5 @@
 /**
- * Servidor MCP: tres herramientas sobre las 19 colecciones de Oura.
+ * MCP server: three tools over Oura's 19 collections.
  *
  * THREE, NOT NINETEEN. A server with one tool per collection forces the model
  * to choose among 19 similar names before knowing what any of them contain. Here
@@ -307,7 +307,7 @@ function authMode(): string {
   return "OAuth2";
 }
 
-/** Alcances y caducidad, SIN un solo token.
+/** Scopes and expiry, WITHOUT a single token.
  *
  * The scopes answer the question people ask most when something comes back
  * empty: "is there no data, or did I not grant permission?"

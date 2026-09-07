@@ -40,9 +40,10 @@ _PAGINA = """<!doctype html><html lang="es"><meta charset="utf-8">
 def app_credentials() -> tuple[str, str]:
     """The client_id and client_secret of the Oura application.
 
-    Van en el entorno y no en un file del repositorio, por lo obvio. Se
-    registran una vez en https://cloud.ouraring.com/oauth/applications con el
-    redirect que termina en diagonal.
+    They live in the environment and not in a file in the repository, for the
+    obvious reason. They are registered once at
+    https://cloud.ouraring.com/oauth/applications with the redirect that ends
+    in a slash.
     """
     cid = (os.environ.get("OURA_CLIENT_ID") or "").strip()
     csec = (os.environ.get("OURA_CLIENT_SECRET") or "").strip()
