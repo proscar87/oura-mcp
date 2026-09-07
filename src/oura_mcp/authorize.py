@@ -212,5 +212,5 @@ def authorize(manual: bool = False, redirect: str = DEFAULT_REDIRECT,
         "authorized": True,
         "granted_scopes": list(cred.scopes),
         "expires_in_seconds": int(cred.expires_at - __import__("time").time()),
-        "next_step": "ya puedes usar el server; el token se renueva solo",
+        "next_step": "you can use the server now; the token refreshes itself",
     }

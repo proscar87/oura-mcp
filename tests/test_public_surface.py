@@ -395,6 +395,43 @@ def test_both_implementations_describe_every_parameter_identically():
             f"  typescript: {obtenido[nombre]}")
 
 
+def _returned_keys(path: str) -> set[str]:
+    """Keys of every object literal handed back by a `return {...}`.
+
+    Reads BOTH languages: Python quotes its keys, TypeScript does not. The
+    older `_literal_keys_in` only knew the quoted shape, so every object
+    TypeScript returns was invisible to it — which is how a key spelled
+    `alcances_concedidos` sat in the bundle's OAuth result unguarded.
+    """
+    src = (ROOT / path).read_text(encoding="utf-8")
+    keys: set[str] = set()
+    for block in re.findall(r"return \{(.*?)\n\s*\}", src, re.S):
+        keys |= set(re.findall(r'^\s*"?([a-z_]{3,})"?\s*:', block, re.M))
+    return keys
+
+
+def test_the_authorize_result_has_the_same_keys_in_both():
+    """The OAuth result is the last thing a person sees before the server works,
+    and it is returned from an object literal — the one shape every guard here
+    was blind to on the TypeScript side.
+
+    `test_no_dict_literal_returns_a_spanish_key` iterates four Python modules
+    and no TypeScript at all, and compares each key for EQUALITY against a
+    marker list that does contain «alcances» — which `alcances_concedidos` is
+    not equal to. Two independent reasons to miss the same key.
+
+    Comparing the two implementations needs neither a file list nor a
+    vocabulary: whatever one returns, the other must return under the same
+    name.
+    """
+    py = _returned_keys("src/oura_mcp/authorize.py")
+    ts = _returned_keys("ts/src/authorize.ts")
+    solo_py, solo_ts = py - ts, ts - py
+    assert not solo_py and not solo_ts, (
+        f"the OAuth result differs:\n  only python:     {sorted(solo_py)}\n"
+        f"  only typescript: {sorted(solo_ts)}")
+
+
 def test_the_typescript_handshake_reports_the_real_version():
     """It said 0.3.0 while everything else said 0.3.2, and it is the number the
     MCP handshake reports — so the bundle told every client a version that had

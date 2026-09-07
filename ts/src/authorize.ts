@@ -271,7 +271,7 @@ export async function authorize(manual = false,
   const cred = await exchangeCode(code, cid, csec, redirect);
   return {
     authorized: true,
-    alcances_concedidos: [...cred.scopes],
+    granted_scopes: [...cred.scopes],
     expires_in_seconds: Math.round((cred.expiresAt - Date.now()) / 1000),
     next_step: "you can use the server now; the token refreshes itself",
   };
