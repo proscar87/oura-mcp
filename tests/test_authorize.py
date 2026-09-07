@@ -23,7 +23,7 @@ def test_the_url_carries_everything_oura_asks_for():
     assert q["response_type"] == ["code"]
     assert q["client_id"] == ["mi-id"]
     assert q["state"] == ["el-estado"]
-    assert q["redirect_uri"][0].endswith("/callback/")   # la diagonal es obligatoria
+    assert q["redirect_uri"][0].endswith("/callback/")   # the trailing slash is mandatory
     assert set(q["scope"][0].split()) == set(az.SCOPES)
 
 
@@ -116,7 +116,7 @@ def test_the_callback_survives_the_browsers_other_requests():
 
     def esperar():
         try:
-            resultado["codigo"] = az.wait_for_callback(9877, "ESTADO", espera=8)
+            resultado["the-code"] = az.wait_for_callback(9877, "ESTADO", espera=8)
         except OuraError as e:
             resultado["error"] = str(e)
 
@@ -126,11 +126,11 @@ def test_the_callback_survives_the_browsers_other_requests():
     try:
         urllib.request.urlopen("http://127.0.0.1:9877/favicon.ico", timeout=3)
     except urllib.error.HTTPError:
-        pass                    # el 404 es lo esperado; lo que importa es seguir vivo
+        pass                    # the 404 is expected; what matters is staying alive
     urllib.request.urlopen(
         "http://127.0.0.1:9877/callback/?code=EL-BUENO&state=ESTADO", timeout=3)
     hilo.join(12)
-    assert resultado.get("codigo") == "EL-BUENO", resultado
+    assert resultado.get("the-code") == "EL-BUENO", resultado
 
 
 # ── The port ───────────────────────────────────────────────────────────────
@@ -160,14 +160,14 @@ def test_manual_mode_starts_no_server(monkeypatch, capsys):
     monkeypatch.setenv("OURA_CLIENT_SECRET", "sec")
 
     def no_deberia(*a, **k):
-        raise AssertionError("el mode manual no debe abrir un puerto")
+        raise AssertionError("manual mode must not open a port")
 
     monkeypatch.setattr(az, "wait_for_callback", no_deberia)
 
     guardadas = {}
 
     def canjear_falso(codigo, cid, csec, redirect):
-        guardadas["codigo"] = codigo
+        guardadas["the-code"] = codigo
         from oura_mcp.credentials import Credentials
         from oura_mcp.client import Secret
         import time
@@ -186,7 +186,7 @@ def test_manual_mode_starts_no_server(monkeypatch, capsys):
 
     salida = io.StringIO()
     monkeypatch.setattr(az.sys, "stdin", io.StringIO(
-        "http://localhost:9876/callback/?code=EL-CODIGO&state=REEMPLAZAR\n"))
+        "http://localhost:9876/callback/?code=THE-CODE&state=REEMPLAZAR\n"))
 
     # The state is generated inside, so it has to run once to learn it. The
     # input is then re-injected with the correct state.
@@ -196,10 +196,10 @@ def test_manual_mode_starts_no_server(monkeypatch, capsys):
     monkeypatch.setattr(az, "authorization_url", lambda cid, estado, *a, **k: original(cid, bueno, *a, **k))
     monkeypatch.setattr(az.secrets, "token_urlsafe", lambda n: bueno)
     monkeypatch.setattr(az.sys, "stdin", io.StringIO(
-        f"http://localhost:9876/callback/?code=EL-CODIGO&state={bueno}\n"))
+        f"http://localhost:9876/callback/?code=THE-CODE&state={bueno}\n"))
 
     resumen = az.authorize(manual=True, salida=salida)
-    assert guardadas["codigo"] == "EL-CODIGO"
+    assert guardadas["the-code"] == "THE-CODE"
     assert resumen["authorized"] is True
     assert resumen["granted_scopes"] == ["daily"]
     # And that the URL was printed, which is all the user needs.
@@ -243,11 +243,11 @@ def test_the_state_is_unguessable_and_never_repeats(monkeypatch):
 
     def espiar(cid, estado, *a, **k):
         vistos.add(estado)
-        raise RuntimeError("basta")          # stop before anything else happens
+        raise RuntimeError("enough")          # stop before anything else happens
 
     monkeypatch.setattr(az, "authorization_url", espiar)
     monkeypatch.setenv("OURA_CLIENT_ID", "id")
-    monkeypatch.setenv("OURA_CLIENT_SECRET", "secreto")
+    monkeypatch.setenv("OURA_CLIENT_SECRET", "the-secret")
 
     for _ in range(20):
         with pytest.raises(RuntimeError):

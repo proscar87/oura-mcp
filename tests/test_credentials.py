@@ -51,7 +51,7 @@ def _cred(refresh_token="R1", expires_at=None, scopes=("daily",)):
 
 
 # ── Saving ─────────────────────────────────────────────────────────────────
-def test_el_archivo_queda_en_600():
+def test_the_file_ends_up_at_600():
     path = cr.save(_cred())
     mode = stat.S_IMODE(os.stat(path).st_mode)
     assert mode == 0o600, oct(mode)
@@ -72,7 +72,7 @@ def test_round_trip():
     assert leida.scopes == ("daily", "heartrate")
 
 
-def test_sin_archivo_no_hay_credenciales():
+def test_no_file_means_no_credentials():
     assert cr.load() is None
 
 
@@ -97,7 +97,7 @@ def test_no_debris_is_left_if_it_fails_mid_write(_isolate, monkeypatch):
     assert sobras == [], sobras
 
 
-def test_olvidar_no_falla_si_no_habia():
+def test_forget_does_not_fail_when_there_was_nothing():
     cr.forget()          # no exception
     cr.save(_cred())
     cr.forget()
@@ -114,7 +114,7 @@ def test_the_credentials_repr_carries_no_tokens():
     assert "valid for" in repr(c)
 
 
-def test_el_archivo_guardado_no_es_legible_por_otros(_isolate):
+def test_the_saved_file_is_not_readable_by_others(_isolate):
     """Obvious, which is why it is worth testing: the contents DO carry the tokens
     in the clear, and the only thing protecting them is the file mode."""
     path = cr.save(_cred())
@@ -123,7 +123,7 @@ def test_el_archivo_guardado_no_es_legible_por_otros(_isolate):
 
 
 # ── Expiry ─────────────────────────────────────────────────────────────────
-def test_un_token_que_expira_en_tres_segundos_ya_esta_caducado():
+def test_a_token_that_expires_in_three_seconds_is_already_expired():
     """The request launched with it will arrive late."""
     assert _cred(expires_at=time.time() + 3).expired()
     assert not _cred(expires_at=time.time() + 3600).expired()
@@ -141,50 +141,50 @@ def _fake_token_endpoint(monkeypatch, respuesta, registrar=None):
     monkeypatch.setattr(cr, "_post", postear)
 
 
-def test_refrescar_guarda_antes_de_devolver(monkeypatch):
+def test_the_refresh_saves_before_it_returns(monkeypatch):
     """THE LINE THAT MATTERS. Oura invalidates the refresh token the moment it is
     exchanged; between the response and the save there is a window where the old
     one has died and the new one does not exist on disk. This test pins that
     window as short as possible: by the time it returns, it is already saved."""
     _fake_token_endpoint(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
                                   "expires_in": 3600, "scope": "daily"})
-    devuelta = cr.refresh(_cred(), "id", "secreto")
+    devuelta = cr.refresh(_cred(), "id", "the-secret")
     en_disco = cr.load()
     assert devuelta.refresh_token.reveal() == "R2"
-    assert en_disco.refresh_token.reveal() == "R2"      # ya estaba guardado
+    assert en_disco.refresh_token.reveal() == "R2"      # it was already saved
 
 
-def test_el_refresco_manda_el_token_viejo(monkeypatch):
+def test_the_refresh_sends_the_old_token(monkeypatch):
     enviados = []
     _fake_token_endpoint(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
                                   "expires_in": 3600}, registrar=enviados)
-    cr.refresh(_cred(refresh_token="R1"), "id", "secreto")
+    cr.refresh(_cred(refresh_token="R1"), "id", "the-secret")
     assert enviados[0]["grant_type"] == "refresh_token"
     assert enviados[0]["refresh_token"] == "R1"
 
 
-def test_si_otro_proceso_ya_refresco_la_sesion_no_se_da_por_perdida(monkeypatch):
+def test_if_another_process_already_refreshed_the_session_is_not_lost(monkeypatch):
     """Two MCP tools called in parallel is a real case. The one that loses the race
     sees a 400 even though the session is alive, already renewed by the other."""
     cr.save(cr.Credentials(access=Secret("A9"), refresh_token=Secret("R9"),
                                expires_at=time.time() + 3600, scopes=("daily",)))
     _fake_token_endpoint(monkeypatch, OuraError("Oura rejected the exchange (400)"))
-    recuperada = cr.refresh(_cred(refresh_token="R1"), "id", "secreto")
+    recuperada = cr.refresh(_cred(refresh_token="R1"), "id", "the-secret")
     assert recuperada.access.reveal() == "A9"
 
 
 def test_if_it_fails_and_nothing_is_saved_it_propagates(monkeypatch):
     _fake_token_endpoint(monkeypatch, OuraError("Oura rejected the exchange (400)"))
     with pytest.raises(OuraError, match="400"):
-        cr.refresh(_cred(), "id", "secreto")
+        cr.refresh(_cred(), "id", "the-secret")
 
 
 def test_without_a_refresh_token_it_says_to_authorize(monkeypatch):
     with pytest.raises(OuraError, match="authorize again"):
-        cr.refresh(_cred(refresh_token=None), "id", "secreto")
+        cr.refresh(_cred(refresh_token=None), "id", "the-secret")
 
 
-def test_se_guardan_los_alcances_concedidos_no_los_pedidos(monkeypatch):
+def test_the_granted_scopes_are_saved_not_the_requested_ones(monkeypatch):
     """The consent screen returns what the user ACCEPTED, which is not always what
     was asked for. The self-check relies on this."""
     _fake_token_endpoint(monkeypatch, {"access_token": "A2", "refresh_token": "R2",
@@ -196,16 +196,16 @@ def test_se_guardan_los_alcances_concedidos_no_los_pedidos(monkeypatch):
 def test_a_response_without_access_token_is_an_error(monkeypatch):
     _fake_token_endpoint(monkeypatch, {"token_type": "Bearer"})
     with pytest.raises(OuraError, match="without `access_token`"):
-        cr.refresh(_cred(), "id", "secreto")
+        cr.refresh(_cred(), "id", "the-secret")
 
 
-def test_canjear_codigo_tambien_guarda(monkeypatch):
+def test_exchanging_the_code_saves_too(monkeypatch):
     enviados = []
     _fake_token_endpoint(monkeypatch, {"access_token": "A1", "refresh_token": "R1",
                                   "expires_in": 3600}, registrar=enviados)
-    cr.exchange_code("el-codigo", "id", "secreto")
+    cr.exchange_code("the-code", "id", "the-secret")
     assert enviados[0]["grant_type"] == "authorization_code"
-    assert enviados[0]["code"] == "el-codigo"
+    assert enviados[0]["code"] == "the-code"
     assert cr.load().access.reveal() == "A1"
 
 
@@ -216,7 +216,7 @@ def test_the_default_redirect_has_a_trailing_slash():
 
 
 # ── Paths someone would actually write ─────────────────────────────────────
-def test_una_ruta_relativa_pelada_no_truena(tmp_path, monkeypatch):
+def test_a_bare_relative_path_does_not_blow_up(tmp_path, monkeypatch):
     """`OURA_CREDENTIALS=cred.json` left the directory as an empty string and blew
     up the save with `FileNotFoundError: ''`, which explains nothing. It would
     also have made the credentials depend on the directory the server was started
@@ -228,7 +228,7 @@ def test_una_ruta_relativa_pelada_no_truena(tmp_path, monkeypatch):
     assert cr.load().refresh_token.reveal() == "R1"
 
 
-def test_la_ruta_siempre_es_absoluta(monkeypatch):
+def test_the_path_is_always_absolute(monkeypatch):
     monkeypatch.setenv("OURA_CREDENTIALS", "~/x/cred.json")
     assert os.path.isabs(cr.credentials_path())
 
@@ -405,7 +405,7 @@ def test_two_threads_refreshing_exchange_the_token_once(monkeypatch):
 
     def correr():
         try:
-            salidas.append(cr.refresh(vencida, "id", "secreto"))
+            salidas.append(cr.refresh(vencida, "id", "the-secret"))
         except Exception as e:        # noqa: BLE001
             errores.append(e)
 
@@ -434,7 +434,7 @@ def test_a_refresh_of_a_credential_nobody_replaced_still_happens(monkeypatch):
     vigente = _cred(refresh_token="R1")
     cr.save(vigente)
 
-    nueva = cr.refresh(vigente, "id", "secreto")
+    nueva = cr.refresh(vigente, "id", "the-secret")
     assert llamadas == ["R1"], "it skipped an exchange it was asked to make"
     assert nueva.refresh_token.reveal() == "R2"
 

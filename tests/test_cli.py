@@ -80,7 +80,7 @@ def test_the_self_check_never_reveals_the_token(monkeypatch):
     into issues, into screenshots. It reports the token's LENGTH, never the
     token."""
     from oura_mcp import server as S
-    monkeypatch.setenv("OURA_PAT", "SUPERSECRETO-NO-DEBE-SALIR-12345")
+    monkeypatch.setenv("OURA_PAT", "SUPERSECRET-MUST-NOT-LEAK-12345")
     monkeypatch.delenv("OURA_SANDBOX", raising=False)
     monkeypatch.setattr("oura_mcp.client._request",
                         lambda *a, **k: {"data": [{"day": "2026-01-01", "score": 7}]})

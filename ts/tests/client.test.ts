@@ -80,7 +80,7 @@ describe("pagination", () => {
     vi.stubGlobal("fetch", async (url: string) => {
       llamadas.push(url);
       return new Response(JSON.stringify({
-        data: [{ day: "2026-08-01" }], next_token: "SIEMPRE-EL-MISMO" }), { status: 200 });
+        data: [{ day: "2026-08-01" }], next_token: "ALWAYS-THE-SAME" }), { status: 200 });
     });
     const r = await fetchAll("daily_sleep", { start: "2026-08-01", end: "2026-08-01" });
     expect(llamadas).toHaveLength(2);
@@ -151,7 +151,7 @@ describe("date range", () => {
       .rejects.toThrow(/2026-08-10.*2026-08-01/s);
   });
 
-  it("dayOf reconoce las keys con hora", () => {
+  it("dayOf recognizes the keys that carry a time", () => {
     expect(dayOf({ timestamp: "2026-08-09T12:00:00-06:00" })).toBe("2026-08-09");
     expect(dayOf({ bedtime_start: "2026-08-09T23:10:00-06:00" })).toBe("2026-08-09");
     expect(dayOf({ nada: 1 })).toBeNull();
@@ -292,7 +292,7 @@ describe("errors", () => {
       .toContain("Start time is greater");
   });
 
-  it("un body ilegible no tumba nada", () => {
+  it("an unreadable body brings nothing down", () => {
     expect(detailOf("<html>")).toBe("");
   });
 });
@@ -558,14 +558,14 @@ describe("warnings actually reach the response", () => {
     // fires on `console.log(secret)` and inside stack traces, which is exactly
     // the scenario this class exists for. A token has already leaked here once,
     // through a traceback.
-    const s = new Secret("TOKEN-QUE-NO-DEBE-SALIR");
-    expect(String(s)).not.toContain("TOKEN-QUE-NO-DEBE-SALIR");
-    expect(JSON.stringify({ s })).not.toContain("TOKEN-QUE-NO-DEBE-SALIR");
-    expect(inspect(s)).not.toContain("TOKEN-QUE-NO-DEBE-SALIR");
+    const s = new Secret("TOKEN-THAT-MUST-NOT-LEAK");
+    expect(String(s)).not.toContain("TOKEN-THAT-MUST-NOT-LEAK");
+    expect(JSON.stringify({ s })).not.toContain("TOKEN-THAT-MUST-NOT-LEAK");
+    expect(inspect(s)).not.toContain("TOKEN-THAT-MUST-NOT-LEAK");
     expect(inspect({ deep: { s } }, { depth: 5 }))
-      .not.toContain("TOKEN-QUE-NO-DEBE-SALIR");
+      .not.toContain("TOKEN-THAT-MUST-NOT-LEAK");
     // And it is still retrievable on purpose.
-    expect(s.reveal()).toBe("TOKEN-QUE-NO-DEBE-SALIR");
+    expect(s.reveal()).toBe("TOKEN-THAT-MUST-NOT-LEAK");
   });
 });
 
@@ -680,7 +680,7 @@ describe("the authorization listener", () => {
     // elicitation callback, which is the exact moment the client is being told.
     const { authorizeByElicitation } = await import("../src/authorize.js");
     process.env.OURA_CLIENT_ID = "id";
-    process.env.OURA_CLIENT_SECRET = "secreto";
+    process.env.OURA_CLIENT_SECRET = "the-secret";
 
     let reachable = false;
     await authorizeByElicitation(
@@ -710,7 +710,7 @@ describe("the authorization listener", () => {
     // service any web page could trigger.
     const { authorizeByElicitation } = await import("../src/authorize.js");
     process.env.OURA_CLIENT_ID = "id";
-    process.env.OURA_CLIENT_SECRET = "secreto";
+    process.env.OURA_CLIENT_SECRET = "the-secret";
 
     const errors: unknown[] = [];
     const onUnhandled = (e: unknown) => errors.push(e);
