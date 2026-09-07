@@ -2110,6 +2110,83 @@ urgent.
 rule, and **`get_morning_context`**, which is still a product-identity call
 about the *three tools* figure and still not decided here.
 
+## The bundle spoke Spanish to every model, and three guards said it didn't — 7 September 2026
+
+Prompted by nothing more than checking that `SUBMISSION.md` was still accurate
+before the form went out. It was, on all nine claims. What was not accurate was
+the artifact the form points at.
+
+### What the published bundle actually answers
+
+Downloading the v0.3.3 `.mcpb` from the release, unpacking it and completing a
+real handshake — not reading the source, running the thing a reviewer would
+install — `tools/list` describes `start` and `end` as **«AAAA-MM-DD, o ISO 8601
+con hora»**. Parameter descriptions are the only text a model reads before
+deciding how to call a tool, and they are what Glama's tool-definition score is
+computed against. The bundle has answered that way since the TypeScript port
+landed.
+
+Worse, and not a message at all: `ts/src/authorize.ts` returned the completed
+OAuth result under a key named **`alcances_concedidos`**, where Python returns
+`granted_scopes`. Two halves of the same product answering one call with
+different field names, one of them in Spanish, and only the Python spelling
+appears in the documentation.
+
+Comparing the two implementations turned up two more that were not Spanish.
+`fields` had quietly dropped `heartrate`; `format` had lost the whole reason to
+prefer CSV. The half that ships in the bundle could give the advice and not the
+grounds for it.
+
+### The part worth keeping is why nothing caught it
+
+Three tests exist for precisely this, and all three passed:
+
+| guard | why it was blind |
+|---|---|
+| `test_no_parameter_description_is_in_spanish` | scans the right file with a regex that **does** match the string; none of its eight markers appear in it |
+| `test_no_error_message_is_in_spanish` | lists four Python modules and three of TypeScript's four; the missing one held the Spanish |
+| `test_no_dict_literal_returns_a_spanish_key` | reads no TypeScript at all, and compares keys for **equality** against a list that contains «alcances» |
+
+And a fourth reason cutting across all of them: every extractor matched
+*quoted* keys. TypeScript object literals do not quote theirs, so **every
+object TypeScript returns was invisible to every guard in the file.**
+
+This is the same shape as the bundle check that reported nothing in the one
+case it was written for, and as the CSV test that read the file back with the
+same stdlib that wrote it. A guard built from the last incident knows the last
+incident's vocabulary. Each of these was written after a real bug, each was
+correct about that bug, and each was useless against the next one.
+
+**The replacement carries no vocabulary.** Two tests now compare the two
+implementations directly: every `oura_query` parameter must be described
+identically in both, and the OAuth result must carry the same keys in both.
+There is no marker list to fall behind and no file list to forget an entry.
+The old lists stay as a cheap net with the gaps filled, but they are no longer
+what the invariant rests on.
+
+### What it costs, and what it blocks
+
+The fix is source-only. **The published bundle still carries all of it**, and
+`SUBMISSION.md` points the form at `releases/latest`, so sending the form today
+hands a reviewer the Spanish version. 0.3.4 has to be cut first. That is the
+whole of the new dependency: not more work, just an ordering nobody had written
+down.
+
+`granted_scopes` is a rename in the TypeScript authorize result. It aligns the
+bundle to what Python has always returned and what the docs describe, so it
+removes a third spelling rather than adding one — but it is a rename, and the
+CHANGELOG says so.
+
+### One more, from the same pass
+
+Writing the first version of the description guard reproduced the exact failure
+this repository already has a commit titled for. Reading `Field(description=)`
+only at the top level of an annotation saw seven parameters on 3.13 and three
+on 3.10, where `get_type_hints` still re-wraps anything defaulting to `None`.
+Green locally, red in CI. It recurses now and a second test pins the 3.10 shape
+by hand — but the interpreter floor claimed another one, in the very test
+written to stop a divergence between two implementations.
+
 ## Execution order — reprioritized 10 August 2026
 
 Rewritten after reading the WHOOP ecosystem and counting the field. The old
@@ -2169,7 +2246,7 @@ The submission is a Google Form behind a sign-in, so it needs Oscar's account.
 Everything it asks for is written and ready; this is the only item on the
 roadmap that cannot be finished from here.
 
-### 4. `awesome-mcp-servers` and mcp.so · **done**
+### 4. `awesome-mcp-servers` and mcp.so · **filed, and neither landed**
 
 - `awesome-mcp-servers` (92k stars): PR
   [#11833](https://github.com/punkpeye/awesome-mcp-servers/pull/11833), filed
@@ -2181,6 +2258,20 @@ roadmap that cannot be finished from here.
   #3503](https://github.com/chatmcp/mcpso/issues/3503), which is the route their
   form actually feeds.
 - glama.ai already indexes the repository — verified, no submission needed.
+
+**Re-checked 7 September 2026, and «done» was the wrong word.** Filing is done;
+being listed is not. The `awesome-mcp-servers` PR has been open for four weeks
+against a queue of **3,343 open items**, and the list today carries three Oura
+servers — `fouradata/mcp`, `Rajskij/oura-mcp`, `tomekkorbak/oura-mcp-server` —
+none of them this one. `Rajskij` was merged on 22 July, before the queue looked
+like this. The mcp.so issue has had no reply since 10 August.
+
+The maintainer did answer the PR on 7 September asking for the Glama server to
+be claimed, which Oscar did, so it is now waiting on a merge rather than on us.
+But the lesson stands and it points at item 3: a channel whose throughput
+depends on someone draining three thousand items is not a channel, and marking
+it done on submission hid that for a month. The desktop-extension form is the
+only listing route here that does not queue behind a stranger's backlog.
 
 ### What the release itself turned up
 
