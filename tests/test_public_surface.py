@@ -312,17 +312,41 @@ def test_no_parameter_description_is_in_spanish():
                 assert marcador not in m.group(1), f"{f}: «{m.group(1)[:60]}»"
 
 
+def _descriptions_in(hint):
+    """Every `Field(description=...)` reachable from an annotation.
+
+    It RECURSES, and that is the whole point. Up to 3.10 `get_type_hints`
+    re-wrapped any parameter defaulting to None as `Optional[Annotated[...]]`,
+    so `__metadata__` sits one level in; 3.11 dropped that implicit wrap and it
+    sits at the top. Reading only the top level passes on a modern interpreter
+    and silently sees four fewer parameters on the 3.10 floor — which is what
+    the first version of this test did, green here and red in CI.
+    """
+    for meta in getattr(hint, "__metadata__", ()):
+        texto = getattr(meta, "description", None)
+        if texto:
+            yield texto
+    for arg in typing.get_args(hint):
+        yield from _descriptions_in(arg)
+
+
 def _python_parameter_descriptions(tool: str) -> dict[str, str]:
     """name -> description, read off the real signature, not off the text."""
     fn = getattr(S, tool)
     fn = getattr(fn, "fn", fn)
     out = {}
     for name, hint in typing.get_type_hints(fn, include_extras=True).items():
-        for meta in getattr(hint, "__metadata__", ()):
-            texto = getattr(meta, "description", None)
-            if texto:
-                out[name] = texto
+        for texto in _descriptions_in(hint):
+            out[name] = texto
     return out
+
+
+def test_the_description_reader_sees_through_an_optional_wrap():
+    """Pins the 3.10 shape directly, so the reader cannot regress to top-level
+    only on an interpreter where that happens to work."""
+    from pydantic import Field as _F
+    envuelto = typing.Optional[typing.Annotated[str, _F(description="ahi esta")]]
+    assert list(_descriptions_in(envuelto)) == ["ahi esta"]
 
 
 _TS_PARAM = re.compile(
