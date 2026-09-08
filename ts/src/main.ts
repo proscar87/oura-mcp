@@ -72,6 +72,12 @@ export async function cli(argv: string[] = process.argv.slice(2)): Promise<numbe
   }
   if (argv.includes("--forget")) {
     const { forget, credentialsPath } = await import("./credentials.js");
+    // The cache holds health data in memory for the life of the process, and
+    // `--forget` is what someone runs to make this server stop knowing things
+    // about them. Reporting «forgotten» while their sleep sits in a Map would
+    // be true about what it names and false about what was asked.
+    const { cacheClear } = await import("./client.js");
+    cacheClear();
     const archivo = credentialsPath();
     await forget();
     print({ olvidado: true, archivo });

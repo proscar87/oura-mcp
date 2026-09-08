@@ -50,6 +50,10 @@ Parameter names match Oura's own API: `collection`, `day`, `start`, `end`,
 - `rate_limited` — Oura refused with 429 and a retry recovered. The data is
   complete; the warning is about the NEXT query, which may fail.
 - `synthetic` — sample data, not this person's. Never report it as theirs.
+- `cached` — answered from this session's memory. Only for a range that
+  closed BEFORE today, which cannot gain records; today is never held, and
+  neither is an empty answer. The numbers are identical to what Oura
+  returned earlier in the same session, not a stale approximation.
 - `empty` — the query came back empty; explains what's knowable about why.
 - `large_response` — the payload is heavy; names the field that dominates it.
 

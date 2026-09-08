@@ -93,6 +93,80 @@ class Secret:
     __str__ = __repr__
 
 
+# ── The cache ─────────────────────────────────────────────────────────────
+# IN MEMORY, NEVER ON DISK, and that is not a performance choice. The submission
+# to the desktop-extension directory states that health data is never written to
+# disk, and the README says the same. A disk cache would make both false for a
+# speed-up nobody asked for, on a server whose whole argument is that its
+# answers can be trusted about themselves.
+#
+# THE RULE IS THE CALENDAR, not a clock. A day that has already closed cannot
+# gain records, so it can be held forever; today can, because the ring syncs
+# whenever it feels like it, so today is never held at all. That is simpler than
+# a tiered expiry and has no window in which it can be wrong.
+CACHE_MAX = 32
+"""Entries, not bytes. A month of `heartrate` is ~37,000 records, so this is
+already generous; the point is bounding a session, not storing a history."""
+
+CACHED = (
+    "answered from this session's memory: the requested range closed before "
+    "today, so Oura cannot have added records to it since. Identical to what "
+    "Oura returned earlier in this same session, not a stale approximation."
+)
+"""On every cache hit, for the same reason `synthetic` is on every sandbox
+response. A response that does not say how it was produced is exactly the
+failure this package exists to refuse — and «why is this instant?» must have an
+answer in the response itself."""
+
+_cache: dict = {}
+"""Insertion-ordered, which `dict` guarantees, so the oldest key is the first."""
+
+
+def cache_clear() -> None:
+    """Empties it. Exists for the tests and for `--forget`."""
+    _cache.clear()
+
+
+def _today() -> str:
+    """The local calendar day. Oura keys its records by local day too."""
+    return datetime.date.today().isoformat()
+
+
+def _range_has_closed(end: str | None) -> bool:
+    """True when `end` is a day that can no longer receive records.
+
+    Compared as text, which works because both sides are `YYYY-MM-DD` and the
+    datetime collections carry that as their first ten characters. Strictly
+    less than today: a range ending today is never cacheable, and neither is
+    one ending in the future, which is a question about a day that has not
+    happened.
+    """
+    return bool(end) and end[:10] < _today()
+
+
+def _worth_caching(out: dict, end: str | None, latest: bool) -> bool:
+    """Whether this answer can be held.
+
+    Four refusals, and each is a way a cached answer could be wrong later:
+
+    - `latest` asks for the most recent record Oura has, which is a question
+      about now. There is no range that closes.
+    - A range that includes today, per `_range_has_closed`.
+    - **An empty response is never cached.** Nothing distinguishes "there is no
+      data for that day" from "the ring had not synced when you asked", and
+      holding the second forever turns a temporary gap into a permanent one.
+      This is the invariant that made caching safe to adopt at all.
+    - A truncated or cycled response is incomplete by its own admission.
+      Freezing it would serve that incompleteness to every later caller without
+      the request that might have gone better.
+    """
+    if latest or not _range_has_closed(end):
+        return False
+    if not out.get("n"):
+        return False
+    return "truncated" not in out and "pagination_cycle" not in out
+
+
 SYNTHETIC = (
     "SANDBOX MODE: this is Oura's sample data, not this person's. Do not "
     "report these numbers as their own. To see real data, turn off the "
@@ -731,6 +805,33 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
             params[f"start_{key}"] = _widen_start(start)
             params[f"end_{key}"] = _widen_end(end)
 
+    # THE CACHE IS READ HERE AND NOT AT THE TOP OF THE FUNCTION, on purpose.
+    # Everything above this line either validates the request or refuses it, and
+    # a hit must not be a way to skip that: a made-up collection, `latest` on a
+    # collection Oura ignores it on, and a backwards range all have to fail the
+    # same way whether or not an answer happens to be held. `_token()` is above
+    # this line too, so a cache hit still requires a credential — held health
+    # data is not served to a session that has none.
+    # `was_string` IS PART OF THE KEY, and leaving it out was a real bug.
+    # `_as_fields` normalizes "day,score" and ["day","score"] to the same list,
+    # so the two calls collided — and the first carries `fields_split`, a note
+    # about how the CALLER phrased the request, not about the data. The list
+    # caller was told its list had been split from a string. The TypeScript
+    # suite caught this on the first run after the cache landed; here no test
+    # happened to make both calls, so it would have shipped.
+    llave = (base(), collection, start, end,
+             tuple(fields) if fields else None, was_string, latest, format,
+             page_limit)
+    if (held := _cache.get(llave)) is not None:
+        # A SHALLOW COPY. The caller may add keys to the dict it gets back —
+        # the server does — and those must not accumulate on the held entry.
+        # The `data` list itself is shared; nothing in this package mutates it,
+        # and copying 37,000 records on every hit would spend exactly what the
+        # cache was meant to save.
+        out = dict(held)
+        out["cached"] = CACHED
+        return out
+
     root = base()
     data, pages, next_token = [], 0, None
     waits: list = []
@@ -890,4 +991,15 @@ def fetch(collection: str, start: str | None = None, end: str | None = None,
         # thesis committed by us, in the default configuration. A model reading
         # this key cannot report synthetic numbers as the person's own.
         out["synthetic"] = SYNTHETIC
+
+    if _worth_caching(out, end, latest):
+        # `rate_limited` is about the request that just happened, not about the
+        # data. Serving it again on a hit would report a throttle that did not
+        # occur, and telling someone they are near a limit they never touched is
+        # the same class of lie as a partial answer that looks complete.
+        held = {k: v for k, v in out.items() if k != "rate_limited"}
+        if len(_cache) >= CACHE_MAX:
+            # Oldest out. `dict` keeps insertion order, so the first key is it.
+            del _cache[next(iter(_cache))]
+        _cache[llave] = held
     return out

@@ -35,7 +35,8 @@ pytestmark = pytest.mark.skipif(
 def _node(expr: str, datos) -> str:
     """Evaluate `expr` in TypeScript with `d` bound to the given records."""
     guion = (
-        f'import {{ sizeWarning, toCsv, shiftDays, dayOf }} from "{DIST}";\n'
+        f'import {{ sizeWarning, toCsv, shiftDays, dayOf, rangeHasClosed }} '
+        f'from "{DIST}";\n'
         'const d = JSON.parse(await new Promise(r => {'
         "  let s = ''; process.stdin.on('data', c => s += c);"
         "  process.stdin.on('end', () => r(s)); }));\n"
@@ -117,3 +118,24 @@ def test_the_day_of_a_record_agrees(registro, esperado):
 
     assert day_of(registro) == esperado
     assert json.loads(_node("dayOf(d[0]) ?? null", [registro])) == esperado
+
+
+@pytest.mark.parametrize("dias_atras", [-1, 0, 1, 2, 400])
+def test_the_calendar_rule_agrees(dias_atras):
+    """WHETHER A DAY HAS CLOSED IS THE WHOLE CACHE. Disagreeing here means one
+    implementation holds an answer the other refuses to hold — and the one that
+    holds it wrong serves a day that could still gain records as if it were
+    settled, which is the failure this package exists to refuse.
+
+    -1 is tomorrow, 0 is today, and both must be refused. The boundary is the
+    only interesting part: `<` and `<=` differ on exactly one day, and it is the
+    day the ring is still syncing.
+    """
+    import datetime
+
+    from oura_mcp.client import _range_has_closed
+
+    fecha = (datetime.date.today() - datetime.timedelta(days=dias_atras)).isoformat()
+    esperado = _range_has_closed(fecha)
+    obtenido = json.loads(_node(f'rangeHasClosed("{fecha}")', []))
+    assert obtenido == esperado, f"{fecha}: python={esperado} typescript={obtenido}"

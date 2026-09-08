@@ -219,6 +219,11 @@ def test_it_warns_when_the_records_do_not_carry_the_same_keys(monkeypatch):
     _fake_oura([[{"day": "2026-08-10"}, {"day": "2026-08-11", "extra": 1}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-11", format="csv")
     assert "uneven_columns" in r
+    # The same query twice with different data underneath, which is precisely
+    # what the cache says cannot happen to a closed range — so the second half
+    # of this test is a different world, not a later moment in this one. It is
+    # about the CSV warning, not about caching.
+    client.cache_clear()
     _fake_oura([[{"day": "2026-08-10"}, {"day": "2026-08-11"}]], monkeypatch)
     r = client.fetch("daily_sleep", "2026-08-10", "2026-08-11", format="csv")
     assert "uneven_columns" not in r

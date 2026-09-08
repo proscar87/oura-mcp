@@ -11,7 +11,7 @@ import { inspect } from "node:util";
 
 import {
   OuraError, Secret, toCsv, inSandbox, sizeWarning, ignoredFields, shiftDays, dayOf,
-  requestedWait, detailOf, fetchAll,
+  requestedWait, detailOf, fetchAll, cacheClear, CACHE_MAX, rangeHasClosed,
 } from "../src/client.js";
 
 type Pagina = Record<string, unknown>[];
@@ -32,6 +32,13 @@ beforeEach(() => {
   process.env.OURA_PAT = "token-de-prueba";
   delete process.env.OURA_SANDBOX;
   delete process.env.OURA_PAT_FILE;
+  // THE CACHE IS MODULE-GLOBAL, which is what it is for: an MCP server is one
+  // process per session. In a test run that same property makes every test
+  // after the first answer from the fake set up in front of an earlier one.
+  // It caught a real bug the day it landed — `fields_split` served to a caller
+  // who never sent a string — and the fix for that belongs in the key, not
+  // here. This is so the next collision is a test failing for its own reason.
+  cacheClear();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -877,5 +884,113 @@ describe("impossible requests", () => {
     const r = await fetchAll("heartrate", { latest: true });
     expect(r["n"]).toBe(1);
     expect(urls[0]).toContain("latest=true");
+  });
+});
+
+
+// ── The cache ──────────────────────────────────────────────────────────────
+// Mirrors tests/test_cache.py. Both count REQUESTS, not milliseconds: a cache
+// that is merely fast is one nobody can prove, and "it did not ask Oura again"
+// is a different claim and the one being made.
+describe("the cache", () => {
+  const dia = (atras: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - atras);
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+  const AYER = dia(3), ANTEAYER = dia(4), HOY = dia(0);
+
+  it("asks for a closed range once", async () => {
+    const urls: string[] = [];
+    fakeOura([[{ day: ANTEAYER }, { day: AYER }]], urls);
+    const primera = await fetchAll("daily_sleep", { start: ANTEAYER, end: AYER });
+    expect(urls.length).toBe(1);
+    const segunda = await fetchAll("daily_sleep", { start: ANTEAYER, end: AYER });
+    expect(urls.length).toBe(1);
+    expect(segunda["n"]).toBe(primera["n"]);
+  });
+
+  it("says so on a hit", async () => {
+    fakeOura([[{ day: AYER }]]);
+    expect((await fetchAll("daily_sleep", { start: AYER, end: AYER }))["cached"])
+      .toBeUndefined();
+    const hit = await fetchAll("daily_sleep", { start: AYER, end: AYER });
+    expect(String(hit["cached"])).toContain("closed before today");
+  });
+
+  it("never holds a range that reaches today", async () => {
+    // THE WHOLE RULE. The ring syncs whenever it likes, so today is still moving.
+    const urls: string[] = [];
+    fakeOura([[{ day: HOY }]], urls);
+    await fetchAll("daily_sleep", { start: AYER, end: HOY });
+    await fetchAll("daily_sleep", { start: AYER, end: HOY });
+    expect(urls.length).toBe(2);
+  });
+
+  it("never holds an empty answer", async () => {
+    // THE INVARIANT THAT MADE CACHING ADOPTABLE. Nothing tells "there is no
+    // data" apart from "the ring had not synced when you asked", and holding
+    // the second forever turns a temporary gap into a permanent one.
+    const urls: string[] = [];
+    fakeOura([[]], urls);
+    expect((await fetchAll("daily_sleep", { start: ANTEAYER, end: AYER }))["empty"])
+      .toBeDefined();
+    await fetchAll("daily_sleep", { start: ANTEAYER, end: AYER });
+    expect(urls.length).toBe(2);
+  });
+
+  it("never holds a truncated answer", async () => {
+    const urls: string[] = [];
+    fakeOura([[{ day: AYER }], [{ day: AYER }], [{ day: AYER }]], urls);
+    const r = await fetchAll("daily_sleep",
+      { start: ANTEAYER, end: AYER, pageLimit: 2 });
+    expect(r["truncated"]).toBeDefined();
+    const antes = urls.length;
+    await fetchAll("daily_sleep", { start: ANTEAYER, end: AYER, pageLimit: 2 });
+    expect(urls.length).toBeGreaterThan(antes);
+  });
+
+  it("never holds latest", async () => {
+    const urls: string[] = [];
+    fakeOura([[{ timestamp: `${AYER}T10:00:00+00:00` }]], urls);
+    await fetchAll("heartrate", { latest: true });
+    await fetchAll("heartrate", { latest: true });
+    expect(urls.length).toBe(2);
+  });
+
+  it("does not answer one question with another's answer", async () => {
+    const urls: string[] = [];
+    fakeOura([[{ day: AYER, score: 1 }]], urls);
+    await fetchAll("daily_sleep", { start: ANTEAYER, end: AYER });
+    await fetchAll("daily_activity", { start: ANTEAYER, end: AYER });
+    await fetchAll("daily_sleep", { start: ANTEAYER, end: AYER, format: "csv" });
+    expect(urls.length).toBe(3);
+  });
+
+  it("tells a split string from a real list", async () => {
+    // THE BUG THIS SUITE CAUGHT. `asFields` normalizes "day,score" and
+    // ["day","score"] to the same list, so without `wasString` in the key the
+    // second caller was told its list had been split from a string.
+    fakeOura([[{ day: AYER, score: 1 }]]);
+    const cadena = await fetchAll("daily_sleep",
+      { start: ANTEAYER, end: AYER, fields: "day,score" });
+    expect(cadena["fields_split"]).toBeDefined();
+    const lista = await fetchAll("daily_sleep",
+      { start: ANTEAYER, end: AYER, fields: ["day", "score"] });
+    expect(lista["fields_split"]).toBeUndefined();
+  });
+
+  it("is bounded", async () => {
+    // Unbounded, a long session holding months of heartrate is a memory leak
+    // with a nice name.
+    fakeOura([[{ day: AYER }]]);
+    for (let i = 0; i < CACHE_MAX + 5; i++) {
+      await fetchAll("daily_sleep",
+        { start: ANTEAYER, end: AYER, pageLimit: 10 + i });
+    }
+    // Nothing throws and the oldest is gone; the count itself is module-private.
+    expect(rangeHasClosed(AYER)).toBe(true);
+    expect(rangeHasClosed(HOY)).toBe(false);
   });
 });

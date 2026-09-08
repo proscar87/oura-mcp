@@ -56,6 +56,7 @@ RESPONSE_KEYS = {
     "truncated", "continue_from", "pagination_cycle",
     "ignored_fields", "fields_split", "large_response",
     "discarded_out_of_range", "empty", "synthetic", "rate_limited",
+    "cached",                                     # answered from memory
 }
 
 # Everything `server.py` adds on top, in `oura_check` and the error paths.

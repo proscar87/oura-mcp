@@ -99,6 +99,75 @@ export class Secret {
  * failure this server exists to correct, so it says so in band, where a
  * model must see it — not in the documentation, where nobody reads it.
  */
+// ── The cache ─────────────────────────────────────────────────────────────
+// IN MEMORY, NEVER ON DISK, and that is not a performance choice. The
+// submission to the desktop-extension directory states that health data is
+// never written to disk, and the README says the same. A disk cache would make
+// both false for a speed-up nobody asked for.
+//
+// THE RULE IS THE CALENDAR, not a clock. A day that has already closed cannot
+// gain records, so it is held forever; today can, because the ring syncs
+// whenever it likes, so today is never held. Simpler than a tiered expiry and
+// with no window in which it can be wrong.
+export const CACHE_MAX = 32;
+
+export const CACHED =
+  "answered from this session's memory: the requested range closed before " +
+  "today, so Oura cannot have added records to it since. Identical to what " +
+  "Oura returned earlier in this same session, not a stale approximation.";
+
+const cache = new Map<string, Row>();
+
+/** Empties it. For the tests, and for `--forget`. */
+export function cacheClear(): void {
+  cache.clear();
+}
+
+/** The local calendar day. Oura keys its records by local day too. */
+export function today(): string {
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+/**
+ * True when `end` is a day that can no longer receive records.
+ *
+ * Compared as text, which works because both sides are `YYYY-MM-DD` and the
+ * datetime collections carry that as their first ten characters. STRICTLY less
+ * than today: a range ending today is never cacheable, and neither is one
+ * ending in the future, which asks about a day that has not happened.
+ */
+export function rangeHasClosed(end: string | undefined): boolean {
+  return !!end && end.slice(0, 10) < today();
+}
+
+/**
+ * Whether this answer can be held. Four refusals, each a way a held answer
+ * could later be wrong:
+ *
+ * - `latest` asks for the most recent record Oura has, a question about now.
+ * - A range including today, per `rangeHasClosed`.
+ * - **An empty response is never held.** Nothing distinguishes "there is no
+ *   data for that day" from "the ring had not synced when you asked", and
+ *   holding the second forever turns a temporary gap into a permanent one.
+ *   This is the invariant that made caching safe to adopt at all.
+ * - A truncated or cycled response is incomplete by its own admission.
+ */
+export function worthCaching(out: Row, end: string | undefined,
+                             latest: boolean): boolean {
+  if (latest || !rangeHasClosed(end)) return false;
+  // Destructured rather than read with bracket notation. The surface guard
+  // extracts response keys by matching bracketed assignments on `out`, and it
+  // cannot tell a key being READ from one being EMITTED — so reading the count
+  // that way announced `n` as a key TypeScript emits and Python does not.
+  // (Nor can it tell code from a comment: the first version of this note
+  // failed the guard by quoting the very expression it was explaining.)
+  const { n } = out as { n?: number };
+  if (!n) return false;
+  return !("truncated" in out) && !("pagination_cycle" in out);
+}
+
 export const SYNTHETIC =
   "SANDBOX MODE: this is Oura's sample data, not this person's. Do not " +
   "report these numbers as their own. To see real data, turn off the " +
@@ -638,6 +707,31 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
     }
   }
 
+  // READ HERE AND NOT AT THE TOP, on purpose. Everything above either
+  // validates the request or refuses it, and a hit must not be a way to skip
+  // that: a made-up collection, `latest` where Oura ignores it, and a
+  // backwards range all fail the same way whether or not an answer is held.
+  // `wasString` IS PART OF THE KEY, and leaving it out was a real bug rather
+  // than a tidiness point. `asFields` normalizes "day,score" and ["day","score"]
+  // to the same list, so the two calls collided — and the first carries
+  // `fields_split`, a note about how the CALLER phrased the request. The list
+  // caller was told its list had been split from a string. Caught by the
+  // TypeScript suite on the first run after the cache landed; Python had the
+  // same hole and no test that happened to make both calls.
+  const llave = JSON.stringify([base(), collection, start, end,
+                                fields ?? null, wasString, latest, format,
+                                pageLimit]);
+  const held = cache.get(llave);
+  if (held !== undefined) {
+    // A SHALLOW COPY. The caller may add keys to what it gets back — the
+    // server does — and those must not accumulate on the held entry. The
+    // `data` value is shared; nothing here mutates it, and copying 37,000
+    // records per hit would spend exactly what the cache was meant to save.
+    const out: Row = { ...held };
+    out["cached"] = CACHED;
+    return out;
+  }
+
   const root = base();
   const tok = await token();
   let data: Row[] = [];
@@ -791,6 +885,20 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
     // us, in the default configuration. A model reading this key cannot report
     // synthetic numbers as the person's own, and it names the next step.
     out["synthetic"] = SYNTHETIC;
+  }
+
+  if (worthCaching(out, end, latest)) {
+    // `rate_limited` is about the request that just happened, not about the
+    // data. Replaying it on a hit would report a throttle that did not occur.
+    const guardado: Row = {};
+    for (const [k, valor] of Object.entries(out)) {
+      if (k !== "rate_limited") guardado[k] = valor;
+    }
+    if (cache.size >= CACHE_MAX) {
+      // Oldest out. A Map iterates in insertion order, so the first key is it.
+      cache.delete(cache.keys().next().value as string);
+    }
+    cache.set(llave, guardado);
   }
   return out;
 }
