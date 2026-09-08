@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.4 — unreleased
+## 0.3.4 — 7 September 2026
 
 **The `.mcpb` described its own parameters in Spanish, and the three tests
 written to catch exactly that all passed.** `tools/list` from the bundle had
