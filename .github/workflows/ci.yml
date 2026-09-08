@@ -80,6 +80,44 @@ jobs:
       - run: ./build-mcpb.sh
         working-directory: ts
 
+  docker:
+    name: Docker
+    runs-on: ubuntu-latest
+    # BUILT AND THEN STARTED, like the bundle. An image that builds is not an
+    # image that speaks stdio: the container has to be run with `-i` or it has
+    # no stdin at all, the handshake never arrives, and from the client that is
+    # indistinguishable from a server that does not exist. That is the failure
+    # `tools/smoke_stdio.py` exists for, so it is the one thing worth spending
+    # a job on — not `docker build` returning 0.
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t oura-mcp:ci .
+      - name: Does it actually answer over stdio?
+        run: |
+          salida=$(printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+            | docker run -i --rm -e OURA_SANDBOX=1 oura-mcp:ci)
+          echo "$salida"
+          # The three tools by name. Counting them would pass on three wrong
+          # ones, and this is the surface every client reads.
+          for t in oura_collections oura_query oura_check; do
+            echo "$salida" | grep -q "\"$t\"" || {
+              echo "::error::the container did not offer $t"
+              exit 1
+            }
+          done
+          # Nothing but JSON-RPC on stdout. A stray print breaks the channel and
+          # looks, from the client, exactly like a server that never started.
+          echo "$salida" | while IFS= read -r linea; do
+            [ -z "$linea" ] && continue
+            echo "$linea" | python3 -c 'import json,sys; json.loads(sys.stdin.read())' || {
+              echo "::error::the container wrote something that is not JSON-RPC: $linea"
+              exit 1
+            }
+          done
+
   garita:
     name: Garita
     runs-on: ubuntu-latest

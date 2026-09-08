@@ -47,6 +47,25 @@ Nine mutants cover the cache across the two languages, and all nine are killed.
 one machine is a dead symlink — so the tool that checks whether the tests have
 teeth died before running one. `OURA_PYTHON` overrides it.
 
+**A container image, on `ghcr.io`.** For people who would rather not have a
+Python on their machine at all — the one thing `Rajskij/oura-mcp` had that this
+did not. `docker run -i --rm -e OURA_SANDBOX=1 ghcr.io/proscar87/oura-mcp` runs
+on sample data with no account.
+
+`-i` is load-bearing and the README says so: an MCP server speaks over stdin
+and stdout, not over a port, so without it the container has no stdin and the
+handshake never arrives. From the client that is indistinguishable from a
+server that does not exist. CI therefore builds the image AND starts it on
+every push, asserting the three tools come back by name and that nothing but
+JSON-RPC reaches stdout; the publish job repeats that against the exact bytes
+before pushing, and refuses to push an image that cannot answer. `docker build`
+returning 0 says the layers assembled, nothing more.
+
+The image runs as a non-root user and OAuth2 is deliberately not containerized:
+authorizing opens a browser and listens on a loopback port, and neither
+survives a container boundary without more flags than it is worth. Authorize on
+the host and mount the credentials read-only.
+
 Also documented `cached` in the README and `llms.txt`, and removed a line in
 the README claiming parameter names are in Spanish. They stopped being Spanish
 in 0.3.0.

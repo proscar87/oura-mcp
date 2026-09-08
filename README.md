@@ -36,6 +36,16 @@ says so, so nothing can pass for your own sleep.
 
 Prefer the command line? `uvx --from mcp-oura oura-mcp`.
 
+Prefer no Python on your machine at all?
+
+```
+docker run -i --rm -e OURA_SANDBOX=1 ghcr.io/proscar87/oura-mcp
+```
+
+`-i` is not optional: an MCP server speaks over stdin and stdout, not over a
+port. Without it the container has no stdin, the handshake never arrives, and
+the client reports a server that doesn't show up.
+
 ---
 
 ## The problem, measured
