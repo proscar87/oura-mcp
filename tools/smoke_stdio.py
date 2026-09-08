@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 import sys
 
@@ -59,8 +60,18 @@ def main() -> int:
     for var in ("OURA_PAT", "OURA_PAT_FILE"):
         entorno.pop(var, None)
 
+    # THE COMMAND IS OVERRIDABLE so the container can be driven by this exact
+    # script rather than by a shell pipeline written a second time. The first
+    # version of the Docker job did write it a second time — a `printf | docker
+    # run` — and it passed once and failed once on the same code, because
+    # closing the pipe after the last line races the server's answer to it.
+    # This script does not race: it writes a request, then READS the reply
+    # before sending the next one, which is what a client does.
+    #
+    #   OURA_SMOKE_CMD='docker run -i --rm -e OURA_SANDBOX=1 oura-mcp:ci'
+    orden = os.environ.get("OURA_SMOKE_CMD")
     proc = subprocess.Popen(
-        [sys.executable, "-m", "oura_mcp"],
+        shlex.split(orden) if orden else [sys.executable, "-m", "oura_mcp"],
         stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
         text=True, env=entorno,
         cwd=os.path.join(os.path.dirname(__file__), ".."),
