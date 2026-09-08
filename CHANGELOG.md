@@ -80,6 +80,17 @@ Python on their machine at all — the one thing `Rajskij/oura-mcp` had that thi
 did not. `docker run -i --rm -e OURA_SANDBOX=1 ghcr.io/proscar87/oura-mcp` runs
 on sample data with no account.
 
+The check that proves it is `tools/smoke_stdio.py`, pointed at the container
+through the new `OURA_SMOKE_CMD`. The first version of that job was a
+`printf | docker run` pipeline, and it passed on one commit and failed on the
+next with nothing between them that could touch it: closing the pipe after the
+last line races the server's answer to it, so `tools/list` sometimes never came
+back. A flaky guard is worse than none, because the failure reads as a real
+one and the pass reads as proof. The script does not race — it writes a request
+and READS the reply before sending the next, which is what a client does — and
+it already checks more than the pipeline did. Writing the handshake a second
+time in shell was the mistake; there was a tested driver for it already.
+
 `-i` is load-bearing and the README says so: an MCP server speaks over stdin
 and stdout, not over a port, so without it the container has no stdin and the
 handshake never arrives. From the client that is indistinguishable from a

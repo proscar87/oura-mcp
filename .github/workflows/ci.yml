@@ -92,31 +92,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t oura-mcp:ci .
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
       - name: Does it actually answer over stdio?
-        run: |
-          salida=$(printf '%s\n' \
-            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' \
-            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
-            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
-            | docker run -i --rm -e OURA_SANDBOX=1 oura-mcp:ci)
-          echo "$salida"
-          # The three tools by name. Counting them would pass on three wrong
-          # ones, and this is the surface every client reads.
-          for t in oura_collections oura_query oura_check; do
-            echo "$salida" | grep -q "\"$t\"" || {
-              echo "::error::the container did not offer $t"
-              exit 1
-            }
-          done
-          # Nothing but JSON-RPC on stdout. A stray print breaks the channel and
-          # looks, from the client, exactly like a server that never started.
-          echo "$salida" | while IFS= read -r linea; do
-            [ -z "$linea" ] && continue
-            echo "$linea" | python3 -c 'import json,sys; json.loads(sys.stdin.read())' || {
-              echo "::error::the container wrote something that is not JSON-RPC: $linea"
-              exit 1
-            }
-          done
+        # DRIVEN BY tools/smoke_stdio.py, not by a shell pipeline. The first
+        # version of this step was `printf ... | docker run -i`, and it passed
+        # once and failed once on identical code: closing the pipe after the
+        # last line races the server's answer to it, so `tools/list` sometimes
+        # never came back. The script does not race — it writes a request and
+        # READS the reply before sending the next, which is what a client does
+        # — and it already checks more than the shell version did.
+        run: OURA_SMOKE_CMD='docker run -i --rm -e OURA_SANDBOX=1 oura-mcp:ci' python tools/smoke_stdio.py
 
   garita:
     name: Garita
