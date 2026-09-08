@@ -47,6 +47,34 @@ Nine mutants cover the cache across the two languages, and all nine are killed.
 one machine is a dead symlink — so the tool that checks whether the tests have
 teeth died before running one. `OURA_PYTHON` overrides it.
 
+**The README in Simplified Chinese, Korean and Spanish**, with a language line
+at the top of each. This is a hypothesis being tested, not a feature:
+`YuzeHao2023/MCP-oura` has 115 stars against the 38 of the project it is a
+straight copy of, and the only visible difference is that it ships its README
+in three languages. A second project moved on a Russian one. It costs no code
+and falsifies itself in a month — if the stars do not move, the hypothesis is
+dead and it cost a document. Each translation says plainly that it is
+machine-assisted and asks for corrections.
+
+Translating the README meant reading it closely, which found **two sentences in
+it that were false**, both in the places a stranger reads first:
+
+- **«There is no cache.»** In the privacy section — the section `SUBMISSION.md`
+  names as this project's privacy policy. True this morning and false by the
+  afternoon. It now states the actual guarantee, which is stronger and more
+  useful than the old absolute: nothing is written to disk, closed days are
+  held in memory only, and `--forget` clears them.
+- **«The code, its comments and the internal documents are in Spanish, and so
+  are the tool parameters.»** None of that had been true since 0.3.0 for the
+  parameters, or since earlier today for the rest. A reviewer would have read
+  it and then looked at an English repository.
+
+`SUBMISSION.md` now describes the cache too. A directory reviewer who later
+sees a `cached` key in a response should have met it in the submission first.
+
+README.md's language links are absolute rather than relative, because README.md
+ships to PyPI and PyPI does not rewrite relative markdown links.
+
 **A container image, on `ghcr.io`.** For people who would rather not have a
 Python on their machine at all — the one thing `Rajskij/oura-mcp` had that this
 did not. `docker run -i --rm -e OURA_SANDBOX=1 ghcr.io/proscar87/oura-mcp` runs

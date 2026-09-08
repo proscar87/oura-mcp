@@ -48,7 +48,11 @@ Authorization itself happens in the browser via MCP URL elicitation — no
 terminal.
 
 **Data handling:** no telemetry, no analytics, no third-party services. Health
-data is never written to disk. Credentials are stored locally at
+data is never written to disk. Answers for a day that has already closed are
+held in memory for the life of the process so the same question is not asked
+twice; today is never held, an empty answer is never held, every such response
+says `cached`, and `oura-mcp --forget` clears it. Credentials are stored
+locally at
 `~/.config/oura-mcp/credenciales.json` with `0600` permissions and can be erased
 with `oura-mcp --forget`.
 
