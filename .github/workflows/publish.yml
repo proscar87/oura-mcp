@@ -62,6 +62,78 @@ jobs:
           # flow that only works the first time isn't a flow.
           skip-existing: true
 
+  release:
+    name: GitHub release and the .mcpb
+    # THE ONE STEP THAT WASN'T HERE, and 0.3.4 nearly shipped without it. Push a
+    # tag and PyPI and the registry both moved on their own, while
+    # `releases/latest` stayed on the previous version — carrying the exact
+    # bundle the release existed to replace. The submission form, the README's
+    # install line and the desktop-extension listing all point at
+    # `releases/latest`, so for anyone who installs the flagship way, the
+    # release had not happened at all.
+    #
+    # It ran by hand for four releases and worked, which is what made it easy to
+    # miss: a manual step only fails on the day someone else runs the release,
+    # or the day the person who always did it is looking at something more
+    # interesting.
+    #
+    # Not gated on `pypi`: the bundle embeds its own compiled TypeScript and
+    # needs nothing from the index. Gated on `tests` for the same reason every
+    # other job is.
+    needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # to create the release and upload the asset
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ts/package-lock.json
+      - run: npm ci
+        working-directory: ts
+      # build-mcpb.sh packs the bundle AND then drives the packed artifact
+      # through a real handshake, a real tools/call and a resource read. A
+      # bundle that builds is not the same as a bundle that runs, and this is
+      # the last place that difference can still be caught for free.
+      - run: ./build-mcpb.sh
+        working-directory: ts
+      - name: Release notes from the CHANGELOG
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # The section for THIS version only, never the whole file. Stops at
+          # the next `## ` heading.
+          awk -v v="$version" '
+            $0 ~ "^## " v " " { found=1; next }
+            found && /^## / { exit }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          # An empty notes file means the CHANGELOG was not updated, and a
+          # release whose notes are blank is worse than one that fails here.
+          test -s notes.md || {
+            echo "::error::CHANGELOG.md has no section for $version"
+            exit 1
+          }
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # Idempotent, for the same reason `skip-existing` is on the PyPI step.
+        # v0.3.4's release was created by hand before this job existed, and a
+        # re-run of that tag must not fail here and take the rest down with it.
+        # If the release already exists the asset is uploaded with --clobber,
+        # so re-running always leaves the bundle matching the tag.
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "release $GITHUB_REF_NAME exists; refreshing the bundle"
+            gh release upload "$GITHUB_REF_NAME" oura-mcp.mcpb --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" \
+              --title "$GITHUB_REF_NAME" \
+              --notes-file notes.md \
+              oura-mcp.mcpb
+          fi
+
   registry:
     name: MCP registry
     # Depends on PyPI, and it has to: the registry checks that the EXACT version

@@ -61,12 +61,13 @@ jobs:
   mcpb:
     name: Bundle
     runs-on: ubuntu-latest
-    # NOTHING ELSE BUILDS THIS. `Publish` doesn't — the `.mcpb` is attached to
-    # each GitHub Release by hand — so a break here surfaced by hand, twice: a
-    # `pack` command that 404'd on every machine but the one that already had
-    # the tool installed, then a verification step that failed in total
-    # silence on the one input it existed to catch. This job is that other
-    # machine, run on every push instead of at release time.
+    # `Publish` builds the bundle too now, at tag time. This job is the one
+    # that runs on EVERY push, and that is the point: back when nothing else
+    # built it at all, two breaks surfaced by hand instead — a `pack` command
+    # that 404'd on every machine but the one that already had the tool
+    # installed, then a verification step that failed in total silence on the
+    # one input it existed to catch. This job is that other machine, and
+    # catching it here costs a push rather than a release.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
