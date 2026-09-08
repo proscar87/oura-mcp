@@ -4,6 +4,8 @@
 [![Glama score](https://glama.ai/mcp/servers/proscar87/oura-mcp/badges/score.svg)](https://glama.ai/mcp/servers/proscar87/oura-mcp)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+English | [简体中文](https://github.com/proscar87/oura-mcp/blob/main/README_zh_CN.md) | [한국어](https://github.com/proscar87/oura-mcp/blob/main/README_ko.md) | [Español](https://github.com/proscar87/oura-mcp/blob/main/README_es.md)
+
 <!-- The Glama badge is live, not a screenshot: it renders whatever that
      independent index scores this server at today. A badge that can only go up
      is decoration; one that can drop is evidence. -->
@@ -350,7 +352,7 @@ isn't one.
 | OAuth2 tokens | `~/.config/oura-mcp/credenciales.json`, mode `600` — or the system keychain if you have `keyring` |
 | Personal token | Wherever you put it: `OURA_PAT`, or the file `OURA_PAT_FILE` points to |
 
-No health data is written to disk. There is no cache.
+No health data is written to disk, and that is the constraint the cache was designed around rather than a claim made after the fact. Answers for a day that has already closed are held **in memory only**, for the life of the process, and `--forget` clears them. Nothing about your sleep survives the server exiting.
 
 **Who it is shared with.** No one. The only outbound connection is to
 `api.ouraring.com`, with your token, to fetch what you asked for. Oura's use of
@@ -369,10 +371,14 @@ in a type that won't print even in a stack trace.
 
 ## A note on language
 
-The code, its comments and the internal documents (`AGENTS.md`, `ROADMAP.md`,
-`CHANGELOG.md`) are in Spanish, and so are the tool parameters. This README and
-`llms.txt` are in English because they're what a stranger — or a directory
-reviewer — reads first.
+The repository is in English: the code, its comments, the tests, and the
+internal documents (`AGENTS.md`, `ROADMAP.md`, `CHANGELOG.md`).
+
+It was written in Spanish through 0.2.0. The tool parameters were renamed in
+0.3.0 — a breaking change, recorded as one in the CHANGELOG — and the prose
+followed. Anything still in Spanish is a storage key that cannot be renamed
+without orphaning credentials someone already saved, and there is a test
+saying so by name.
 
 ## License
 
