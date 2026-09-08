@@ -1,0 +1,20 @@
+# The image ships the package, not the repository. Everything here either
+# doesn't belong in a container or would invalidate the layer cache on a change
+# that cannot affect the build.
+.git
+.github
+.venv
+**/node_modules
+**/dist
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+*.egg-info
+*.mcpb
+ts
+tests
+tools
+ROADMAP.md
+CHANGELOG.md
+AGENTS.md
+SUBMISSION.md

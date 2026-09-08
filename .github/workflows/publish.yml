@@ -134,6 +134,51 @@ jobs:
               oura-mcp.mcpb
           fi
 
+  ghcr:
+    name: Container image
+    # Gated on `tests` and not on `pypi`: the image installs from the checkout,
+    # not from the index, so it needs nothing that PyPI has to serve first.
+    #
+    # `ghcr.io` and not Docker Hub, because the credential is the token GitHub
+    # already mints for this run. Docker Hub would mean a stored secret, and
+    # this workflow's whole shape is that there is not one.
+    needs: tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+      - name: Build, start it, and only then push
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          imagen="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/oura-mcp"
+          docker build --build-arg "VERSION=$version" \
+            -t "$imagen:$version" -t "$imagen:latest" .
+          # THE SAME CHECK CI RUNS ON EVERY PUSH, repeated here against the
+          # exact bytes about to be published. `docker build` returning 0 says
+          # the layers assembled, not that anything speaks stdio — and an image
+          # that cannot complete a handshake is worse than a missing one,
+          # because it looks installed.
+          salida=$(printf '%s\n' \
+            '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"publish","version":"1"}}}' \
+            '{"jsonrpc":"2.0","method":"notifications/initialized"}' \
+            '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' \
+            | docker run -i --rm -e OURA_SANDBOX=1 "$imagen:$version")
+          for t in oura_collections oura_query oura_check; do
+            echo "$salida" | grep -q "\"$t\"" || {
+              echo "::error::the image does not offer $t; not pushing it"
+              exit 1
+            }
+          done
+          docker push "$imagen:$version"
+          docker push "$imagen:latest"
+
   registry:
     name: MCP registry
     # Depends on PyPI, and it has to: the registry checks that the EXACT version
