@@ -2187,6 +2187,82 @@ Green locally, red in CI. It recurses now and a second test pins the 3.10 shape
 by hand — but the interpreter floor claimed another one, in the very test
 written to stop a divergence between two implementations.
 
+## Caching, taken outright, and the bug the other language found — 7 September 2026
+
+The 31 August scan said caching was «safe to take outright» on the closed-day
+rule. It was. What it did not say, because nobody had looked, is that the rule
+has a constraint that decides the design before performance does.
+
+### The constraint is a promise already made
+
+`SUBMISSION.md` states that health data is never written to disk, and the README
+says the same. `loganmurphy/oura-mcp-server`'s D1 cache is right for a Worker
+serving many people; here it would make two published claims false in exchange
+for a speed-up nobody has asked for, on a server whose entire argument is that
+its answers can be trusted about themselves. **In memory, dying with the
+process.** An MCP server is one process per session, so a session that asks
+about the same week four times pays for it once — which is the case that
+actually happens.
+
+### The rule needed no tuning, only refusals
+
+A day that has ended cannot gain records; today can. That is the whole policy,
+and it beats the tiered TTL not because it is faster but because there is no
+window in which it is wrong. What took thought was what to REFUSE:
+
+| refused | because |
+|---|---|
+| an empty answer | nothing tells «no data» from «the ring hadn't synced», and holding the second makes a temporary gap permanent |
+| a range reaching today | the ring syncs whenever it likes |
+| `latest` | asks about now; no range that can close |
+| a truncated or cycled answer | incomplete by its own admission |
+
+The first is the one the previous entry already required, and it is the only one
+that is not obvious. It is also the only one whose absence would produce a wrong
+answer that looks exactly like a right one.
+
+Every hit carries `cached`. Not politeness: a response that does not say how it
+was produced is the failure this whole package refuses, and «why was that
+instant?» must be answerable from the response. `rate_limited` is deliberately
+not replayed, because it describes a request that did not happen on a hit.
+
+### The other language found the bug
+
+Implemented in Python first, then TypeScript. The TypeScript suite failed on its
+first run for a reason that had nothing to do with TypeScript: `fields_split`
+records how the CALLER phrased the request, `asFields` normalizes `"day,score"`
+and `["day","score"]` to the same list, and the key did not distinguish them —
+so a caller who sent a proper list was told its list had been split from a
+string.
+
+**Python had the identical hole and no test that happened to make both calls.**
+It would have shipped. Writing the same thing twice is usually filed as a cost;
+this is the second time this month it has been the thing that caught the defect,
+after the parameter descriptions. Worth stating plainly: the two
+implementations are not redundancy, they are a differential, and the differential
+is finding bugs neither suite finds alone.
+
+### What it cost to believe it
+
+Nine mutants across the two languages, all killed. `tools/mutate.py` — the tool
+that exists precisely to answer «do these tests have teeth?» — was hard-coded to
+`.venv/bin/python`, a dead symlink on this machine, so it died before running a
+single mutant. A guard that cannot start is worse than no guard, because the
+absence of output reads like nothing to report.
+
+Four existing tests also began failing the moment the cache landed, each passing
+alone and failing in sequence. That is what shared state does, and the fix is a
+`conftest.py` clearing it between tests rather than each test remembering to.
+One test was left with an explicit `cache_clear()` and a comment, because it
+deliberately asks the same question twice with different data underneath —
+which is the one thing the cache declares impossible.
+
+### Still not done, and still first
+
+None of this unblocks anything. The desktop-extension form remains the only item
+that cannot be finished from here, and 0.3.5 will need cutting before it carries
+`cached` to anyone.
+
 ## Execution order — reprioritized 10 August 2026
 
 Rewritten after reading the WHOOP ecosystem and counting the field. The old

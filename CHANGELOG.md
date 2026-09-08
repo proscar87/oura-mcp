@@ -1,5 +1,56 @@
 # Changelog
 
+## 0.3.5 — unreleased
+
+**A closed day is now answered from memory, and the response says so.** Ask the
+same question twice about a range that ended before today and the second answer
+does not reach Oura at all. The rule is the calendar, not a clock: a day that
+has already ended cannot gain records, so it is held for the life of the
+process; today is never held, because the ring syncs whenever it likes. There
+is no expiry to tune and no window in which it can be wrong.
+
+**In memory, never on disk.** The submission to the desktop-extension directory
+and the README both state that health data is never written to disk, and a
+speed-up is not worth making either of them false. It dies with the process,
+and `--forget` clears it — reporting «forgotten» while someone's sleep sat in a
+dict would be an answer that is true about what it names and false about what
+was asked.
+
+Four things are never held, and each is a way a cached answer becomes a wrong
+answer that still looks right:
+
+- **An empty response.** Nothing distinguishes «there is no data for that day»
+  from «the ring had not synced when you asked», and holding the second forever
+  turns a temporary gap into a permanent one. This is the invariant that made
+  caching adoptable at all.
+- **A range reaching today or the future.**
+- **`latest`**, which asks about now and has no range that can close.
+- **A truncated or cycled response**, incomplete by its own admission.
+
+Every hit carries `cached`, for the same reason every sandbox response carries
+`synthetic`: «why was that instant?» has to be answerable from the response
+itself. `rate_limited` is deliberately NOT replayed on a hit — it describes the
+request that happened, and telling someone they are near a limit they never
+touched is the same class of false statement as a partial answer presented as
+whole.
+
+**The TypeScript suite caught a real bug on the first run after this landed.**
+`fields_split` is a note about how the CALLER phrased the request, and
+`asFields` normalizes `"day,score"` and `["day","score"]` to the same list — so
+without that distinction in the key, a caller who sent a proper list was told
+its list had been split from a string. Python had the identical hole and no
+test that happened to make both calls; it would have shipped. Both keys carry
+it now, and both suites pin it.
+
+Nine mutants cover the cache across the two languages, and all nine are killed.
+`tools/mutate.py` itself was hard-coded to `.venv/bin/python`, which on at least
+one machine is a dead symlink — so the tool that checks whether the tests have
+teeth died before running one. `OURA_PYTHON` overrides it.
+
+Also documented `cached` in the README and `llms.txt`, and removed a line in
+the README claiming parameter names are in Spanish. They stopped being Spanish
+in 0.3.0.
+
 ## 0.3.4 — 7 September 2026
 
 **The `.mcpb` described its own parameters in Spanish, and the three tests

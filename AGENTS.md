@@ -88,7 +88,7 @@ Two decisions an agent shouldn't make alone:
 
 ## What's already done
 
-Eight correctness fixes and full OAuth2. **124 tests, none touch the network.**
+Eight correctness fixes and full OAuth2. **279 tests, none touch the network.**
 The long version, with the measurements, is in `ROADMAP.md`. What you need to
 know to avoid breaking it:
 
@@ -201,9 +201,10 @@ README or a test: `personal_info` returns email, age, weight and height. The
 ## How it's tested
 
 ```
-python -m pytest -q          # 214 tests, none touch the network
-cd ts && npx vitest run      # 83 more, same rule
+python -m pytest -q          # 279 tests, none touch the network
+cd ts && npx vitest run      # 117 more, same rule
 python tools/mutate.py       # do those tests have TEETH?
+#   OURA_PYTHON=/path/to/python tools/mutate.py   if .venv/bin/python is dead
 ```
 
 **Run `tools/mutate.py` before you believe a green suite.** It breaks each core

@@ -83,9 +83,16 @@ def cli(argv: list[str] | None = None) -> int:
         return 0
 
     if "--forget" in args:
+        from .client import cache_clear
         from .credentials import credentials_path, forget
         path = credentials_path()
         forget()
+        # THE CACHE HOLDS HEALTH DATA, in memory, for the life of the process.
+        # `--forget` is what someone runs when they want this server to stop
+        # knowing things about them, and leaving their sleep in a dict while
+        # reporting «forgotten: true» would be exactly the kind of answer that
+        # is true about what it names and false about what was asked.
+        cache_clear()
         print(json.dumps({"forgotten": True, "file": path},
                          ensure_ascii=False, indent=2))
         return 0

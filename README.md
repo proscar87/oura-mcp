@@ -245,7 +245,7 @@ repeats a token, `ignored_fields`, `discarded_out_of_range`,
 `uneven_columns`, `empty` when a query comes back empty, and
 `large_response` when what's returned is heavy enough to matter.
 
-Three more say something happened that you'd otherwise never learn:
+Four more say something happened that you'd otherwise never learn:
 
 - **`synthetic`** — this is Oura's sample data, not yours. It rides on every
   response in sample mode, which is how the extension ships, so a model can't
@@ -258,6 +258,13 @@ Three more say something happened that you'd otherwise never learn:
   `["day","score"]` and was split. No Oura field name contains a comma, so
   splitting is unambiguous — but reinterpreting your input silently would be the
   same sin this whole package is about.
+- **`cached`** — the answer came from this session's memory instead of from
+  Oura. Only ever for a range that closed **before today**, because a day that
+  has ended cannot gain records; today is never held, since the ring syncs
+  whenever it likes. An empty answer is never held either — nothing tells "no
+  data" apart from "the ring hadn't synced yet", and freezing the second would
+  turn a temporary gap into a permanent one. It lives in memory and dies with
+  the process: **no health data is ever written to disk.**
 
 That last one comes from measuring: **30 days of `daily_activity` is 252,000
 characters**, and 87% of it is a single field, `met`, a per-minute MET series.
@@ -265,9 +272,10 @@ Asking for three columns with `fields` brings those same 30 days down to 5,000
 characters — **99% less**. The server doesn't trim on its own — that would be
 under-delivering — but it does say what's heavy and how to ask for less.
 
-*(Parameter names are in Spanish because the codebase is. They're stable, they're
-documented here, and the tool descriptions the model reads carry the same
-information.)*
+*(Parameter names are stable, documented here, and the tool descriptions the
+model reads carry the same information. They were Spanish through 0.2.0; the
+rename to English landed in 0.3.0 and is recorded in the CHANGELOG as a
+breaking change.)*
 
 ## What this server does NOT do
 

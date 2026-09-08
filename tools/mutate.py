@@ -30,6 +30,7 @@ you what to revert.
 
 from __future__ import annotations
 
+import os
 import pathlib
 import subprocess
 import sys
@@ -58,6 +59,19 @@ PYTHON = [
      [("    if in_sandbox():\n", "    if False:\n")]),
     ("report a recovered 429", "src/oura_mcp/client.py",
      [("    if waits:", "    if False:")]),
+    # THE CACHE'S REFUSALS. Each one is a way a held answer becomes a wrong
+    # answer that still looks right, which is the family this package is
+    # about — so each gets a mutant rather than a comment claiming it is safe.
+    ("never cache an empty response", "src/oura_mcp/client.py",
+     [('    if not out.get("n"):\n        return False\n', "")]),
+    ("never cache a range that includes today", "src/oura_mcp/client.py",
+     [("    return bool(end) and end[:10] < _today()",
+       "    return bool(end)")]),
+    ("never cache an incomplete response", "src/oura_mcp/client.py",
+     [('    return "truncated" not in out and "pagination_cycle" not in out',
+       "    return True")]),
+    ("say so on a cache hit", "src/oura_mcp/client.py",
+     [('        out["cached"] = CACHED\n', "")]),
     ("a 403 names the missing scope", "src/oura_mcp/client.py",
      [('            if "403" in str(e):', "            if False:")]),
     ("Secret is not printable", "src/oura_mcp/client.py",
@@ -90,6 +104,20 @@ TYPESCRIPT = [
     ("the ±2-day margin", "ts/src/client.ts",
      [('params.set("start_date", shiftDays(start, -EXTRA_DAYS));', 'params.set("start_date", start);')]),
     ("detect the nextToken cycle", "ts/src/client.ts", [("if (seen.has(nextToken))", "if (false)")]),
+    # The cache's refusals, mirrored from the Python list. Parity is the law
+    # here and it applies to what the tests can prove, not just to the code.
+    ("never cache an empty response", "ts/src/client.ts",
+     [("  if (!n) return false;\n", "")]),
+    ("never cache a range that includes today", "ts/src/client.ts",
+     [('  return !!end && end.slice(0, 10) < today();', "  return !!end;")]),
+    ("never cache an incomplete response", "ts/src/client.ts",
+     [('  return !("truncated" in out) && !("pagination_cycle" in out);',
+       "  return true;")]),
+    ("say so on a cache hit", "ts/src/client.ts",
+     [('    out["cached"] = CACHED;\n', "")]),
+    ("a split string is not a list", "ts/src/client.ts",
+     [("fields ?? null, wasString, latest, format,", "fields ?? null, latest, format,")]),
+
     ("reject latest where it does not apply", "ts/src/client.ts",
      [("WITH_LATEST.has(collection)", "true")]),
     ("warn about ignored fields", "ts/src/client.ts", [("if (ignored.length)", "if (false)")]),
@@ -137,7 +165,13 @@ TYPESCRIPT = [
      [("await rm(tmp, { force: true });", "")]),
 ]
 
-PY_CMD = [".venv/bin/python", "-m", "pytest", "-q", "-p", "no:cacheprovider"]
+# The interpreter, overridable. It was hard-coded to `.venv/bin/python`, which
+# on at least one machine is a dead symlink to a Homebrew Python that no longer
+# exists — so the tool that checks whether the tests have teeth died before
+# running one mutant, with a FileNotFoundError that says nothing about that.
+# `OURA_PYTHON=... python tools/mutate.py` now points it anywhere.
+PY_BIN = os.environ.get("OURA_PYTHON", ".venv/bin/python")
+PY_CMD = [PY_BIN, "-m", "pytest", "-q", "-p", "no:cacheprovider"]
 TS_CMD = ["npx", "vitest", "run"]
 
 
