@@ -45,13 +45,14 @@ The install name is `mcp-oura` because `oura-mcp` was already taken on PyPI by a
 git tag v0.2.1 && git push origin v0.2.1
 ```
 
-That runs the tests, publishes to PyPI and then to the registry. **There is no
-secret configured and there must not be**: both publications go through OIDC,
+That runs the tests, publishes to PyPI, then to the registry, and creates the
+GitHub Release with `oura-mcp.mcpb` attached. **There is no secret configured
+and there must not be**: both publications go through OIDC,
 with a single-use credential GitHub mints on the spot. PyPI's trusted publisher
 is already registered as `proscar87` / `oura-mcp` / `publicar.yml` / environment
 `pypi`.
 
-Four things that cost time and shouldn't be repeated:
+Five things that cost time and shouldn't be repeated:
 
 1. **The registry step must wait for PyPI.** It validates that the exact version
    exists there, and retries while the index propagates.
@@ -63,6 +64,14 @@ Four things that cost time and shouldn't be repeated:
    are fixed; there's a test for the length now.
 4. **Don't use `~/.pypirc`.** A malformed file made the parser dump a full token
    into a transcript.
+5. **The GitHub Release is part of the workflow now, and did not use to be.**
+   Through 0.3.3 the `.mcpb` was uploaded by hand, and 0.3.4 nearly shipped
+   with PyPI and the registry both current while `releases/latest` still served
+   the previous bundle — the exact artifact that release existed to replace.
+   `SUBMISSION.md`, the README install line and the directory listing all point
+   at `releases/latest`, so a release that skips it has not happened for anyone
+   installing the flagship way. The release job also refuses to run if
+   `CHANGELOG.md` has no section for the tag.
 
 ## What's blocking, and it's yours
 
@@ -108,7 +117,7 @@ know to avoid breaking it:
   --strict`), `smithery.yaml`, `glama.json`, `llms.txt`, and `uvx` documented —
   with the caveat that **`uvx` requires `uv`**, so `pip install` is the
   no-prerequisites path.
-- Done: the `.mcpb`, attached to releases v0.3.0 and v0.3.1, with a 512×512
+- Done: the `.mcpb`, attached to every release since v0.3.0, with a 512×512
   icon. `ts/build-mcpb.sh` packs it and then verifies the packed bundle by
   completing a handshake, issuing a real `tools/call`, and reading the
   `oura://collections` resource — a bundle that builds is not the same as a
