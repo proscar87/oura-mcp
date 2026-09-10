@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import pathlib
 import shlex
 import subprocess
 import sys
@@ -101,13 +102,23 @@ def main() -> int:
         r = c.pedir("tools/list")
         tools = (r.get("result") or {}).get("tools") or []
         nombres = sorted(h["name"] for h in tools)
-        # Counted against the declared list, not a literal. This line said
-        # `== 3` while a fourth tool was being added, and it is checked here
-        # against a REAL process — including the container — so a stale number
-        # would have failed the release for the wrong reason.
-        from oura_mcp.server import TOOLS_EXPUESTAS
-        check(f"there are exactly {len(TOOLS_EXPUESTAS)} tools",
-              sorted(nombres) == sorted(TOOLS_EXPUESTAS), ", ".join(nombres))
+        # Counted against the declared list, not a literal — this line said
+        # `== 3` while a fourth tool was being added.
+        #
+        # READ FROM THE MANIFEST, NOT IMPORTED. The first version imported
+        # `oura_mcp.server`, which broke the moment this script was pointed at
+        # a container: the package lives INSIDE the image, not on the runner,
+        # and requiring it locally defeats the reason `OURA_SMOKE_CMD` exists.
+        # The manifest is a plain file in every checkout, and
+        # `test_the_mcpb_declares_every_tool_the_server_has` already pins it
+        # equal to what the server registers — so this is a mirror with a
+        # guard on it, not a second source of truth.
+        manifiesto = json.loads(
+            (pathlib.Path(__file__).parent.parent / "ts" / "manifest.json")
+            .read_text(encoding="utf-8"))
+        esperadas = sorted(t["name"] for t in manifiesto["tools"])
+        check(f"there are exactly {len(esperadas)} tools",
+              sorted(nombres) == esperadas, ", ".join(nombres))
         check("every tool declares itself read-only",
                 all((h.get("annotations") or {}).get("readOnlyHint") for h in tools))
         check("every tool has a title",
