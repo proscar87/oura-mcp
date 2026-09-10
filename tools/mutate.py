@@ -70,6 +70,15 @@ PYTHON = [
     ("never cache an incomplete response", "src/oura_mcp/client.py",
      [('    return "truncated" not in out and "pagination_cycle" not in out',
        "    return True")]),
+    # `oura_today` is a COMPOSITION, and the only thing separating it from the
+    # analysis tools this project refuses to build is that it computes
+    # nothing. Both halves of that get a mutant.
+    ("oura_today refuses a window it cannot honour", "src/oura_mcp/server.py",
+     [("    if not 1 <= days <= 30:", "    if False:")]),
+    ("oura_today names what did not arrive", "src/oura_mcp/server.py",
+     [("    if missing:\n", "    if False:\n")]),
+    ("oura_today carries the warnings through", "src/oura_mcp/server.py",
+     [('            **{k: v for k, v in r.items()', "            **{k: v for k, v in {}.items()")]),
     ("say so on a cache hit", "src/oura_mcp/client.py",
      [('        out["cached"] = CACHED\n', "")]),
     ("a 403 names the missing scope", "src/oura_mcp/client.py",

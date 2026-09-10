@@ -13,6 +13,7 @@ import {
   OuraError, Secret, toCsv, inSandbox, sizeWarning, ignoredFields, shiftDays, dayOf,
   requestedWait, detailOf, fetchAll, cacheClear, CACHE_MAX, rangeHasClosed,
 } from "../src/client.js";
+import { today } from "../src/server.js";
 
 type Pagina = Record<string, unknown>[];
 
@@ -992,5 +993,78 @@ describe("the cache", () => {
     // Nothing throws and the oldest is gone; the count itself is module-private.
     expect(rangeHasClosed(AYER)).toBe(true);
     expect(rangeHasClosed(HOY)).toBe(false);
+  });
+});
+
+
+// ── oura_today ─────────────────────────────────────────────────────────────
+// Mirrors tests/test_today.py. The tests are mostly about what it must NOT do:
+// a 7-day delta — which is what the competing Go server returns — would make
+// three published statements false at once, in server.ts, llms.txt and the
+// directory submission.
+describe("oura_today", () => {
+  const dia = (atras: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() - atras);
+    const p = (n: number) => String(n).padStart(2, "0");
+    return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+  };
+  const AYER = dia(1);
+
+  it("reaches both collections in one call", async () => {
+    const urls: string[] = [];
+    fakeOura([[{ day: AYER, score: 71 }]], urls);
+    const r = await today(7);
+    expect(r["sleep"]).toBeDefined();
+    expect(r["readiness"]).toBeDefined();
+    expect(urls.length).toBe(2);
+  });
+
+  it("computes nothing, and says so", async () => {
+    // THE WHOLE REASON THIS TOOL IS ALLOWED TO EXIST.
+    fakeOura([[{ day: AYER, score: 71 }, { day: AYER, score: 60 }]]);
+    const r = await today(7);
+    const { computed, ...resto } = r;
+    const plano = JSON.stringify(resto).toLowerCase();
+    for (const prohibido of ["average", "mean", "delta", "trend", "baseline",
+                             "percent"]) {
+      expect(plano).not.toContain(prohibido);
+    }
+    expect(String(computed)).toContain("computed no average");
+  });
+
+  it("returns the records whole", async () => {
+    fakeOura([[{ day: AYER, score: 71, contributors: { deep_sleep: 88 } }]]);
+    const r = await today(7);
+    const sleep = r["sleep"] as Record<string, unknown>;
+    const registros = sleep["records"] as Record<string, unknown>[];
+    expect(registros[0]["contributors"]).toEqual({ deep_sleep: 88 });
+  });
+
+  it.each([0, -1, 31, 1000, 1.5])("refuses days=%s rather than clamping", async (d) => {
+    fakeOura([[{ day: AYER }]]);
+    const r = await today(d as number);
+    expect(r["error"]).toBeDefined();
+    expect(r["sleep"]).toBeUndefined();
+  });
+
+  it("names an empty day instead of dropping it", async () => {
+    // `n: 0` does not mean the person did not sleep. The ring syncs when it
+    // likes and the current day is the one most often missing.
+    fakeOura([[]]);
+    const r = await today(7);
+    expect(String(r["missing"])).toContain("sleep");
+    expect(String(r["missing"])).toContain("NOT");
+  });
+
+  it("carries the warnings through the wrapper", async () => {
+    // `synthetic` is the one that matters: a wrapper that drops it hands
+    // Oura's sample data to a model with nothing marking it.
+    process.env.OURA_SANDBOX = "1";
+    fakeOura([[{ day: AYER, score: 71 }]]);
+    const r = await today(7);
+    const sleep = r["sleep"] as Record<string, unknown>;
+    expect(sleep["synthetic"]).toBeDefined();
+    delete process.env.OURA_SANDBOX;
   });
 });

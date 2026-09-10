@@ -146,7 +146,15 @@ def _docs() -> dict[str, str]:
     it was in Spanish, and the straight quotes the English documents use.
     """
     docs = {}
-    for n in ("README.md", "AGENTS.md", "ROADMAP.md", "CHANGELOG.md", "llms.txt"):
+    # THE TRANSLATIONS ARE DOCUMENTS TOO. They were published on 7 September
+    # and this list did not learn about them, so for three days every coherence
+    # guard here — the tool count, the collection count, the quoted
+    # measurements, the retired response keys — was checking the English README
+    # and silently skipping three files saying the same things in three other
+    # languages. A guard that omits a file is the same failure as a marker list
+    # that omits a word, which this repository has now committed twice.
+    for n in ("README.md", "README_zh_CN.md", "README_ko.md", "README_es.md",
+              "AGENTS.md", "ROADMAP.md", "CHANGELOG.md", "llms.txt"):
         text = (ROOT / n).read_text(encoding="utf-8")
         text = re.sub(r"«[^»]*»", "«…»", text)
         # Bounded and across newlines: quotes in prose wrap, and a quote that
@@ -176,11 +184,46 @@ def test_no_document_repeats_the_phrase_that_stopped_being_true():
         assert "most complete one doesn't paginate" not in text, name
 
 
-def test_no_document_promises_four_tools():
-    """There are three, and there always have been."""
+# How many tools there are, spelled the way documents spell it. Derived, not
+# typed: the previous version of this guard was called
+# `test_no_document_promises_four_tools` and asserted the string "four tools"
+# appeared nowhere. It was right for a year and then a fourth tool was added,
+# at which point the guard was defending a number that had stopped being true —
+# and it would have passed while every document said three.
+_NUMERO = {1: ("one", "uno"), 2: ("two", "dos"), 3: ("three", "tres"),
+           4: ("four", "cuatro"), 5: ("five", "cinco")}
+
+
+def test_no_document_names_the_wrong_tool_count():
+    """The count lives in the code and the documents quote it.
+
+    A document naming a DIFFERENT number than the server actually exposes is
+    the same failure as a retired response key still being documented: it reads
+    as current and is not. Checked in both languages the documents use, and
+    against the real tool list rather than a literal, so adding a fifth tool
+    fails here instead of shipping four documents that disagree.
+
+    Historical files are exempt: `CHANGELOG.md` and `ROADMAP.md` record what
+    was true at the time on purpose, and rewriting them to match today would
+    destroy the only account of why the number changed.
+    """
+    from oura_mcp.server import TOOLS_EXPUESTAS
+
+    real = len(TOOLS_EXPUESTAS)
+    correcto = _NUMERO[real]
     for name, text in _docs().items():
-        assert "cuatro herramientas" not in text.lower(), name
-        assert "four tools" not in text.lower(), name
+        if name in ("CHANGELOG.md", "ROADMAP.md"):
+            continue
+        bajo = text.lower()
+        for n_mal, palabras in _NUMERO.items():
+            if n_mal == real:
+                continue
+            for palabra in palabras:
+                for sustantivo in ("tools", "herramientas"):
+                    frase = f"{palabra} {sustantivo}"
+                    assert frase not in bajo, (
+                        f"{name} says «{frase}» and there are {real} "
+                        f"({correcto[0]})")
 
 
 def test_the_collection_count_matches_everywhere():
@@ -195,9 +238,14 @@ def test_the_collection_count_matches_everywhere():
 def test_the_measurements_are_quoted_the_same_everywhere():
     """1,231 samples across 2 pages. It's a measured number; copied wrong into
     another file, the next person doesn't know which to believe."""
+    # The page count as each language writes it. Adding the translations to
+    # `_docs()` immediately failed here, which is the guard working: the number
+    # was right in all four files and only the WORD differed. A measurement
+    # guard that knows one language checks one file and waves the rest through.
+    PAGINAS = ("2 pages", "two-page", "2 páginas", "2 页", "2 페이지")
     for name, text in _docs().items():
         if "1,231" in text or "1231" in text:
-            assert any(x in text for x in ("2 pages", "two-page", "2 páginas")), \
+            assert any(x in text for x in PAGINAS), \
                 f"{name} cites the samples without the page count"
         # No document may carry the old estimate as though it were measured.
         assert "1,250 muestras en 2 páginas" not in text, name
@@ -235,13 +283,18 @@ def test_the_mcpb_manifest_matches_pyproject():
     assert _read_json("ts/package.json")["version"] == _declared_version()
 
 
-def test_the_mcpb_declares_the_three_tools():
+def test_the_mcpb_declares_every_tool_the_server_has():
     """The directory review syncs tools from the manifest. Declaring a tool the
     server doesn't expose — or missing one it does — is caught here rather than
-    by a reviewer."""
-    from oura_mcp.collections import COLLECTIONS  # noqa: F401  (import guard)
+    by a reviewer.
+
+    Compared against the server rather than a literal list. The literal was
+    right for three releases and then a fourth tool arrived, at which point
+    this test was pinning the manifest to a set that no longer described
+    anything."""
+    from oura_mcp.server import TOOLS_EXPUESTAS
     declared = {t["name"] for t in _read_json("ts/manifest.json")["tools"]}
-    assert declared == {"oura_collections", "oura_query", "oura_check"}
+    assert declared == set(TOOLS_EXPUESTAS)
 
 
 def test_the_mcpb_carries_a_privacy_policy_url():

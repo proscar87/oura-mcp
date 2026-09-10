@@ -1,6 +1,6 @@
 # oura-mcp
 
-> The Oura v2 API as an MCP server. All 19 collections, three tools, no
+> The Oura v2 API as an MCP server. All 19 collections, four tools, no
 > dependencies beyond the MCP SDK.
 
 It exists because Oura under-delivers without saying so, in four distinct ways,
@@ -26,7 +26,7 @@ correct response.
 - `oura_check` — self-check: auth mode, granted scopes, expiry. Returns
   neither the token nor any health value.
 
-All three are read-only. There is no POST, PUT or DELETE in the package.
+All four are read-only. There is no POST, PUT or DELETE in the package.
 Parameter names match Oura's own API: `collection`, `day`, `start`, `end`,
 `fields`, `latest`, `format`.
 

@@ -41,12 +41,13 @@ ROOT = pathlib.Path(__file__).parent.parent
 
 
 # ── The frozen surface ─────────────────────────────────────────────────────
-TOOLS = {"oura_collections", "oura_query", "oura_check"}
+TOOLS = {"oura_collections", "oura_query", "oura_check", "oura_today"}
 
 PARAMETERS = {
     "oura_collections": set(),
     "oura_check": set(),
     "oura_query": {"collection", "start", "end", "day", "fields", "latest", "format"},
+    "oura_today": {"days"},
 }
 
 # Everything `client.py` can put in a response.
@@ -63,6 +64,8 @@ RESPONSE_KEYS = {
 SERVER_KEYS = {
     "error", "next_step", "oura_responds", "profile_fields",
     "sample_fields", "unavailable_in_sandbox",
+    # oura_today
+    "today", "days", "computed", "sleep", "readiness", "missing", "records",
 }
 
 FLAGS = {"--help", "-h", "--check", "--authorize", "--forget", "--manual"}
@@ -92,7 +95,16 @@ def _literal_keys_in(path: str) -> set[str]:
 
 
 # ── The locks ──────────────────────────────────────────────────────────────
-def test_the_tools_are_exactly_these_three():
+def test_the_declared_list_matches_the_real_one():
+    """`TOOLS_EXPUESTAS` is what the documentation guard counts. If it drifts
+    from what the server actually registers, that guard starts defending a
+    number nobody exposes — which is the exact way its predecessor failed."""
+    from oura_mcp.server import TOOLS_EXPUESTAS
+    assert set(TOOLS_EXPUESTAS) == TOOLS
+    assert len(TOOLS_EXPUESTAS) == len(set(TOOLS_EXPUESTAS)), "a name is repeated"
+
+
+def test_the_tools_are_exactly_these_four():
     exposed = {n for n in dir(S) if n.startswith("oura_")}
     assert exposed == TOOLS
 
@@ -355,11 +367,20 @@ _TS_PARAM = re.compile(
     r'((?:"(?:[^"\\]|\\.)*"\s*\+?\s*)+)\)', re.M | re.S)
 
 
-def _typescript_parameter_descriptions() -> dict[str, str]:
-    """The same map, parsed out of the `inputSchema` block TypeScript declares."""
+def _typescript_parameter_descriptions(tool: str) -> dict[str, str]:
+    """The same map, parsed out of ONE tool's `inputSchema` block.
+
+    Scoped per tool rather than per file. The first version read the whole of
+    server.ts into a single map, which happened to work while `oura_query` was
+    the only tool with parameters and would have silently merged two tools'
+    schemas the moment a second one had a name in common.
+    """
     text = (ROOT / "ts" / "src" / "server.ts").read_text(encoding="utf-8")
+    inicio = text.index(f'srv.registerTool("{tool}"')
+    siguiente = text.find("srv.registerTool(", inicio + 1)
+    bloque = text[inicio:siguiente if siguiente != -1 else len(text)]
     out = {}
-    for m in _TS_PARAM.finditer(text):
+    for m in _TS_PARAM.finditer(bloque):
         trozos = re.findall(r'"((?:[^"\\]|\\.)*)"', m.group(2))
         out[m.group(1)] = "".join(trozos)
     return out
@@ -386,14 +407,18 @@ def test_both_implementations_describe_every_parameter_identically():
     prefer CSV — the ~37,000 records whose keys repeat — leaving the half that
     ships in the bundle unable to explain its own advice.
     """
-    esperado = _python_parameter_descriptions("oura_query")
-    obtenido = _typescript_parameter_descriptions()
-    assert set(esperado) == set(obtenido), "the two declare different parameters"
-    for nombre in sorted(esperado):
-        assert obtenido[nombre] == esperado[nombre], (
-            f"`{nombre}` is described differently:\n"
-            f"  python:     {esperado[nombre]}\n"
-            f"  typescript: {obtenido[nombre]}")
+    for tool in sorted(TOOLS):
+        esperado = _python_parameter_descriptions(tool)
+        obtenido = _typescript_parameter_descriptions(tool)
+        assert set(esperado) == set(obtenido), (
+            f"{tool} declares different parameters:\n"
+            f"  python:     {sorted(esperado)}\n"
+            f"  typescript: {sorted(obtenido)}")
+        for nombre in sorted(esperado):
+            assert obtenido[nombre] == esperado[nombre], (
+                f"{tool}.`{nombre}` is described differently:\n"
+                f"  python:     {esperado[nombre]}\n"
+                f"  typescript: {obtenido[nombre]}")
 
 
 def _returned_keys(path: str) -> set[str]:

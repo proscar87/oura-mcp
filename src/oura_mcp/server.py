@@ -1,6 +1,6 @@
-"""MCP server: three tools over Oura's 19 collections.
+"""MCP server: four tools over Oura's 19 collections.
 
-THREE, NOT NINETEEN. A server with one tool per collection forces the model to
+FOUR, NOT NINETEEN. A server with one tool per collection forces the model to
 choose among 19 similar names before knowing what any of them contain, and each
 one has to be documented separately. Here the collection is a parameter and the
 catalog is consulted when needed, not memorised.
@@ -27,9 +27,24 @@ from mcp.types import Icon, ToolAnnotations
 from pydantic import Field
 
 from .client import OuraError, fetch
+
+TOOLS_EXPUESTAS = ("oura_collections", "oura_query", "oura_today", "oura_check")
+"""The tool names, in the order they are declared.
+
+Exists so the documentation guard can count them instead of trusting a number
+typed into a test — the previous guard asserted the string "four tools"
+appeared nowhere, which was correct until it wasn't."""
+
+NOTHING_COMPUTED = (
+    "raw records only: this server computed no average, no delta and no trend. "
+    "Compare them yourself so the method travels with the number."
+)
+"""On every `oura_today` response. The tool exists to save round trips, not to
+draw conclusions, and a caller has to be able to tell those apart without
+reading the source."""
 from .collections import COLLECTIONS, WITH_DATE, describe, shape
 
-# ALL THREE ARE READ-ONLY, and that isn't a promise: there isn't a single write
+# ALL FOUR ARE READ-ONLY, and that isn't a promise: there isn't a single write
 # in the whole package — no POST, no PUT, no DELETE. Declaring it stops the
 # client asking for confirmation on every call, and Claude's connectors
 # directory requires it (`title` and `readOnlyHint` on every tool).
@@ -220,6 +235,77 @@ def oura_query(
         # Returned as data, not raised: an exception cuts the whole conversation
         # short over what is almost always a malformed date or an expired token.
         return {"error": str(e)}
+
+
+@server.tool(title="Last night and the days before it",
+               annotations=ToolAnnotations(title="Last night and the days before it",
+                                           **_SOLO_LECTURA))
+def oura_today(
+    days: Annotated[int, Field(
+        description="How many days of context, ending yesterday. 1-30.")] = 7,
+) -> dict:
+    """Last night's sleep and today's readiness, with the days before them.
+
+    ONE CALL INSTEAD OF FOUR, and that is the whole of it. «How did I sleep?»
+    is the most common question there is, and answering it well means today's
+    two records plus enough history to know whether they are unusual — which
+    was four round trips through `oura_query` and four chances to stop early.
+
+    IT COMPUTES NOTHING. No average, no delta, no «your HRV is up 12%». The
+    records come back raw and the comparison happens where the method can be
+    cited. That is not an omission: across nine years of real data, three out
+    of four changes between consecutive measurements fall inside the metric's
+    own normal swing, so a server that hands over a percentage without saying
+    how much the metric wanders on its own is manufacturing a signal.
+
+    `today` is very often empty and that is not an error: the ring syncs when
+    it feels like it, and the current day is the one most likely to be missing.
+    `missing` names whichever came back empty, so «no data yet» is never
+    mistaken for «nothing happened».
+    """
+    import datetime
+
+    if not 1 <= days <= 30:
+        # Refused rather than clamped. Clamping answers a question nobody
+        # asked and looks identical to having answered the one that was.
+        return {"error": f"`days` must be between 1 and 30; got {days}",
+                "next_step": "ask again with a value in that range"}
+
+    hoy = datetime.date.today()
+    desde = (hoy - datetime.timedelta(days=days)).isoformat()
+    hasta = hoy.isoformat()
+
+    out: dict = {"today": hasta, "days": days, "computed": NOTHING_COMPUTED}
+    missing = []
+    for nombre, clave in (("daily_sleep", "sleep"),
+                          ("daily_readiness", "readiness")):
+        try:
+            r = fetch(nombre, desde, hasta)
+        except OuraError as e:
+            # ONE COLLECTION FAILING MUST NOT LOSE THE OTHER. A 403 on
+            # readiness is no reason to withhold the sleep that arrived.
+            out[clave] = {"error": str(e)}
+            missing.append(clave)
+            continue
+        registros = r.get("data") or []
+        out[clave] = {
+            "n": len(registros),
+            "records": registros,
+            # Carried through rather than summarised: `truncated`, `empty`,
+            # `synthetic` and `cached` all change how an answer should be read,
+            # and a wrapper that drops them is a wrapper that lies by omission.
+            **{k: v for k, v in r.items()
+               if k in ("empty", "truncated", "pagination_cycle", "synthetic",
+                        "cached", "rate_limited", "large_response")},
+        }
+        if not registros:
+            missing.append(clave)
+    if missing:
+        out["missing"] = (
+            f"no records came back for: {', '.join(missing)}. The most common "
+            f"cause is that the ring has not synced yet, and the current day is "
+            f"the one most often absent. This is NOT «it did not happen».")
+    return out
 
 
 @server.tool(title="Self-check of the Oura connection",

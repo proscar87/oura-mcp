@@ -47,6 +47,49 @@ Nine mutants cover the cache across the two languages, and all nine are killed.
 one machine is a dead symlink — so the tool that checks whether the tests have
 teeth died before running one. `OURA_PYTHON` overrides it.
 
+**A fourth tool, `oura_today`, and it computes nothing.** «How did I sleep?»
+is the most common question there is, and answering it well needs last night's
+sleep, today's readiness, and enough of the days before them to know whether
+either is unusual. Through `oura_query` that was four round trips and four
+chances to stop early. This is one call.
+
+It spends the **three tools** figure, which was the one differentiator in this
+field with an editorial stance behind it, and that was a deliberate decision
+rather than a drift. What it does NOT spend is the stance itself. The competing
+Go server returns a delta against a 7-day average; this returns the seven days
+RAW. A delta would have made three published statements false at once — the
+module docstring, `llms.txt`, and the long description going into the
+directory submission — all of which say that an average computed inside the
+server arrives as a number without its method. Across nine years of real data,
+three out of four changes between consecutive measurements fall inside the
+metric's own normal swing, so a percentage without that context manufactures a
+signal rather than reporting one.
+
+Every response carries `computed`, saying out loud that no average, delta or
+trend was calculated, because a caller has to be able to tell a composition
+from an analysis without reading the source. `days` is 1 to 30 and an
+out-of-range value is REFUSED, not clamped: clamping answers a question nobody
+asked and the answer looks identical to one to the question that was asked.
+One collection failing does not lose the other — a 403 on readiness is no
+reason to withhold the sleep that arrived — and `empty`, `truncated`,
+`synthetic`, `cached` and the rest are carried through rather than summarised,
+because a wrapper that drops them lies by omission.
+
+**The tool count was hardcoded in nine places, and one of them was a test
+asserting the old number.** `test_no_document_promises_four_tools` was correct
+for a year and then defended a number that had stopped being true; it would
+have passed while every document said three. It is now
+`test_no_document_names_the_wrong_tool_count`, it derives the count from the
+server, it checks both languages, and it exempts only CHANGELOG.md and
+ROADMAP.md — which record what was true at the time on purpose. The same
+treatment went to the `.mcpb` manifest guard, the read-only guard, and the
+stdio smoke test, all of which compared against a literal `3`.
+
+The description-parity guard now runs per tool instead of per file. It read
+the whole of `server.ts` into one map, which worked only while `oura_query`
+was the only tool with parameters and would have silently merged two schemas
+the moment a second one shared a name.
+
 **The README in Simplified Chinese, Korean and Spanish**, with a language line
 at the top of each. This is a hypothesis being tested, not a feature:
 `YuzeHao2023/MCP-oura` has 115 stars against the 38 of the project it is a

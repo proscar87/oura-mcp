@@ -11,7 +11,7 @@
      puede subir es decoración; una que puede bajar es evidencia. -->
 
 La API v2 de [Oura](https://ouraring.com) como servidor
-[MCP](https://modelcontextprotocol.io). Las 19 colecciones, tres herramientas,
+[MCP](https://modelcontextprotocol.io). Las 19 colecciones, cuatro herramientas,
 ninguna dependencia más allá del SDK de MCP.
 
 ### Un día local de frecuencia cardiaca son 1,231 muestras repartidas en 2 páginas
@@ -233,15 +233,27 @@ más comunes al configurar un servidor MCP.
 |---|---|
 | `oura_collections` | Las 19, qué lleva cada una y qué parámetros acepta |
 | `oura_query` | Una colección entera sobre un rango, paginando hasta el final |
+| `oura_today` | El sueño de anoche y la preparación de hoy, con los días previos |
 | `oura_check` | Autodiagnóstico que no expone nada |
 
-**Tres, no diecinueve.** Un servidor con una herramienta por colección obliga al
+**Cuatro, no diecinueve.** Un servidor con una herramienta por colección obliga al
 modelo a elegir entre 19 nombres parecidos antes de saber qué contiene ninguno.
 Aquí la colección es un parámetro y el catálogo se consulta cuando hace falta.
 
-Las tres se declaran de solo lectura, y eso no es una promesa: no hay ningún
+Las cuatro se declaran de solo lectura, y eso no es una promesa: no hay ningún
 `POST`, `PUT` ni `DELETE` en todo el paquete, y hay un test que lee el código
 fuente para que siga siendo así.
+
+`oura_today` es la única que existe por comodidad y no por corrección:
+«¿qué tal dormí?» necesita los dos registros de hoy más suficiente historia para
+saber si son inusuales, lo que antes eran cuatro viajes de ida y vuelta y cuatro
+oportunidades de detenerse antes de tiempo. **No calcula nada**: ni promedios,
+ni diferencias, ni «tu HRV subió 12%». Los días vuelven en crudo y la
+comparación ocurre donde se puede citar el método. A lo largo de nueve años de
+datos reales, tres de cada cuatro cambios entre mediciones consecutivas caen
+dentro de la oscilación normal de la propia métrica, así que un porcentaje sin
+ese contexto fabrica una señal en vez de informar de una. Su único parámetro es
+`days`, de 1 a 30, con 7 por defecto.
 
 ### Parámetros de `oura_query`
 
