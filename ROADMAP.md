@@ -1954,6 +1954,9 @@ the user deploys) rather than as a service we run, which gets the
 no-terminal, works-on-mobile win without the multi-tenant exposure. The Docker
 image is cheap regardless of the other two.
 
+**DECIDED 10 September 2026: built, as `oura_today`, composing and not
+aggregating. See the entry above.** The original reasoning follows.
+
 `get_morning_context` is the one with a real trade rather than a checklist
 item: it would work by composing data the existing tools already return, so
 it costs no new analysis — but it does cost the **three tools** figure, the
@@ -2262,6 +2265,62 @@ which is the one thing the cache declares impossible.
 None of this unblocks anything. The desktop-extension form remains the only item
 that cannot be finished from here, and 0.3.5 will need cutting before it carries
 `cached` to anyone.
+
+## The three-tools figure, spent on purpose — 10 September 2026
+
+The 31 August scan named `get_morning_context` the one item with a real trade
+rather than a checklist entry, and closed by saying the decision «belongs with
+whoever owns that claim — not decided here». It has now been decided: build it.
+This entry records what was spent and what was explicitly not.
+
+### What it cost
+
+**The «three tools, not twelve» figure.** In a field of 104 repositories where
+everyone else sits at 8–12 tools, that number was the only differentiator with
+an editorial stance behind it rather than a feature list. It is now four, and
+four is a worse number than three for exactly the reason three was worth
+having.
+
+It also cost nine places where the count was hardcoded, including a test named
+`test_no_document_promises_four_tools` that asserted the opposite of what was
+about to become true. That guard was correct for a year and would have passed
+while every document said three — a guard defending a number rather than an
+invariant. The replacement derives the count from the server and fails on any
+document naming a different one, which is the version that survives the next
+change.
+
+### What it did not cost, and this was the whole design question
+
+**The stance the figure stood for.** `shimabukuromeg/oura-mcp-go` returns a
+delta against a 7-day average. This returns the seven days raw.
+
+That is not fussiness. Three published statements say that an average computed
+inside this server reaches the model as a number without its method: the
+module docstring, `llms.txt`, and the long description in `SUBMISSION.md` that
+is going into the directory form. A delta would have made all three false in
+the same commit, and the measurement behind them has not changed — across nine
+years of real data, **three out of four changes between consecutive
+measurements fall inside the metric's own normal oscillation.** A server
+handing over «your HRV is up 12%» without that context is manufacturing a
+signal.
+
+So the tool composes and does not aggregate. One call instead of four, which
+is the actual value the competitor demonstrated; the arithmetic stays where
+the method can be cited. Every response says `computed` out loud, because a
+caller must be able to tell a composition from an analysis without reading the
+source.
+
+### The distinction worth keeping
+
+A convenience tool is allowed here when it saves round trips and forbidden
+when it saves thinking. `oura_today` is on the right side of that line by
+construction rather than by promise, and there are three mutants and a test
+that scans the whole response for the words «average», «delta» and «trend»
+holding it there.
+
+If a fifth tool is ever proposed, the question is not «is four already too
+many» — that argument was lost today. It is whether the tool moves data or
+draws a conclusion.
 
 ## Execution order — reprioritized 10 August 2026
 

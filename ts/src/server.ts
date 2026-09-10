@@ -1,7 +1,7 @@
 /**
- * MCP server: three tools over Oura's 19 collections.
+ * MCP server: four tools over Oura's 19 collections.
  *
- * THREE, NOT NINETEEN. A server with one tool per collection forces the model
+ * FOUR, NOT NINETEEN. A server with one tool per collection forces the model
  * to choose among 19 similar names before knowing what any of them contain. Here
  * the collection is a parameter and the catalog is consulted when needed.
  *
@@ -39,7 +39,7 @@ export const VERSION: string = (() => {
 })();
 
 /**
- * ALL THREE ARE READ-ONLY, and that isn't a promise: there is no POST, PUT or
+ * ALL FOUR ARE READ-ONLY, and that isn't a promise: there is no POST, PUT or
  * DELETE anywhere in the package. Declaring it stops the client asking for
  * confirmation on every call, and Claude's connectors directory requires it.
  *
@@ -219,6 +219,28 @@ export function createServer(): McpServer {
     return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
   });
 
+  srv.registerTool("oura_today", {
+    title: "Last night and the days before it",
+    description:
+      "Last night's sleep and today's readiness, with the days before them. " +
+      "ONE CALL INSTEAD OF FOUR: \"how did I sleep?\" needs today's two " +
+      "records plus enough history to know whether they are unusual, which " +
+      "was four round trips and four chances to stop early. IT COMPUTES " +
+      "NOTHING — no average, no delta, no trend. The records come back raw " +
+      "and the comparison happens where the method can be cited. `today` is " +
+      "very often empty and that is not an error: the ring syncs when it " +
+      "feels like it, and `missing` names whatever did not arrive so \"no " +
+      "data yet\" is never read as \"nothing happened\".",
+    inputSchema: {
+      days: z.number().int().optional().describe(
+        "How many days of context, ending yesterday. 1-30."),
+    },
+    annotations: { title: "Last night and the days before it", ...READ_ONLY },
+  }, async (args) => {
+    const out = await today(args?.days ?? 7);
+    return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
+  });
+
   srv.registerTool("oura_check", {
     title: "Self-check of the Oura connection",
     description:
@@ -246,6 +268,75 @@ interface QueryArgs {
   fields?: string[] | string;
   latest?: boolean;
   format?: "json" | "csv";
+}
+
+export const NOTHING_COMPUTED =
+  "raw records only: this server computed no average, no delta and no trend. " +
+  "Compare them yourself so the method travels with the number.";
+
+/** The tool names, in the order they are declared. Mirrors TOOLS_EXPUESTAS. */
+export const TOOLS_EXPOSED = ["oura_collections", "oura_query", "oura_today",
+                              "oura_check"] as const;
+
+/**
+ * Last night's sleep and today's readiness, with the days before them.
+ *
+ * ONE CALL INSTEAD OF FOUR, and that is the whole of it. IT COMPUTES NOTHING:
+ * no average, no delta, no "your HRV is up 12%". The records come back raw and
+ * the comparison happens where the method can be cited — across nine years of
+ * real data, three out of four changes between consecutive measurements fall
+ * inside the metric's own normal swing, so a percentage without that context
+ * manufactures a signal rather than reporting one.
+ */
+export async function today(days = 7): Promise<Record<string, unknown>> {
+  if (!Number.isInteger(days) || days < 1 || days > 30) {
+    // Refused rather than clamped. Clamping answers a question nobody asked
+    // and the answer looks identical to one to the question that was asked.
+    return {
+      error: `\`days\` must be between 1 and 30; got ${days}`,
+      next_step: "ask again with a value in that range",
+    };
+  }
+  const d = new Date();
+  const p = (n: number) => String(n).padStart(2, "0");
+  const iso = (x: Date) => `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}`;
+  const desde = new Date(d);
+  desde.setDate(desde.getDate() - days);
+
+  const out: Record<string, unknown> = {
+    today: iso(d), days, computed: NOTHING_COMPUTED,
+  };
+  const missing: string[] = [];
+  const LLEVAR = ["empty", "truncated", "pagination_cycle", "synthetic",
+                  "cached", "rate_limited", "large_response"];
+
+  for (const [nombre, clave] of [["daily_sleep", "sleep"],
+                                 ["daily_readiness", "readiness"]] as const) {
+    let r: Record<string, unknown>;
+    try {
+      r = await fetchAll(nombre, { start: iso(desde), end: iso(d) });
+    } catch (e) {
+      // ONE COLLECTION FAILING MUST NOT LOSE THE OTHER. A 403 on readiness is
+      // no reason to withhold the sleep that arrived.
+      out[clave] = { error: (e as Error).message };
+      missing.push(clave);
+      continue;
+    }
+    const registros = (r["data"] as unknown[]) ?? [];
+    const bloque: Record<string, unknown> = { n: registros.length, records: registros };
+    // Carried through rather than summarised: each of these changes how the
+    // answer should be read, and a wrapper that drops them lies by omission.
+    for (const k of LLEVAR) if (k in r) bloque[k] = r[k];
+    out[clave] = bloque;
+    if (registros.length === 0) missing.push(clave);
+  }
+  if (missing.length) {
+    out["missing"] =
+      `no records came back for: ${missing.join(", ")}. The most common cause ` +
+      `is that the ring has not synced yet, and the current day is the one ` +
+      `most often absent. This is NOT «it did not happen».`;
+  }
+  return out;
 }
 
 export async function query(a: QueryArgs): Promise<Record<string, unknown>> {

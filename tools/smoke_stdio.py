@@ -101,10 +101,16 @@ def main() -> int:
         r = c.pedir("tools/list")
         tools = (r.get("result") or {}).get("tools") or []
         nombres = sorted(h["name"] for h in tools)
-        check("there are exactly three tools", len(tools) == 3, ", ".join(nombres))
-        check("all three declare themselves read-only",
+        # Counted against the declared list, not a literal. This line said
+        # `== 3` while a fourth tool was being added, and it is checked here
+        # against a REAL process — including the container — so a stale number
+        # would have failed the release for the wrong reason.
+        from oura_mcp.server import TOOLS_EXPUESTAS
+        check(f"there are exactly {len(TOOLS_EXPUESTAS)} tools",
+              sorted(nombres) == sorted(TOOLS_EXPUESTAS), ", ".join(nombres))
+        check("every tool declares itself read-only",
                 all((h.get("annotations") or {}).get("readOnlyHint") for h in tools))
-        check("all three have a title",
+        check("every tool has a title",
                 all(h.get("title") for h in tools))
 
         r = c.pedir("tools/call", {"name": "oura_check", "arguments": {}})

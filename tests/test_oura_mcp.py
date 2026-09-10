@@ -536,14 +536,17 @@ def test_day_and_a_range_together_is_an_error(monkeypatch):
 
 
 # ── Annotations: what the MCP client needs to know without asking ──────────
-def test_all_three_declare_themselves_read_only():
+def test_every_tool_declares_itself_read_only():
     """Not a promise: there is no POST, no PUT and no DELETE anywhere in the
     package. Declaring it saves the client from confirming on every call, and
     Claude's connectors directory requires it."""
     import asyncio
     from oura_mcp.server import server
     tools = asyncio.run(server.list_tools())
-    assert len(tools) == 3
+    # Counted against the frozen set rather than a literal, which is how this
+    # line came to say 3 while a fourth tool was being added.
+    from tests.test_public_surface import TOOLS as ESPERADAS
+    assert {t.name for t in tools} == ESPERADAS
     for t in tools:
         assert t.title, t.name
         assert t.annotations.read_only_hint is True, t.name

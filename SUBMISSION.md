@@ -14,7 +14,7 @@ asks for is below, ready to paste.
 
 **Short description**
 
-> The Oura Ring v2 API as an MCP server. All 19 collections, three tools, and it
+> The Oura Ring v2 API as an MCP server. All 19 collections, four tools, and it
 > paginates to the end so a partial answer never passes for a complete one.
 
 **Long description**
@@ -56,6 +56,9 @@ locally at
 `~/.config/oura-mcp/credenciales.json` with `0600` permissions and can be erased
 with `oura-mcp --forget`.
 
-**Tools:** `oura_collections`, `oura_query`, `oura_check` — all read-only.
+**Tools:** `oura_collections`, `oura_query`, `oura_today`, `oura_check` — all
+read-only. `oura_today` composes the other two: it returns last night's sleep
+and today's readiness with the days before them, RAW, and computes no average,
+no delta and no trend.
 
 **License:** MIT

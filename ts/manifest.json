@@ -51,6 +51,10 @@
       "description": "Fetches a complete Oura collection over a range, paginating to the end."
     },
     {
+      "name": "oura_today",
+      "description": "Last night's sleep and today's readiness with the days before them, raw. Computes no average, no delta and no trend."
+    },
+    {
       "name": "oura_check",
       "description": "Self-check: which credential is in use, which scopes were granted, and whether Oura responds. Returns neither the token nor any health value."
     }

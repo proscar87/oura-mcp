@@ -11,7 +11,7 @@ English | [简体中文](https://github.com/proscar87/oura-mcp/blob/main/README_
      is decoration; one that can drop is evidence. -->
 
 The [Oura](https://ouraring.com) v2 API as an [MCP](https://modelcontextprotocol.io)
-server. All 19 collections, three tools, no dependencies beyond the MCP SDK.
+server. All 19 collections, four tools, no dependencies beyond the MCP SDK.
 
 ### One local day of heart rate is 1,231 samples across 2 pages
 
@@ -230,15 +230,26 @@ mistakes when configuring an MCP server.
 |---|---|
 | `oura_collections` | All 19, what each one carries and which parameters it takes |
 | `oura_query` | One collection in full over a range, paginating to the end |
+| `oura_today` | Last night's sleep and today's readiness, with the days before them |
 | `oura_check` | Self-check that exposes nothing |
 
-**Three, not nineteen.** A server with one tool per collection forces the model
+**Four, not nineteen.** A server with one tool per collection forces the model
 to pick among 19 similar names before knowing what any of them contain. Here the
 collection is a parameter and the catalog is consulted when needed.
 
-All three declare themselves read-only, and that isn't a promise: there is no
+All four declare themselves read-only, and that isn't a promise: there is no
 `POST`, `PUT` or `DELETE` anywhere in the package, and a test reads the source to
 keep it that way.
+
+`oura_today` is the only one that exists for convenience rather than for
+correctness: "how did I sleep?" needs today's two records plus enough history
+to know whether they are unusual, which was four round trips and four chances
+to stop early. **It computes nothing** — no average, no delta, no "your HRV is
+up 12%". The days come back raw and the comparison happens where the method
+can be cited. Across nine years of real data, three out of four changes
+between consecutive measurements fall inside the metric's own normal swing, so
+a percentage without that context manufactures a signal rather than reporting
+one. Its one parameter is `days`, from 1 to 30, defaulting to 7.
 
 ### `oura_query` parameters
 
