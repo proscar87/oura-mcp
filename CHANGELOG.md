@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.5 — unreleased
+## 0.3.5 — 12 September 2026
 
 **A closed day is now answered from memory, and the response says so.** Ask the
 same question twice about a range that ended before today and the second answer
