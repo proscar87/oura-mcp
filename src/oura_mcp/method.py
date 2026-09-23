@@ -34,6 +34,11 @@ import math
 
 MIN_DAYS = 7
 MIN_HISTORY = 60
+# Consecutive-day pairs in the history. With the estimator normalized per pair,
+# the simulated false-alarm rate stays at about 5% with half the days missing
+# once there are 20; with none — worn every other day — there is nothing to
+# estimate the day-to-day dependence from, which is not «no dependence».
+MIN_PAIRS = 20
 HISTORY_DAYS = 120
 RHO_CEILING = 0.95
 
@@ -178,12 +183,17 @@ def lag1(days: list) -> float:
     den = 0.0
     for v in vals:
         den += (v - m) * (v - m)
+    pairs = consecutive_pairs(days)
     num = 0.0
-    for a, b in consecutive_pairs(days):
+    for a, b in pairs:
         num += (a - m) * (b - m)
-    if den == 0.0:
+    if den == 0.0 or not pairs:
         return 0.0
-    return min(max(num / den, 0.0), RHO_CEILING)
+    # EACH SUM OVER ITS OWN COUNT. The cross-products exist only where two
+    # consecutive days both have a value; the squares exist for every value.
+    # Dividing one sum by the other shrank ρ in proportion to the missing days
+    # — about half its size at 30% missing — and the false alarms crept back.
+    return min(max((num / len(pairs)) / (den / len(vals)), 0.0), RHO_CEILING)
 
 
 def _fixed(x: float, places: int) -> str:
@@ -232,6 +242,16 @@ def compare_series(a: list, b: list, history: list) -> dict:
             f"this tool exists not to invent.")
         return out
 
+    n_pairs = len(consecutive_pairs(history))
+    if n_pairs < MIN_PAIRS:
+        out["verdict"] = "cannot_tell"
+        out["reading"] = (
+            f"The history has too few consecutive days with a value — {n_pairs}, "
+            f"and at least {MIN_PAIRS} are needed — to measure how much one day "
+            f"depends on the day before. Treating that as «no dependence» would "
+            f"narrow the band and call noise a change.")
+        return out
+
     rho = lag1(history)
     va = [v for _, v in a]
     vb = [v for _, v in b]
@@ -272,8 +292,8 @@ def compare_series(a: list, b: list, history: list) -> dict:
         out["reading"] = (
             f"The difference ({_signed(diff)}) is inside what this metric does on "
             f"its own over periods this long (±{_num(band)}). It is not evidence of "
-            f"a change — and a real change smaller than {_num(band)} could not have "
-            f"been seen with these days either.")
+            f"a change — and with these days, a real change smaller than "
+            f"{_num(band)} would be missed more often than seen.")
     out["typical_daily_change"] = _r(_median(swings)) if swings else None
     out["method"] = {
         "autocorrelation": _r(rho),

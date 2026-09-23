@@ -14,8 +14,9 @@ worth fewer than seven independent observations, and a textbook standard error
 calls noise a change roughly a third of the time (measured: 34–38% at ρ=0.65).
 Estimating that autocorrelation from the two short periods themselves is biased
 low and still gave 11–21%. Estimated from the person's own preceding 120 days,
-with a t critical value, it stays at or under 5% at every autocorrelation
-tried. Those are the numbers the tests below hold it to.
+with a t critical value, it stays at about 5% (measured up to 5.7%) at every
+autocorrelation tried, gaps in the days included. Those are the numbers the
+tests below hold it to.
 
 None of it touches the network.
 """
@@ -108,13 +109,13 @@ def test_too_few_days_in_a_period_is_no_verdict():
 
 def test_every_verdict_says_what_it_could_not_have_seen():
     """«within noise» read as «no change» is the misreading that matters most.
-    The band is also the smallest difference these days could have told apart,
-    and the reading has to say so in words."""
+    With these days a real change smaller than the band is missed more often
+    than seen, and the reading has to say so in words."""
     rng = random.Random(3)
     s = _ar1(120 + 38, 0.6, rng)
     r = _run(s[:120], s[120:134], s[144:158], gap=0)
     assert r["verdict"] == "within_noise"
-    assert "could not" in r["reading"]
+    assert "missed more often than seen" in r["reading"]
     assert r["noise_band"] > 0
 
 
@@ -249,3 +250,67 @@ def test_a_metric_that_never_varies_has_no_band_to_measure():
     assert r["verdict"] == "cannot_tell"
     assert "did not vary" in r["reading"]
     assert "noise_band" not in r
+
+
+# ── Real rings have gaps ────────────────────────────────────────────────────
+def _gapped_false_positive_rate(rho, n, reps, seed, drop, history=120):
+    """The same null, with a fraction of days missing at random — charging
+    days, nights without the ring — from the history and both periods."""
+    rng = random.Random(seed)
+    hits = told = 0
+    for _ in range(reps):
+        s = _ar1(history + 2 * n + 10, rho, rng)
+        days = _days(BASE, s)
+        keep = [d for d in days if rng.random() >= drop]
+        h = [d for d in keep if d[0] < days[history][0]]
+        a = [d for d in keep if days[history][0] <= d[0] <= days[history + n - 1][0]]
+        b = [d for d in keep if d[0] >= days[history + n + 10][0]]
+        r = M.compare_series(a, b, h)
+        if r["verdict"] != "cannot_tell":
+            told += 1
+            hits += r["verdict"] == "outside_noise"
+    return hits / max(told, 1), told / reps
+
+
+@pytest.mark.parametrize("rho,n,drop", [(0.65, 14, 0.3), (0.65, 21, 0.3), (0.4, 14, 0.25)])
+def test_missing_days_do_not_bring_the_false_alarms_back(rho, n, drop):
+    """Every run above used gap-free histories. A lag-1 estimate that sums over
+    the pairs that survive but divides by every value shrinks toward zero as
+    days go missing — about half its true size at 30% missing — and the method
+    drifts back to the textbook's false-alarm rate without anything saying so."""
+    rate, answered = _gapped_false_positive_rate(rho, n, reps=1500,
+                                                 seed=int(rho * 100) + n, drop=drop)
+    assert answered > 0.5, f"answered only {answered:.0%}"
+    assert rate <= 0.07, f"{rate:.3f} false alarms with {drop:.0%} of days missing"
+
+
+def test_a_history_with_no_consecutive_days_is_no_verdict():
+    """Worn every other day: 60 values, zero pairs, nothing to estimate the
+    day-to-day dependence from. That is not «no dependence»."""
+    h = _days(BASE, [0.0] * 120)[::2]
+    rng = random.Random(9)
+    h = [(d, rng.gauss(0, 1)) for d, _ in h]
+    a = _days(BASE + 130, [rng.gauss(0, 1) for _ in range(14)])
+    b = _days(BASE + 150, [rng.gauss(0, 1) for _ in range(14)])
+    r = M.compare_series(a, b, h)
+    assert r["verdict"] == "cannot_tell"
+    assert "consecutive" in r["reading"]
+
+
+def test_a_weekly_pattern_with_uneven_weekday_mixes_is_not_called_a_change():
+    """Steps are higher on weekends for most people, and nothing stops someone
+    comparing ten days against ten days with a different number of Saturdays in
+    each. Measured before deciding whether to require whole weeks: the weekly
+    pattern widens each period's spread and makes the method MORE cautious
+    (0.2–3.8% false alarms across the cases tried), so no rule was added. This
+    keeps it that way."""
+    import datetime as dt
+    rng = random.Random(21)
+    hits = 0
+    for _ in range(1500):
+        s = _ar1(120 + 23, 0.4, rng)
+        vals = [v + (1.0 if dt.date.fromordinal(BASE + i).weekday() >= 5 else 0.0)
+                for i, v in enumerate(s)]
+        d = _days(BASE, vals)
+        hits += M.compare_series(d[120:130], d[133:143], d[:120])["verdict"] == "outside_noise"
+    assert hits / 1500 <= 0.07

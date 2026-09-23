@@ -170,6 +170,14 @@ def _compare_cases():
     # tie where Python and JavaScript disagree unless one copies the other.
     whole = [float(rng.randint(5000, 12000)) for _ in range(152)]
     cases.append((days(0, whole[:120]), days(120, whole[120:136]), days(136, whole[136:152])))
+    # Days missing at random — the ring on its charger — from every part.
+    s = ar1(170, 0.6)
+    gapped = [[d, v] for d, v in days(0, s) if rng.random() >= 0.3]
+    first_a, first_b = dt.date(2026, 1, 1).toordinal() + 120, dt.date(2026, 1, 1).toordinal() + 145
+    iso = lambda o: dt.date.fromordinal(o).isoformat()
+    cases.append(([x for x in gapped if x[0] < iso(first_a)],
+                  [x for x in gapped if iso(first_a) <= x[0] < iso(first_a + 21)],
+                  [x for x in gapped if iso(first_b) <= x[0]]))
     # A metric that never varies, as Oura's sandbox serves it.
     cases.append((days(0, [80.0] * 120), days(120, [80.0] * 14), days(134, [80.0] * 14)))
     # Not enough history, and not enough days: the two «cannot_tell» paths.

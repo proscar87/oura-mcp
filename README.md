@@ -291,8 +291,9 @@ day-to-day dependence. Then one of three verdicts:
 
 - `outside_noise` — the difference is larger than the band. The level differs;
   not why, and not that it will last.
-- `within_noise` — it isn't. **This is not "no change"**: the band is also the
-  smallest difference those days could have seen, and the response says so.
+- `within_noise` — it isn't. **This is not "no change"**: with those days, a
+  real change smaller than the band would be missed more often than seen, and
+  the response says so.
 - `cannot_tell` — fewer than 7 days with a value in a period, or fewer than 60
   days of history to measure the band from, or a metric that never varied —
   Oura's sample data is like that. No band is guessed.

@@ -343,8 +343,8 @@ def oura_compare(
     calls noise a change about a third of the time. This one measures how much
     the metric moves on its own from the person's preceding 120 days, and
     answers `within_noise`, `outside_noise`, or `cannot_tell` when it has too
-    little to know. `noise_band` is also the smallest difference those days
-    could have seen: «within noise» is not «no change».
+    little to know. «within noise» is not «no change»: with those days, a real
+    change smaller than `noise_band` is missed more often than seen.
 
     Today is left out — it is still accumulating. It says whether the level
     differs, never why.
