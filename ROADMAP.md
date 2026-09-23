@@ -2381,7 +2381,7 @@ The submission is a Google Form behind a sign-in, so it needs Oscar's account.
 Everything it asks for is written and ready; this is the only item on the
 roadmap that cannot be finished from here.
 
-### 4. `awesome-mcp-servers` and mcp.so · **filed, and neither landed**
+### 4. `awesome-mcp-servers` and mcp.so · **awesome merged 15 September; mcp.so silent**
 
 - `awesome-mcp-servers` (92k stars): PR
   [#11833](https://github.com/punkpeye/awesome-mcp-servers/pull/11833), filed
@@ -2402,7 +2402,9 @@ none of them this one. `Rajskij` was merged on 22 July, before the queue looked
 like this. The mcp.so issue has had no reply since 10 August.
 
 The maintainer did answer the PR on 7 September asking for the Glama server to
-be claimed, which Oscar did, so it is now waiting on a merge rather than on us.
+be claimed, which Oscar did, so it is now waiting on a merge rather than on us. **It merged on 15 September**,
+after a rebase: Health & Wellness had moved underneath it. mcp.so issue #3503
+is still open with no reply as of 22 September.
 But the lesson stands and it points at item 3: a channel whose throughput
 depends on someone draining three thousand items is not a channel, and marking
 it done on submission hid that for a month. The desktop-extension form is the
@@ -2446,3 +2448,56 @@ stars) is about using the hardware *without a subscription*. Oura doesn't
 paywall its API, so there is no equivalent lever here. The attention in this
 category is for escaping a fee; mistaking it for interest in MCP servers would
 send us building the wrong thing.
+
+---
+
+## Re-scan — 22 September 2026
+
+Prompted by asking plainly: does any competitor leave us out, is anyone using
+this, is there anything new, is anything broken?
+
+**Broken: yes, one, and it shipped as 0.3.6.** Oura began granting scopes as
+`extapi:daily` rather than `daily`, and both implementations compared them raw,
+so every empty day told OAuth users to re-authorize a scope they had. Found by
+reading a competitor's issue tracker (davidmosiah/oura-mcp#11), not by our
+drift check — which watches collections, not the token endpoint. That is the
+gap worth remembering: **the drift check covers the data surface and nothing of
+the auth surface.**
+
+**New in the API: almost nothing.** Spec 1.37 → 1.40 adds and removes no path,
+parameter or schema. The OAuth block renamed `spo2Daily` to `spo2` (the name
+already requested here) and added `heart_health`, which no collection in the
+spec is documented as needing. Not requested until one is — but if
+`daily_cardiovascular_age` or `vO2_max` ever answer 403 to an OAuth user, this
+is the first suspect: its name fits them, and nothing here has verified it.
+
+**Usage, measured:** 0 stars, 0 forks, 0 outside issues or PRs; 439 PyPI
+downloads in the last month (mirrors included), 17 unique visitors in 14 days,
+2 downloads of the 0.3.5 `.mcpb`. For scale, `@daveremy/oura-mcp` does ~11k a
+month on npm. Distribution, not code, is the constraint — which keeps item 3,
+the desktop-extension form, at the top.
+
+**The field since 9 August:**
+
+- Paginating to the end is now common (sumedhkhodke, gjlumsden, ktortti), so
+  it no longer differentiates on its own. Silent caps remain common too:
+  `Rajskij` stops at 5 pages with no flag, and `BrianVia` hands `next_token` to
+  the model. What is still ours alone is the combination — a loud `truncated`,
+  the inclusive `end_date` per collection, the `workout` UTC skew, `latest`
+  passed through, and no analysis server-side.
+- `benngermin/oura-mcp`, cited above as the resumable-cursor reference, is gone
+  (404).
+- No official Oura MCP server, and no official Oura connector in Claude or
+  ChatGPT.
+
+**What others ship that we don't, and the verdict on each:**
+
+| Feature | Who | Verdict |
+|---|---|---|
+| Remote HTTP, for ChatGPT and claude.ai web | Rajskij, sumedhkhodke, BrianVia, hosted paid services | **The one real reason to pick someone else.** Open decision: an optional self-hosted mode, never a hosted service of ours (Door B's reasoning still holds) |
+| Persistent local store / CSV export | FelixWag, ktortti | Maybe. Only under the caching rule: never stale in silence, and the README's «never written to disk» would have to change first |
+| Trends, correlations, period comparison | FelixWag, sumedhkhodke, ktortti | No — see *What is NOT on the roadmap* |
+| Webhooks | sumedhkhodke | No — breaks the local model |
+| User annotations (a write path) | FelixWag | No — this server reads Oura, it does not keep a second diary |
+| Refresh token shared across processes | ktortti | Already done here: the lock plus cross-process recovery |
+
