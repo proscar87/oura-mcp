@@ -2470,6 +2470,10 @@ already requested here) and added `heart_health`, which no collection in the
 spec is documented as needing. Not requested until one is — but if
 `daily_cardiovascular_age` or `vO2_max` ever answer 403 to an OAuth user, this
 is the first suspect: its name fits them, and nothing here has verified it.
+Same for `daily_stress`: another server says Oura's app form lists `stress` as
+its own permission, while `SCOPE_OF` maps it to `daily`. If that is true the
+cost is a missed diagnosis (an empty stress day stays silent about scopes),
+not a false one. Unverified.
 
 **Usage, measured:** 0 stars, 0 forks, 0 outside issues or PRs; 439 PyPI
 downloads in the last month (mirrors included), 17 unique visitors in 14 days,
