@@ -63,6 +63,24 @@ DEFAULT_REDIRECT = "http://localhost:9876/callback/"
 SCOPES = ("email", "personal", "daily", "heartrate", "workout", "tag",
             "session", "spo2")
 
+# Oura's spellings of those same scopes. Since around September 2026 the token
+# endpoint grants `extapi:daily`, not `daily`; and the spec before 1.40 called
+# `spo2` `spo2Daily`. Compared raw, a scope the user DID grant reads as missing,
+# and the only advice that follows — authorize again — cannot fix it.
+_SCOPE_ALIASES = {"spo2Daily": "spo2"}
+
+
+def normalize_scopes(scopes) -> tuple[str, ...]:
+    """The scopes as this server names them, whatever Oura called them."""
+    out = []
+    for a in scopes:
+        a = a.removeprefix("extapi:")
+        a = _SCOPE_ALIASES.get(a, a)
+        if a not in out:
+            out.append(a)
+    return tuple(out)
+
+
 # Margin before treating an access token as expired. One that expires in three
 # seconds is, practically speaking, already expired: the request launched with it
 # will arrive late.
@@ -102,6 +120,11 @@ class Credentials:
     refresh_token: Secret | None
     expires_at: float                    # epoch seconds
     scopes: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        # Here rather than where scopes are read, so that a grant, a file written
+        # by 0.3.5 and the keychain all arrive the same way.
+        self.scopes = normalize_scopes(self.scopes)
 
     def expired(self, margen: float = EXPIRY_MARGIN) -> bool:
         return time.time() + margen >= self.expires_at

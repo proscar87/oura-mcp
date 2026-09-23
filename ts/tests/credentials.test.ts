@@ -152,6 +152,25 @@ describe("refresh", () => {
     expect(nueva.scopes).toEqual(["daily", "heartrate"]);
   });
 
+  it("reads Oura's prefixed scopes as the scopes they name", async () => {
+    // Oura started granting `extapi:daily` instead of `daily` (reported on
+    // 1 Sep 2026, davidmosiah/oura-mcp#11), and the spec before 1.40 called
+    // `spo2` `spo2Daily`. Stored raw, a granted scope reads as missing, and
+    // re-authorizing — the only advice given — can never fix it.
+    fakeToken({ access_token: "A2", refresh_token: "R2", expires_in: 3600,
+                scope: "extapi:daily extapi:heartrate extapi:personal spo2Daily" });
+    const nueva = await refresh(cred("R1"), "id", "secret");
+    expect(nueva.scopes).toEqual(["daily", "heartrate", "personal", "spo2"]);
+  });
+
+  it("normalizes prefixed scopes already written to disk", async () => {
+    // 0.3.5 stored them raw for anyone who authorized after Oura's change.
+    await writeFile(process.env.OURA_CREDENTIALS!, JSON.stringify({
+      access: "A", refreshToken: "R", expira_en: Date.now() + 3_600_000,
+      scopes: ["extapi:daily", "extapi:workout"] }));
+    expect((await load())?.scopes).toEqual(["daily", "workout"]);
+  });
+
   it("does not give up if another process already refreshed", async () => {
     // Two clients sharing one credentials file is normal — the CLI and the
     // server. The loser of the race must not conclude the session is dead.
@@ -339,6 +358,24 @@ describe("an empty response and a throttled one", () => {
     const razones = JSON.stringify((r["empty"] as Record<string, unknown>)["what_we_know"]);
     expect(razones).toContain("`workout` scope");
     expect(razones).toContain("--authorize");
+  });
+
+  it("does not invent a missing scope from a prefixed grant", async () => {
+    const { fetchAll } = await import("../src/client.js");
+    delete process.env.OURA_PAT;
+    delete process.env.OURA_PAT_FILE;
+    delete process.env.OURA_SANDBOX;
+    await save(cred("R1", undefined, ["extapi:daily", "extapi:workout"]));
+
+    vi.stubGlobal("fetch", async () =>
+      new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    const r = await fetchAll("workout", { start: "2026-01-01", end: "2026-01-05" });
+    expect(JSON.stringify((r["empty"] as Record<string, unknown>)["what_we_know"]))
+      .not.toContain("scope");
+
+    const s = await fetchAll("session", { start: "2026-01-01", end: "2026-01-05" });
+    expect(JSON.stringify((s["empty"] as Record<string, unknown>)["what_we_know"]))
+      .toContain("`session` scope");
   });
 
   it("reports the throttled wait in seconds, not milliseconds", async () => {
