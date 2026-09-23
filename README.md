@@ -11,7 +11,7 @@ English | [简体中文](https://github.com/proscar87/oura-mcp/blob/main/README_
      is decoration; one that can drop is evidence. -->
 
 The [Oura](https://ouraring.com) v2 API as an [MCP](https://modelcontextprotocol.io)
-server. All 19 collections, five tools, no dependencies beyond the MCP SDK.
+server. All 19 collections, six tools, no dependencies beyond the MCP SDK.
 
 ### One local day of heart rate is 1,231 samples across 2 pages
 
@@ -254,13 +254,14 @@ Deployment, step by step, and exactly what has and has not been verified:
 | `oura_query` | One collection in full over a range, paginating to the end |
 | `oura_today` | Last night's sleep and today's readiness, with the days before them |
 | `oura_compare` | Whether two periods differ by more than the metric's own noise |
+| `oura_relate` | Whether two metrics' day-to-day changes move together beyond chance |
 | `oura_check` | Self-check that exposes nothing |
 
-**Five, not nineteen.** A server with one tool per collection forces the model
+**Six, not nineteen.** A server with one tool per collection forces the model
 to pick among 19 similar names before knowing what any of them contain. Here the
 collection is a parameter and the catalog is consulted when needed.
 
-All five declare themselves read-only, and that isn't a promise: there is no
+All six declare themselves read-only, and that isn't a promise: there is no
 `POST`, `PUT` or `DELETE` anywhere in the package, and a test reads the source to
 keep it that way.
 
@@ -305,6 +306,34 @@ holds it to that. Today is left out, because it is still accumulating. `sleep`
 uses each day's longest main sleep, and the response states that rule. Asking
 many comparisons and keeping the one that crosses finds a crossing by chance —
 the response says that too.
+
+### `oura_relate`: correlation, with the ways it lies taken out
+
+"Do hard training days lower my readiness the next morning?" Correlating two
+columns answers it wrongly in two familiar ways: two metrics that both rise on
+weekends correlate without touching each other, and so do two that both drift
+over months. Measured on unrelated simulated metrics, a plain correlation
+called them related **41–93% of the time** with a shared weekly rhythm, and 58%
+with a shared trend.
+
+`oura_relate` takes two metrics, `x` and `y`, a range `start`/`end`, and a
+`lag` in days (0–7). It removes each weekday's usual level from each metric,
+compares only **day-to-day changes** between consecutive days, corrects the
+number of pairs for autocorrelation, and returns the correlation with its 95%
+interval and the same three verdicts. Every null simulated — weekly rhythms,
+random walks, shared trends, 30% of days missing — stays at about 5% (measured
+up to 5.2%).
+
+- **Lag is yours to choose, once.** Oura files a night's sleep and the next
+  morning's readiness under the day you woke up, so activity on a day meets the
+  sleep that followed it at `lag=1`. `first_pair` shows which day met which, so
+  a wrong alignment is visible. Trying several lags is several tests, and
+  because the method works on changes, a real relation at one lag also shows
+  up, reversed, next to it — the response says both.
+- **It needs about three months.** Under 20 effective pairs it answers
+  `cannot_tell`, and with gaps in the days it needs longer.
+- **It measures co-movement, not cause and not direction.** Something else can
+  move both, and the response says so every time.
 
 ### `oura_query` parameters
 
@@ -357,8 +386,9 @@ breaking change.)*
 
 ## What this server does NOT do
 
-**It doesn't analyze beyond `oura_compare`.** No correlations, no trends, no
-anomaly detection — which is exactly where other servers place their value.
+**It doesn't analyze beyond `oura_compare` and `oura_relate`.** No trends, no
+anomaly detection, no advice — which is exactly where other servers place their
+value.
 
 The reason: an average computed in here reaches the model as a number without
 its method. Across nine years of real data, **three out of four changes between
@@ -366,11 +396,11 @@ two consecutive measurements fall within the metric's own normal oscillation**. 
 server that hands over "your HRV is up 12%" without saying how much that metric
 swings on its own isn't informing you: it's manufacturing a signal.
 
-`oura_compare` exists because it answers that objection instead of ignoring it:
-the band comes with the number. The rest doesn't have a method here yet that
-survives the same simulations, so it isn't here. Correlation is the next
-candidate, and it has more ways to mislead — shared weekly patterns, shared
-trends, and testing several lags until one crosses.
+`oura_compare` and `oura_relate` exist because they answer that objection
+instead of ignoring it: the band comes with the number. Trends don't have a
+method here yet that survives the same simulations — a slope over
+autocorrelated days is the easiest signal of all to manufacture — so they
+aren't here.
 
 Everything else, you get raw. The analysis belongs where the method can be cited — for
 instance with [cotejo](https://github.com/proscar87/cotejo), which draws exactly

@@ -194,7 +194,7 @@ is not sufficient on its own: it is itself a race.
 reached, not Oura's token. Accepting a token back would hand pagination to the
 model, which is the failure this package exists to prevent.
 
-**Five tools, not nineteen.** One per collection forces the model to choose
+**Six tools, not nineteen.** One per collection forces the model to choose
 among 19 similar names before knowing what any of them contain.
 
 **One calculation, and only with its method attached.** Through 0.3.x there was
@@ -205,8 +205,8 @@ without saying how much that metric swings on its own is manufacturing a signal.
 
 Oscar reversed the rule on 23 September 2026, with a condition: an analysis
 tool ships only if the method travels with the number and a simulation holds
-it to its error rate. `oura_compare` is the first to meet it. The rule for any
-next one, correlation included:
+it to its error rate. `oura_compare` was the first to meet it and `oura_relate`
+the second. The rule for any next one — trends are the obvious candidate:
 
 - It returns the noise band with the difference and defaults to «within noise».
 - It says `cannot_tell` instead of guessing when there are too few days.
@@ -214,7 +214,7 @@ next one, correlation included:
   noise, and mutating each part of the method fails a test.
 - Python and TypeScript agree to the last printed digit (`test_parity.py`).
 
-No trends, no anomaly detection, no advice. Analysis that needs more than this
+No trends yet, no anomaly detection, no advice. Analysis that needs more than this
 still belongs where the method can be cited — see
 [cotejo](https://github.com/proscar87/cotejo).
 
