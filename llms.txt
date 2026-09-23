@@ -27,8 +27,8 @@ correct response.
 - `oura_compare` — whether two periods of one metric (`collection.field`)
   differ by more than that metric's own noise, measured from the person's
   preceding 120 days. Returns `verdict` (`outside_noise`, `within_noise`,
-  `cannot_tell`) with `noise_band`. `within_noise` is NOT «no change»: the band
-  is also the smallest difference those days could show. Report both.
+  `cannot_tell`) with `noise_band`. `within_noise` is NOT «no change»: a real
+  change smaller than the band would be missed more often than seen. Report both.
 - `oura_check` — self-check: auth mode, granted scopes, expiry. Returns
   neither the token nor any health value.
 

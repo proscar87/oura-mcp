@@ -10,6 +10,7 @@
 
 export const MIN_DAYS = 7;
 export const MIN_HISTORY = 60;
+export const MIN_PAIRS = 20;       // see method.py
 export const HISTORY_DAYS = 120;
 const RHO_CEILING = 0.95;
 
@@ -140,10 +141,12 @@ export function lag1(days: Day[]): number {
   const m = mean(vals);
   let den = 0.0;
   for (const v of vals) den += (v - m) * (v - m);
+  const pairs = consecutivePairs(days);
   let num = 0.0;
-  for (const [a, b] of consecutivePairs(days)) num += (a - m) * (b - m);
-  if (den === 0.0) return 0.0;
-  return Math.min(Math.max(num / den, 0.0), RHO_CEILING);
+  for (const [a, b] of pairs) num += (a - m) * (b - m);
+  if (den === 0.0 || !pairs.length) return 0.0;
+  // Each sum over its own count: see method.py.
+  return Math.min(Math.max((num / pairs.length) / (den / vals.length), 0.0), RHO_CEILING);
 }
 
 const r = (x: number, places = 3) => Number(x.toFixed(places));
@@ -181,6 +184,17 @@ export function compareSeries(a: Day[], b: Day[], history: Day[]): Record<string
       `${MIN_HISTORY} with a value; there are ${history.length}. Without it any ` +
       `band would be a guess, and a guessed band is exactly the signal ` +
       `this tool exists not to invent.`;
+    return out;
+  }
+
+  const nPairs = consecutivePairs(history).length;
+  if (nPairs < MIN_PAIRS) {
+    out["verdict"] = "cannot_tell";
+    out["reading"] =
+      `The history has too few consecutive days with a value — ${nPairs}, ` +
+      `and at least ${MIN_PAIRS} are needed — to measure how much one day ` +
+      `depends on the day before. Treating that as «no dependence» would ` +
+      `narrow the band and call noise a change.`;
     return out;
   }
 
@@ -223,8 +237,8 @@ export function compareSeries(a: Day[], b: Day[], history: Day[]): Record<string
     out["reading"] =
       `The difference (${signed(diff)}) is inside what this metric does on ` +
       `its own over periods this long (±${num(band)}). It is not evidence of ` +
-      `a change — and a real change smaller than ${num(band)} could not have ` +
-      `been seen with these days either.`;
+      `a change — and with these days, a real change smaller than ` +
+      `${num(band)} would be missed more often than seen.`;
   }
   out["typical_daily_change"] = swings.length ? r(median(swings)) : null;
   out["method"] = {

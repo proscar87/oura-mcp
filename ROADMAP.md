@@ -2561,12 +2561,20 @@ whatever comes next.
 | Textbook: independent days | 34–38% |
 | Autocorrelation from the two periods, t | 11–21% |
 | …with Kendall's bias correction | 7–14% |
-| **Autocorrelation from the person's preceding 120 days, t** | **≤ 5%** |
+| **Autocorrelation from the person's preceding 120 days, t** | **about 5%** (measured up to 5.7%) |
 
 With too little history (under 60 days) or too few days in a period (under 7)
 it answers `cannot_tell` rather than guess. Its power is low when the metric is
 strongly autocorrelated and the periods are short — which is why every answer
-states the band as the smallest difference those days could have seen.
+says a real change smaller than the band would be missed more often than seen.
+
+**Found after the first push, by review:** real rings have gaps, and the lag-1
+estimate summed over the pairs that survived but divided by every value, so ρ
+shrank with the missing days and false alarms crept back (8.7% at 30% missing).
+Each sum is now over its own count, the history needs 20 consecutive pairs,
+and a simulated null with 25–30% of days missing holds it. A weekly pattern
+with uneven weekday mixes turned out to make the method more cautious, not
+less (0.2–3.8%), so it got a guard test rather than a rule.
 
 **One parity trap found before it shipped:** Python rounds ties to even and
 JavaScript's `toFixed` away from zero, so the mean of sixteen whole numbers

@@ -298,8 +298,9 @@ dependencia de un día al siguiente. Luego, uno de tres veredictos:
 
 - `outside_noise`: la diferencia es mayor que la banda. El nivel es distinto;
   no por qué, ni que vaya a durar.
-- `within_noise`: no lo es. **Esto no es «no hubo cambio»**: la banda también es
-  la diferencia más chica que esos días podían detectar, y la respuesta lo dice.
+- `within_noise`: no lo es. **Esto no es «no hubo cambio»**: con esos días, un
+  cambio real más chico que la banda se perdería más veces de las que se vería,
+  y la respuesta lo dice.
 - `cannot_tell`: menos de 7 días con valor en un periodo, o menos de 60 días de
   historia para medir la banda, o una métrica que nunca varió (como pasa con los
   datos de muestra de Oura). No se adivina ninguna banda.
