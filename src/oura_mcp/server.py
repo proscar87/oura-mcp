@@ -1,19 +1,23 @@
-"""MCP server: four tools over Oura's 19 collections.
+"""MCP server: five tools over Oura's 19 collections.
 
-FOUR, NOT NINETEEN. A server with one tool per collection forces the model to
+FIVE, NOT NINETEEN. A server with one tool per collection forces the model to
 choose among 19 similar names before knowing what any of them contain, and each
 one has to be documented separately. Here the collection is a parameter and the
 catalog is consulted when needed, not memorised.
 
-THERE ARE NO ANALYSIS TOOLS. No correlations, no anomaly detection, no period
-comparison — which is where other servers place their value.
+ONE ANALYSIS TOOL, AND THE CONDITION IT EXISTS UNDER. Through 0.3.x there were
+none, for a reason that still holds: an average computed in here reaches the
+model as a number without its method. Across nine years of real data, **three
+out of four changes between two consecutive measurements fall within the
+metric's own normal oscillation**, so "your HRV is up 12%" without saying how
+much that metric swings on its own isn't informing: it's manufacturing a signal.
 
-The reason: an average computed in here reaches the model as a number without
-its method. Across nine years of real data, **three out of four changes between
-two consecutive measurements fall within the metric's own normal oscillation**. A
-server that hands over "your HRV is up 12%" without saying how much that metric
-swings on its own isn't informing: it's manufacturing a signal. Here the data is
-handed over; the analysis belongs where the method can be cited.
+`oura_compare` is the answer to that objection rather than an exception to it:
+it returns the band the metric moves in on its own — measured from the person's
+history, corrected for autocorrelation — with the difference, and reads «within
+noise» by default. The method, and the simulations that chose it, are in
+`method.py` and `tests/test_compare.py`. No trends, no correlations, no anomaly
+detection: none of those has a method here yet that survives the same test.
 """
 
 from __future__ import annotations
@@ -26,9 +30,10 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import Icon, ToolAnnotations
 from pydantic import Field
 
-from .client import OuraError, _today, fetch
+from .client import OuraError, _shift_days, _today, fetch
 
-TOOLS_EXPUESTAS = ("oura_collections", "oura_query", "oura_today", "oura_check")
+TOOLS_EXPUESTAS = ("oura_collections", "oura_query", "oura_today", "oura_compare",
+                   "oura_check")
 """The tool names, in the order they are declared.
 
 Exists so the documentation guard can count them instead of trusting a number
@@ -36,7 +41,7 @@ typed into a test — the previous guard asserted the string "four tools"
 appeared nowhere, which was correct until it wasn't."""
 
 NOTHING_COMPUTED = (
-    "raw records only: this server computed no average, no delta and no trend. "
+    "raw records only: this call computed no average, no delta and no trend. "
     "Compare them yourself so the method travels with the number."
 )
 """On every `oura_today` response. The tool exists to save round trips, not to
@@ -44,7 +49,7 @@ draw conclusions, and a caller has to be able to tell those apart without
 reading the source."""
 from .collections import COLLECTIONS, WITH_DATE, describe, shape
 
-# ALL FOUR ARE READ-ONLY, and that isn't a promise: there isn't a single write
+# ALL FIVE ARE READ-ONLY, and that isn't a promise: there isn't a single write
 # in the whole package — no POST, no PUT, no DELETE. Declaring it stops the
 # client asking for confirmation on every call, and Claude's connectors
 # directory requires it (`title` and `readOnlyHint` on every tool).
@@ -137,8 +142,13 @@ server = MCPServer(
         "250,000 characters, and 92% of it is a single field. If the response "
         "carries `large_response`, ask again with `fields` limited to what you "
         "need.\n\n"
-        "This server deliberately computes no averages and no trends: it hands "
-        "over the data so the analysis happens where the method can be cited."
+        "It computes exactly one thing, and only when asked: `oura_compare` "
+        "tests whether two periods differ by more than the metric's own noise, "
+        "measured from the person's history, and returns that band with the "
+        "verdict. Report the band and the verdict together, and read "
+        "`within_noise` as «not evidence of a change», never as «no change». "
+        "Everything else is raw data; no other average, delta or trend comes "
+        "from here."
     ),
 )
 
@@ -308,6 +318,103 @@ def oura_today(
             f"no records came back for: {', '.join(missing)}. The most common "
             f"cause is that the ring has not synced yet, and the current day is "
             f"the one most often absent. This is NOT «it did not happen».")
+    return out
+
+
+@server.tool(title="Compare two periods against the noise",
+               annotations=ToolAnnotations(title="Compare two periods against the noise",
+                                           **_SOLO_LECTURA))
+def oura_compare(
+    metric: Annotated[str, Field(
+        description="`collection.field`, e.g. `daily_readiness.score`, "
+                    "`sleep.average_hrv`, `daily_activity.steps`, "
+                    "`daily_readiness.contributors.hrv_balance`. Daily "
+                    "collections and `sleep` only.")],
+    a_start: Annotated[str, Field(description="First period, YYYY-MM-DD")],
+    a_end: Annotated[str, Field(description="First period, YYYY-MM-DD, inclusive")],
+    b_start: Annotated[str, Field(description="Second period, YYYY-MM-DD")],
+    b_end: Annotated[str, Field(description="Second period, YYYY-MM-DD, inclusive")],
+) -> dict:
+    """Is the difference between two periods larger than this metric's own noise?
+
+    THE ONE CALCULATION THIS SERVER MAKES, and it comes with its method. «Your
+    HRV is up 12%» is a number without one: daily metrics swing on their own,
+    and a good night tends to follow a good night, so a textbook comparison
+    calls noise a change about a third of the time. This one measures how much
+    the metric moves on its own from the person's preceding 120 days, and
+    answers `within_noise`, `outside_noise`, or `cannot_tell` when it has too
+    little to know. `noise_band` is also the smallest difference those days
+    could have seen: «within noise» is not «no change».
+
+    Today is left out — it is still accumulating. It says whether the level
+    differs, never why.
+    """
+    import datetime
+
+    from . import method as M
+
+    problem = M.check_metric(metric)
+    if problem:
+        return {"error": problem}
+    collection, field = metric.split(".", 1)
+    try:
+        for d in (a_start, a_end, b_start, b_end):
+            _shift_days(d, 0)
+        hoy = _today()
+    except OuraError as e:
+        return {"error": str(e)}
+    if a_start > a_end or b_start > b_end:
+        return {"error": "a period runs backwards: its start is after its end"}
+    if not (a_end < b_start or b_end < a_start):
+        return {"error": "the periods overlap; a day cannot be evidence for both"}
+
+    excluded: dict = {}
+    ayer = _shift_days(hoy, -1)
+    if a_end >= hoy or b_end >= hoy:
+        excluded["today"] = ("left out: today is still accumulating, and a "
+                             "partial day would pull its period down")
+        a_end, b_end = min(a_end, ayer), min(b_end, ayer)
+    if a_start > a_end or b_start > b_end:
+        return {"error": "a period has no closed day in it: it starts today or later"}
+
+    first = min(a_start, b_start)
+    h_start = _shift_days(first, -M.HISTORY_DAYS)
+    last = max(a_end, b_end)
+    top = field.split(".", 1)[0]
+    fields = [top, "type", "total_sleep_duration"] if collection == "sleep" else [top]
+    try:
+        r = fetch(collection, h_start, last, fields=fields)
+    except OuraError as e:
+        return {"error": str(e)}
+    if "truncated" in r or "pagination_cycle" in r:
+        return {"error": "Oura's answer came back incomplete, and a band computed "
+                         "on part of the days would be a band about other days. "
+                         "Try a shorter range."}
+
+    s = M.series(r.get("data") or [], collection, field)
+    if s["non_numeric"]:
+        return {"error": f"`{field}` is not a number in `{collection}`; "
+                         f"only numeric fields can be compared"}
+    vals = s["values"]
+    history = [x for x in vals if x[0] < first]
+    pa = [x for x in vals if a_start <= x[0] <= a_end]
+    pb = [x for x in vals if b_start <= x[0] <= b_end]
+
+    out = M.compare_series(pa, pb, history)
+    out["metric"] = metric
+    out["period_a"].update(start=a_start, end=a_end)
+    out["period_b"].update(start=b_start, end=b_end)
+    if s["missing_values"]:
+        excluded["missing_values"] = s["missing_values"]
+    if s.get("without_main_sleep"):
+        excluded["days_without_main_sleep"] = s["without_main_sleep"]
+    if collection == "sleep":
+        out["main_sleep_rule"] = M.MAIN_SLEEP_RULE
+    if excluded:
+        out["excluded"] = excluded
+    for k in ("synthetic", "cached", "rate_limited"):
+        if k in r:
+            out[k] = r[k]
     return out
 
 

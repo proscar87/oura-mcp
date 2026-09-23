@@ -117,7 +117,7 @@ delete` removes the Worker and what it stored.
 
 **Verified**, in CI on every push, against the real runtime (`wrangler dev`) and
 the real OAuth library: app registration, the consent page and three forged
-approvals, token exchange, and the MCP endpoint with all four tools, in sandbox
+approvals, token exchange, and the MCP endpoint with every tool, in sandbox
 mode. The Oura login, the owner check and token refresh are tested against a
 fake of Oura (`tests/`).
 
