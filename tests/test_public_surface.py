@@ -41,13 +41,14 @@ ROOT = pathlib.Path(__file__).parent.parent
 
 
 # ── The frozen surface ─────────────────────────────────────────────────────
-TOOLS = {"oura_collections", "oura_query", "oura_check", "oura_today"}
+TOOLS = {"oura_collections", "oura_query", "oura_check", "oura_today", "oura_compare"}
 
 PARAMETERS = {
     "oura_collections": set(),
     "oura_check": set(),
     "oura_query": {"collection", "start", "end", "day", "fields", "latest", "format"},
     "oura_today": {"days"},
+    "oura_compare": {"metric", "a_start", "a_end", "b_start", "b_end"},
 }
 
 # Everything `client.py` can put in a response.
@@ -66,6 +67,15 @@ SERVER_KEYS = {
     "sample_fields", "unavailable_in_sandbox",
     # oura_today
     "today", "days", "computed", "sleep", "readiness", "missing", "records",
+    # oura_compare, on top of what method.py returns
+    "metric", "main_sleep_rule", "excluded", "period_a", "period_b",
+}
+
+# Everything `method.py` puts in an `oura_compare` answer. The same set is
+# required of `ts/src/method.ts`.
+METHOD_KEYS = {
+    "period_a", "period_b", "verdict", "reading", "difference", "noise_band",
+    "typical_daily_change", "method", "multiple_comparisons",
 }
 
 FLAGS = {"--help", "-h", "--check", "--authorize", "--forget", "--manual"}
@@ -104,7 +114,7 @@ def test_the_declared_list_matches_the_real_one():
     assert len(TOOLS_EXPUESTAS) == len(set(TOOLS_EXPUESTAS)), "a name is repeated"
 
 
-def test_the_tools_are_exactly_these_four():
+def test_the_tools_are_exactly_these():
     exposed = {n for n in dir(S) if n.startswith("oura_")}
     assert exposed == TOOLS
 
@@ -504,3 +514,15 @@ def test_the_icon_ships_inside_the_installed_package():
     assert "../icon.png" in ts and "../../icon.png" in ts, \
         "only one layout is tried; the bundle puts it at a different depth"
     _json  # noqa: B018
+
+
+def test_the_compare_keys_are_exactly_these_in_both():
+    """`oura_compare` is the one tool whose answer is computed, so its keys are
+    the ones a reader most needs to trust — and the TypeScript twin must emit
+    the same ones, or the method reads differently depending on the install."""
+    py = _keys_in("src/oura_mcp/method.py")
+    assert py == METHOD_KEYS, f"method.py: {py ^ METHOD_KEYS}"
+    ts = set(re.findall(r'out\["([a-z_]+)"\]',
+                        (ROOT / "ts" / "src" / "method.ts").read_text(encoding="utf-8")))
+    assert ts == METHOD_KEYS, f"method.ts: {ts ^ METHOD_KEYS}"
+

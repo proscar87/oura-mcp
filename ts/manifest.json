@@ -55,6 +55,10 @@
       "description": "Last night's sleep and today's readiness with the days before them, raw. Computes no average, no delta and no trend."
     },
     {
+      "name": "oura_compare",
+      "description": "Whether two periods differ by more than the metric's own noise, measured from your history. Returns the band with the verdict; «within noise» is not «no change»."
+    },
+    {
       "name": "oura_check",
       "description": "Self-check: which credential is in use, which scopes were granted, and whether Oura responds. Returns neither the token nor any health value."
     }
