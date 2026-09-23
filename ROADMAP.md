@@ -2498,10 +2498,45 @@ the desktop-extension form, at the top.
 
 | Feature | Who | Verdict |
 |---|---|---|
-| Remote HTTP, for ChatGPT and claude.ai web | Rajskij, sumedhkhodke, BrianVia, hosted paid services | **The one real reason to pick someone else.** Open decision: an optional self-hosted mode, never a hosted service of ours (Door B's reasoning still holds) |
+| Remote HTTP, for ChatGPT and claude.ai web | Rajskij, sumedhkhodke, BrianVia, hosted paid services | **Built, 23 September:** `ts/worker`, self-deployed on each person's Cloudflare account — never a hosted service of ours. See below |
 | Persistent local store / CSV export | FelixWag, ktortti | Maybe. Only under the caching rule: never stale in silence, and the README's «never written to disk» would have to change first |
 | Trends, correlations, period comparison | FelixWag, sumedhkhodke, ktortti | No — see *What is NOT on the roadmap* |
 | Webhooks | sumedhkhodke | No — breaks the local model |
 | User annotations (a write path) | FelixWag | No — this server reads Oura, it does not keep a second diary |
 | Refresh token shared across processes | ktortti | Already done here: the lock plus cross-process recovery |
+
+---
+
+## Remote, self-deployed — 23 September 2026
+
+Oscar chose the self-deployed Worker over a hosted service, and to build the
+analysis layer on top of it (next section, once it exists).
+
+**What made it possible without breaking Door B's reasoning.** Custom
+connectors in claude.ai take any URL on any plan, and ChatGPT's developer mode
+does the same. Only a *listed* connector needs a Team organization and a hosted
+service. A Worker each person deploys on their own account is neither: nobody
+holds anyone else's tokens.
+
+**What the core got wrong for a multi-request process, found before any Worker
+code existed:** the cache was keyed without the asker's identity; the token
+came only from this machine; and «today» was the process's zone — UTC in a
+Worker, which would have held the person's today as a closed day forever.
+All three fixed in the core, each with a test that failed first.
+
+**Three attacks the auth layer is shaped around** — confused deputy, a forged
+approval, a spliced callback — are documented where they are guarded,
+`ts/worker/src/authorize.ts`, and each is exercised: the forged approvals in
+workerd by `tests/e2e.sh`, the rest against a fake Oura by the unit suite,
+which was mutation-checked (removing each guard fails a test).
+
+**A choice the library's own examples make the other way.** The OAuth provider
+can keep upstream tokens in each grant and refresh them from its hook. With
+Oura's single-use refresh token and KV's lack of transactions, two clients
+refreshing together would lock the owner out. One Durable Object holds them
+instead.
+
+**Not verified: a real deployment, a real Oura login, and claude.ai or ChatGPT
+completing the connection.** The branch ships as a PR, not a release, until
+Oscar has done it once.
 

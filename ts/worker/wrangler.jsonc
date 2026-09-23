@@ -1,0 +1,30 @@
+// oura-mcp as a remote MCP server, deployed on YOUR Cloudflare account.
+// Nothing here is a secret. The four that are go in with `wrangler secret put`
+// — see README.md in this directory.
+{
+  "name": "oura-mcp",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-01",
+  // nodejs_compat: the shared core imports node:fs and friends at the top of a
+  // few modules, and only ever uses them on the stdio path.
+  // global_fetch_strictly_public: required by the OAuth provider before it will
+  // fetch Client ID Metadata Documents, as SSRF protection.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "kv_namespaces": [
+    { "binding": "OAUTH_KV" }
+  ],
+  "durable_objects": {
+    "bindings": [{ "name": "OURA_TOKENS", "class_name": "OuraTokens" }]
+  },
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["OuraTokens"] }
+  ],
+  "vars": {
+    // The day Oura keys your records by. REQUIRED: a Worker's clock is UTC,
+    // and without this your evening reads as tomorrow. IANA name.
+    "OURA_TIMEZONE": "",
+    // "1" serves Oura's sample data and skips the Oura login. For trying the
+    // connector before registering an Oura application. Never your data.
+    "OURA_SANDBOX": ""
+  }
+}

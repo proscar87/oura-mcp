@@ -182,3 +182,30 @@ def test_nothing_reaches_the_disk(tmp_path, monkeypatch):
     for p in tmp_path.rglob("*"):
         if p.is_file():
             assert "77" not in p.read_text(encoding="utf-8", errors="ignore"), p
+
+
+def test_oura_timezone_decides_which_day_is_today(monkeypatch):
+    """Parity with the TypeScript core, where a Worker's UTC clock made this
+    necessary: `OURA_TIMEZONE` overrides the machine's zone, so the cache and
+    the empty-reason agree with the person on which day has closed. Tokyo and
+    Honolulu sit either side of UTC, so this means the same on any machine."""
+    import datetime as dt
+    from oura_mcp import client as c
+
+    class Frozen(dt.datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return dt.datetime(2026, 1, 2, 20, 0, tzinfo=dt.timezone.utc).astimezone(tz)
+
+    monkeypatch.setattr(c.datetime, "datetime", Frozen)
+    monkeypatch.setenv("OURA_TIMEZONE", "Asia/Tokyo")
+    assert c._today() == "2026-01-03"
+    monkeypatch.setenv("OURA_TIMEZONE", "Pacific/Honolulu")
+    assert c._today() == "2026-01-02"
+
+
+def test_a_time_zone_that_does_not_exist_is_refused(monkeypatch):
+    from oura_mcp import client as c
+    monkeypatch.setenv("OURA_TIMEZONE", "America/Atlantis")
+    with pytest.raises(c.OuraError, match="OURA_TIMEZONE"):
+        c._today()

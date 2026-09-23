@@ -26,7 +26,7 @@ from mcp.server.mcpserver import MCPServer
 from mcp.types import Icon, ToolAnnotations
 from pydantic import Field
 
-from .client import OuraError, fetch
+from .client import OuraError, _today, fetch
 
 TOOLS_EXPUESTAS = ("oura_collections", "oura_query", "oura_today", "oura_check")
 """The tool names, in the order they are declared.
@@ -271,7 +271,10 @@ def oura_today(
         return {"error": f"`days` must be between 1 and 30; got {days}",
                 "next_step": "ask again with a value in that range"}
 
-    hoy = datetime.date.today()
+    try:
+        hoy = datetime.date.fromisoformat(_today())   # the package's day, not the machine's
+    except OuraError as e:
+        return {"error": str(e)}
     desde = (hoy - datetime.timedelta(days=days)).isoformat()
     hasta = hoy.isoformat()
 
