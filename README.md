@@ -48,6 +48,11 @@ docker run -i --rm -e OURA_SANDBOX=1 ghcr.io/proscar87/oura-mcp
 port. Without it the container has no stdin, the handshake never arrives, and
 the client reports a server that doesn't show up.
 
+In **claude.ai** or **ChatGPT**, in a browser? Those connect by URL, so the
+server has to live somewhere public: deploy it as a Worker on your own
+Cloudflare account — free, about ten minutes, yours alone. See
+[Remote: claude.ai and ChatGPT](#remote-claudeai-and-chatgpt).
+
 ---
 
 ## The problem, measured
@@ -224,6 +229,23 @@ terminal users and for clients that can't show a URL.
 terminal's `PATH`, so a bare name there fails silently — one of the most common
 mistakes when configuring an MCP server.
 
+### Remote: claude.ai and ChatGPT
+
+claude.ai reaches a connector from Anthropic's cloud and ChatGPT from OpenAI's,
+not from your computer — so a server on your machine is invisible to both.
+[`ts/worker`](ts/worker/README.md) is the same server as a Cloudflare Worker
+that **you deploy on your own account, for your own Oura account only**. Nobody
+runs a shared instance, so your tokens and your data pass through no one else.
+
+It adds three things the local server does not need: its own consent page,
+which shows which app is asking and where the result will go; a check, after
+Oura's login, that the account is the one you configured — anyone else is
+turned away, and with no owner configured nobody gets in; and a single place
+where Oura's single-use refresh token is renewed, one request at a time.
+
+Deployment, step by step, and exactly what has and has not been verified:
+[ts/worker/README.md](ts/worker/README.md).
+
 ## The tools
 
 | | |
@@ -364,6 +386,13 @@ isn't one.
 | Personal token | Wherever you put it: `OURA_PAT`, or the file `OURA_PAT_FILE` points to |
 
 No health data is written to disk, and that is the constraint the cache was designed around rather than a claim made after the fact. Answers for a day that has already closed are held **in memory only**, for the life of the process, and `--forget` clears them. Nothing about your sleep survives the server exiting.
+
+**If you deploy the remote Worker**, the same holds with one difference: it
+runs on *your* Cloudflare account instead of your machine, so that is where your
+Oura tokens live — in a Durable Object — and the apps' tokens for it are kept in
+KV hashed, with what they carry encrypted. Health data is still never stored:
+it is fetched per request and held only in the Worker's memory. No one but you
+operates it. Details: [ts/worker/README.md](ts/worker/README.md#what-is-stored-and-where).
 
 **Who it is shared with.** No one. The only outbound connection is to
 `api.ouraring.com`, with your token, to fetch what you asked for. Oura's use of
