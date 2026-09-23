@@ -41,7 +41,8 @@ ROOT = pathlib.Path(__file__).parent.parent
 
 
 # ── The frozen surface ─────────────────────────────────────────────────────
-TOOLS = {"oura_collections", "oura_query", "oura_check", "oura_today", "oura_compare"}
+TOOLS = {"oura_collections", "oura_query", "oura_check", "oura_today", "oura_compare",
+         "oura_relate"}
 
 PARAMETERS = {
     "oura_collections": set(),
@@ -49,6 +50,7 @@ PARAMETERS = {
     "oura_query": {"collection", "start", "end", "day", "fields", "latest", "format"},
     "oura_today": {"days"},
     "oura_compare": {"metric", "a_start", "a_end", "b_start", "b_end"},
+    "oura_relate": {"x", "y", "start", "end", "lag"},
 }
 
 # Everything `client.py` can put in a response.
@@ -69,6 +71,8 @@ SERVER_KEYS = {
     "today", "days", "computed", "sleep", "readiness", "missing", "records",
     # oura_compare, on top of what method.py returns
     "metric", "main_sleep_rule", "excluded", "period_a", "period_b",
+    # oura_relate
+    "x", "y",
 }
 
 # Everything `method.py` puts in an `oura_compare` answer. The same set is
@@ -76,6 +80,8 @@ SERVER_KEYS = {
 METHOD_KEYS = {
     "period_a", "period_b", "verdict", "reading", "difference", "noise_band",
     "typical_daily_change", "method", "multiple_comparisons",
+    # oura_relate
+    "lag", "pairs", "correlation", "interval", "first_pair",
 }
 
 FLAGS = {"--help", "-h", "--check", "--authorize", "--forget", "--manual"}

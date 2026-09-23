@@ -234,3 +234,59 @@ def test_the_main_sleep_rule_picks_the_same_night_in_both():
                        input=json.dumps(records), capture_output=True, text=True, timeout=60)
     assert r.returncode == 0, r.stderr[:400]
     assert json.loads(r.stdout) == json.loads(json.dumps(M.series(records, "sleep", "average_hrv")))
+
+
+def _relate_cases():
+    import datetime as dt
+    import math
+    import random
+    rng = random.Random(13)
+
+    def ar1(n, rho):
+        x = [rng.gauss(0, 1) / math.sqrt(1 - rho * rho)]
+        for _ in range(n - 1):
+            x.append(rho * x[-1] + rng.gauss(0, 1))
+        return x
+
+    def days(vals, keep=None):
+        d0 = dt.date(2026, 1, 1).toordinal()
+        return [[dt.date.fromordinal(d0 + i).isoformat(), v]
+                for i, v in enumerate(vals) if keep is None or keep[i]]
+
+    def weekend(vals):
+        d0 = dt.date(2026, 1, 1).toordinal()
+        return [v + (1.5 if dt.date.fromordinal(d0 + i).weekday() >= 5 else 0) for i, v in enumerate(vals)]
+
+    cases = []
+    x = ar1(121, 0.5)
+    y = [e + (0.6 * x[i - 1] if i else 0) for i, e in enumerate(ar1(121, 0.5))]
+    cases.append((days(x), days(y), 1))                         # a real next-day relation
+    cases.append((days(weekend(ar1(120, 0.6))), days(weekend(ar1(120, 0.6))), 0))  # shared rhythm
+    keep = [rng.random() >= 0.3 for _ in range(180)]
+    cases.append((days(ar1(180, 0.65), keep), days(ar1(180, 0.65), keep), 2))      # gaps
+    cases.append((days(ar1(120, 0.3)), days([80.0] * 120), 0))  # one never varies
+    cases.append((days(ar1(30, 0.3)), days(ar1(30, 0.3)), 0))   # a month: too short
+    return cases
+
+
+@pytest.mark.skipif(not METHOD.exists(), reason="needs ts/dist/method.js")
+def test_relate_gives_the_same_answer_in_both():
+    from oura_mcp import method as M
+    cases = _relate_cases()
+    guion = (
+        f'import {{ relateSeries }} from "{METHOD}";\n'
+        'const cs = JSON.parse(await new Promise(r => {'
+        "  let s = ''; process.stdin.on('data', c => s += c);"
+        "  process.stdin.on('end', () => r(s)); }));\n"
+        "console.log(JSON.stringify(cs.map(([x, y, lag]) => relateSeries(x, y, lag))));"
+    )
+    r = subprocess.run(["node", "--input-type=module", "-e", guion],
+                       input=json.dumps(cases), capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr[:400]
+    ts = json.loads(r.stdout)
+    py = json.loads(json.dumps([M.relate_series([tuple(p) for p in x], [tuple(p) for p in y], lag)
+                                for x, y, lag in cases]))
+    verdicts = [p["verdict"] for p in py]
+    assert "outside_noise" in verdicts and "cannot_tell" in verdicts, verdicts
+    for i, (p, t) in enumerate(zip(py, ts)):
+        assert p == t, f"case {i}: {p} != {t}"
