@@ -11,7 +11,7 @@ English | [简体中文](https://github.com/proscar87/oura-mcp/blob/main/README_
      is decoration; one that can drop is evidence. -->
 
 The [Oura](https://ouraring.com) v2 API as an [MCP](https://modelcontextprotocol.io)
-server. All 19 collections, four tools, no dependencies beyond the MCP SDK.
+server. All 19 collections, five tools, no dependencies beyond the MCP SDK.
 
 ### One local day of heart rate is 1,231 samples across 2 pages
 
@@ -253,13 +253,14 @@ Deployment, step by step, and exactly what has and has not been verified:
 | `oura_collections` | All 19, what each one carries and which parameters it takes |
 | `oura_query` | One collection in full over a range, paginating to the end |
 | `oura_today` | Last night's sleep and today's readiness, with the days before them |
+| `oura_compare` | Whether two periods differ by more than the metric's own noise |
 | `oura_check` | Self-check that exposes nothing |
 
-**Four, not nineteen.** A server with one tool per collection forces the model
+**Five, not nineteen.** A server with one tool per collection forces the model
 to pick among 19 similar names before knowing what any of them contain. Here the
 collection is a parameter and the catalog is consulted when needed.
 
-All four declare themselves read-only, and that isn't a promise: there is no
+All five declare themselves read-only, and that isn't a promise: there is no
 `POST`, `PUT` or `DELETE` anywhere in the package, and a test reads the source to
 keep it that way.
 
@@ -272,6 +273,37 @@ can be cited. Across nine years of real data, three out of four changes
 between consecutive measurements fall inside the metric's own normal swing, so
 a percentage without that context manufactures a signal rather than reporting
 one. Its one parameter is `days`, from 1 to 30, defaulting to 7.
+
+### `oura_compare`: the one calculation, with its method
+
+"Did my HRV go up since I stopped drinking?" is the question people actually
+bring, and handing over two averages answers it wrongly: daily metrics swing on
+their own, and a good night tends to follow a good night, so a textbook
+comparison **calls ordinary noise a change about a third of the time**
+(measured: 34–38% at the autocorrelation these metrics typically have).
+
+`oura_compare` takes a `metric` — `collection.field`, such as
+`daily_readiness.score`, `sleep.average_hrv` or `daily_activity.steps` — and two
+periods, `a_start`/`a_end` and `b_start`/`b_end`. It answers with the two means,
+the difference, and the **band this metric moves in on its own over periods that
+long**, measured from **your own preceding 120 days** and corrected for that
+day-to-day dependence. Then one of three verdicts:
+
+- `outside_noise` — the difference is larger than the band. The level differs;
+  not why, and not that it will last.
+- `within_noise` — it isn't. **This is not "no change"**: the band is also the
+  smallest difference those days could have seen, and the response says so.
+- `cannot_tell` — fewer than 7 days with a value in a period, or fewer than 60
+  days of history to measure the band from, or a metric that never varied —
+  Oura's sample data is like that. No band is guessed.
+
+The method was chosen by simulation, not before it: with the band estimated
+from your history and a t critical value, noise is called a change **at most
+about one time in twenty** at every autocorrelation tried, and the test suite
+holds it to that. Today is left out, because it is still accumulating. `sleep`
+uses each day's longest main sleep, and the response states that rule. Asking
+many comparisons and keeping the one that crosses finds a crossing by chance —
+the response says that too.
 
 ### `oura_query` parameters
 
@@ -324,8 +356,8 @@ breaking change.)*
 
 ## What this server does NOT do
 
-**It doesn't analyze.** No correlations, no anomaly detection, no period
-comparison — which is exactly where other servers place their value.
+**It doesn't analyze beyond `oura_compare`.** No correlations, no trends, no
+anomaly detection — which is exactly where other servers place their value.
 
 The reason: an average computed in here reaches the model as a number without
 its method. Across nine years of real data, **three out of four changes between
@@ -333,7 +365,13 @@ two consecutive measurements fall within the metric's own normal oscillation**. 
 server that hands over "your HRV is up 12%" without saying how much that metric
 swings on its own isn't informing you: it's manufacturing a signal.
 
-Here you get the data. The analysis belongs where the method can be cited — for
+`oura_compare` exists because it answers that objection instead of ignoring it:
+the band comes with the number. The rest doesn't have a method here yet that
+survives the same simulations, so it isn't here. Correlation is the next
+candidate, and it has more ways to mislead — shared weekly patterns, shared
+trends, and testing several lags until one crosses.
+
+Everything else, you get raw. The analysis belongs where the method can be cited — for
 instance with [cotejo](https://github.com/proscar87/cotejo), which draws exactly
 that distinction for blood biomarkers.
 
