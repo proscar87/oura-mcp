@@ -194,16 +194,29 @@ is not sufficient on its own: it is itself a race.
 reached, not Oura's token. Accepting a token back would hand pagination to the
 model, which is the failure this package exists to prevent.
 
-**Four tools, not nineteen.** One per collection forces the model to choose
+**Five tools, not nineteen.** One per collection forces the model to choose
 among 19 similar names before knowing what any of them contain.
 
-**It doesn't analyze.** No correlations, no anomalies, no period comparison —
-which is where other servers place their value. An average computed inside
-reaches the model as a number without its method, and across nine years of real
-data three out of four changes between consecutive measurements are noise.
-Handing over "your HRV is up 12%" without saying how much that metric swings on
-its own isn't informing: it's manufacturing a signal. Analysis belongs where the
-method can be cited — see [cotejo](https://github.com/proscar87/cotejo).
+**One calculation, and only with its method attached.** Through 0.3.x there was
+none, and the reason still stands: an average computed inside reaches the model
+as a number without its method, and across nine years of real data three out of
+four changes between consecutive measurements are noise. "Your HRV is up 12%"
+without saying how much that metric swings on its own is manufacturing a signal.
+
+Oscar reversed the rule on 23 September 2026, with a condition: an analysis
+tool ships only if the method travels with the number and a simulation holds
+it to its error rate. `oura_compare` is the first to meet it. The rule for any
+next one, correlation included:
+
+- It returns the noise band with the difference and defaults to «within noise».
+- It says `cannot_tell` instead of guessing when there are too few days.
+- Its false-positive rate is simulated in the test suite on autocorrelated
+  noise, and mutating each part of the method fails a test.
+- Python and TypeScript agree to the last printed digit (`test_parity.py`).
+
+No trends, no anomaly detection, no advice. Analysis that needs more than this
+still belongs where the method can be cited — see
+[cotejo](https://github.com/proscar87/cotejo).
 
 **Zero dependencies beyond the MCP SDK.** Not aesthetics: it's what makes
 packaging as a binary viable. That's why `keyring` is imported inside a `try` and

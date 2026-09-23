@@ -1,6 +1,6 @@
 # oura-mcp
 
-> The Oura v2 API as an MCP server. All 19 collections, four tools, no
+> The Oura v2 API as an MCP server. All 19 collections, five tools, no
 > dependencies beyond the MCP SDK.
 
 It exists because Oura under-delivers without saying so, in four distinct ways,
@@ -24,10 +24,15 @@ correct response.
   The range is INCLUSIVE on both ends.
 - `oura_today` — last night's sleep and today's readiness, with the days before
   them, in one call. Computes nothing: the records come back raw.
+- `oura_compare` — whether two periods of one metric (`collection.field`)
+  differ by more than that metric's own noise, measured from the person's
+  preceding 120 days. Returns `verdict` (`outside_noise`, `within_noise`,
+  `cannot_tell`) with `noise_band`. `within_noise` is NOT «no change»: a real
+  change smaller than the band would be missed more often than seen. Report both.
 - `oura_check` — self-check: auth mode, granted scopes, expiry. Returns
   neither the token nor any health value.
 
-All four are read-only. There is no POST, PUT or DELETE in the package.
+All five are read-only. There is no POST, PUT or DELETE in the package.
 Parameter names match Oura's own API: `collection`, `day`, `start`, `end`,
 `fields`, `latest`, `format`.
 
@@ -77,8 +82,10 @@ account only, behind OAuth and a consent page. No shared instance exists.
 
 ## What it does NOT do
 
-It doesn't analyze: no correlations, no anomalies, no period comparison. An
-average computed inside reaches the model as a number without its method. The
+It doesn't analyze beyond `oura_compare`: no correlations, no trends, no
+anomalies. An average computed inside reaches the model as a number without its
+method; `oura_compare` is the one place a number leaves with its method — the
+band — attached. The
 data is delivered raw and the analysis belongs where the method can be cited.
 
 ## Links
