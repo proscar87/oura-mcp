@@ -1,0 +1,30 @@
+{
+  "name": "oura-mcp-worker",
+  "private": true,
+  "description": "oura-mcp as a remote MCP server on Cloudflare Workers, for claude.ai and ChatGPT. Deployed by each person on their own account.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "typecheck": "wrangler types >/dev/null && tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@cloudflare/workers-oauth-provider": "0.10.3",
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260923.1",
+    "@types/node": "^22.20.4",
+    "typescript": "^5.7.0",
+    "vitest": "^2.1.8",
+    "wrangler": "^4.136.3"
+  },
+  "allowScripts": {
+    "workerd@1.20260921.1": true,
+    "esbuild@0.21.5": true,
+    "esbuild@0.28.1": true
+  }
+}
