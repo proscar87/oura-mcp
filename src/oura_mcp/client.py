@@ -128,8 +128,24 @@ def cache_clear() -> None:
 
 
 def _today() -> str:
-    """The local calendar day. Oura keys its records by local day too."""
-    return datetime.date.today().isoformat()
+    """The person's calendar day. Oura keys its records by local day too.
+
+    `OURA_TIMEZONE` wins over the machine's zone, as in the TypeScript core,
+    where a Worker's clock is UTC and the person's evening read as tomorrow —
+    turning today into a closed day the cache would hold forever. A zone that
+    does not exist is refused, never replaced by a guess.
+    """
+    tz = os.environ.get("OURA_TIMEZONE", "").strip()
+    if not tz:
+        return datetime.date.today().isoformat()
+    import zoneinfo
+    try:
+        zona = zoneinfo.ZoneInfo(tz)
+    except (zoneinfo.ZoneInfoNotFoundError, ValueError):
+        raise OuraError(
+            f"OURA_TIMEZONE is «{tz}», which is not an IANA time zone. Use a "
+            f"name like America/Mexico_City or Europe/Madrid.") from None
+    return datetime.datetime.now(zona).date().isoformat()
 
 
 def _range_has_closed(end: str | None) -> bool:
@@ -562,7 +578,7 @@ def _why_empty(collection: str, start: str | None, end: str | None) -> dict:
     """
     from .collections import SCOPE_OF
 
-    today = datetime.date.today().isoformat()
+    today = _today()      # one definition of the day, `OURA_TIMEZONE` included
     reasons = []
 
     if start and end:

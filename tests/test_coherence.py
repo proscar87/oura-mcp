@@ -619,3 +619,17 @@ def test_the_handoff_document_names_paths_that_exist():
     assert rutas, "the handoff names no paths at all — did it lose its commands?"
     for r in sorted(rutas):
         assert (ROOT / r).exists(), f"AGENTS.md points at {r}, which does not exist"
+
+
+def test_llms_txt_names_every_tool_and_no_retired_parameter():
+    """llms.txt is written for a model deciding how to call this server, and it
+    had drifted twice without a test noticing: it listed three tools after the
+    fourth, `oura_today`, shipped in 0.3.5, and a line still gave the parameters
+    their pre-0.3.0 Spanish names — `coleccion, dia, inicio, fin` — directly
+    above the line giving the real ones. A model reading it had two answers."""
+    from oura_mcp.server import TOOLS_EXPUESTAS
+    llms = (ROOT / "llms.txt").read_text(encoding="utf-8")
+    for tool in TOOLS_EXPUESTAS:
+        assert f"`{tool}`" in llms, f"llms.txt never mentions {tool}"
+    for retired in ("coleccion", "inicio", "campos", "ultimo", "formato"):
+        assert not re.search(rf"\b{retired}\b", llms), f"llms.txt still says {retired}"

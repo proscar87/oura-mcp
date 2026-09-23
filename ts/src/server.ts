@@ -18,7 +18,8 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { z } from "zod";
 
-import { OuraError, base, inSandbox, fetchAll, token } from "./client.js";
+import { OuraError, base, inSandbox, fetchAll, token, shiftDays,
+         today as localDay, type Auth } from "./client.js";
 import { SCOPE_OF, COLLECTIONS, WITH_DATE, shape, shapeName } from "./collections.js";
 
 // READ FROM package.json, never typed here. This constant said 0.3.0 while
@@ -148,9 +149,20 @@ function icons(): { src: string; mimeType: string; sizes: string[] }[] | undefin
   return undefined;
 }
 
-export function createServer(): McpServer {
+/**
+ * `auth` is how the remote Worker hands in each request's grant. Absent, the
+ * server is what it always was: one person, this machine's credentials.
+ */
+export interface ServerOptions {
+  auth?: Auth;
+  /** The Worker has no package.json to read at runtime; it passes the number. */
+  version?: string;
+}
+
+export function createServer(opts: ServerOptions = {}): McpServer {
+  const { auth } = opts;
   const srv = new McpServer(
-    { name: "oura", version: VERSION, icons: icons() },
+    { name: "oura", version: opts.version ?? VERSION, icons: icons() },
     { instructions: INSTRUCTIONS },
   );
 
@@ -215,7 +227,7 @@ export function createServer(): McpServer {
     },
     annotations: { title: "Query an Oura collection", ...READ_ONLY },
   }, async (args) => {
-    const out = await query(args);
+    const out = await query(args, auth);
     return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
   });
 
@@ -237,7 +249,7 @@ export function createServer(): McpServer {
     },
     annotations: { title: "Last night and the days before it", ...READ_ONLY },
   }, async (args) => {
-    const out = await today(args?.days ?? 7);
+    const out = await today(args?.days ?? 7, auth);
     return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
   });
 
@@ -251,7 +263,7 @@ export function createServer(): McpServer {
     inputSchema: {},
     annotations: { title: "Self-check of the Oura connection", ...READ_ONLY },
   }, async () => {
-    return { content: [{ type: "text", text: JSON.stringify(await check(), null, 2) }] };
+    return { content: [{ type: "text", text: JSON.stringify(await check(auth), null, 2) }] };
   });
 
   return srv;
@@ -288,7 +300,7 @@ export const TOOLS_EXPOSED = ["oura_collections", "oura_query", "oura_today",
  * inside the metric's own normal swing, so a percentage without that context
  * manufactures a signal rather than reporting one.
  */
-export async function today(days = 7): Promise<Record<string, unknown>> {
+export async function today(days = 7, auth?: Auth): Promise<Record<string, unknown>> {
   if (!Number.isInteger(days) || days < 1 || days > 30) {
     // Refused rather than clamped. Clamping answers a question nobody asked
     // and the answer looks identical to one to the question that was asked.
@@ -297,14 +309,18 @@ export async function today(days = 7): Promise<Record<string, unknown>> {
       next_step: "ask again with a value in that range",
     };
   }
-  const d = new Date();
-  const p = (n: number) => String(n).padStart(2, "0");
-  const iso = (x: Date) => `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())}`;
-  const desde = new Date(d);
-  desde.setDate(desde.getDate() - days);
+  // THE PACKAGE'S DAY, not this process's: in the Worker the clock is UTC and
+  // `OURA_TIMEZONE` is what says which day it is for the person asking.
+  let hoy: string;
+  try {
+    hoy = localDay();
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  const desde = shiftDays(hoy, -days);
 
   const out: Record<string, unknown> = {
-    today: iso(d), days, computed: NOTHING_COMPUTED,
+    today: hoy, days, computed: NOTHING_COMPUTED,
   };
   const missing: string[] = [];
   const LLEVAR = ["empty", "truncated", "pagination_cycle", "synthetic",
@@ -314,7 +330,7 @@ export async function today(days = 7): Promise<Record<string, unknown>> {
                                  ["daily_readiness", "readiness"]] as const) {
     let r: Record<string, unknown>;
     try {
-      r = await fetchAll(nombre, { start: iso(desde), end: iso(d) });
+      r = await fetchAll(nombre, { start: desde, end: hoy, auth });
     } catch (e) {
       // ONE COLLECTION FAILING MUST NOT LOSE THE OTHER. A 403 on readiness is
       // no reason to withhold the sleep that arrived.
@@ -339,7 +355,7 @@ export async function today(days = 7): Promise<Record<string, unknown>> {
   return out;
 }
 
-export async function query(a: QueryArgs): Promise<Record<string, unknown>> {
+export async function query(a: QueryArgs, auth?: Auth): Promise<Record<string, unknown>> {
   if (!(a.collection in COLLECTIONS)) {
     return {
       error: `«${a.collection}» is not an Oura collection`,
@@ -362,7 +378,7 @@ export async function query(a: QueryArgs): Promise<Record<string, unknown>> {
   }
   try {
     return await fetchAll(a.collection, {
-      start, end, fields: a.fields, latest: a.latest, format: a.format,
+      start, end, fields: a.fields, latest: a.latest, format: a.format, auth,
     });
   } catch (e) {
     // NO CREDENTIALS IS NOT AN ERROR THE USER SHOULD HAVE TO FIX BY HAND. If the
@@ -371,7 +387,9 @@ export async function query(a: QueryArgs): Promise<Record<string, unknown>> {
     // server listens for the callback it already knows how to listen for, and
     // the original request is retried. A `.mcpb` installed with a double click
     // must not end in a terminal.
-    const channel = e instanceof OuraError && /no credentials/.test(e.message)
+    // Never in the Worker: this flow starts a listener on localhost, and the
+    // remote grant already came through the connector's own OAuth.
+    const channel = !auth && e instanceof OuraError && /no credentials/.test(e.message)
       ? elicitationChannel() : undefined;
     if (channel) {
       try {
@@ -420,7 +438,17 @@ async function oauthState(): Promise<Record<string, unknown>> {
   }
 }
 
-export async function check(): Promise<Record<string, unknown>> {
+/** The same answer as `oauthState`, from the grant instead of a local file. */
+async function grantState(auth: Auth): Promise<Record<string, unknown>> {
+  if (!auth.scopes) return {};
+  const { SCOPES } = await import("./credentials.js");
+  return {
+    granted_scopes: [...auth.scopes],
+    ungranted_scopes: SCOPES.filter((a) => !auth.scopes!.includes(a)),
+  };
+}
+
+export async function check(auth?: Auth): Promise<Record<string, unknown>> {
   if (inSandbox()) {
     // In sandbox there is no token to check and it mustn't look like there is:
     // whoever reads this response has to know the data they will see is made up.
@@ -448,18 +476,18 @@ export async function check(): Promise<Record<string, unknown>> {
 
   let t;
   try {
-    t = await token();
+    t = auth ? await auth.token() : await token();
   } catch (e) {
     return { token_present: false, next_step: (e as Error).message };
   }
   const out: Record<string, unknown> = {
     token_present: true,
     token_length: t.length,
-    mode: authMode(),
-    ...(await oauthState()),
+    mode: auth ? "remote: OAuth2 through this connector" : authMode(),
+    ...(auth ? await grantState(auth) : await oauthState()),
   };
   try {
-    const r = await fetchAll("personal_info");
+    const r = await fetchAll("personal_info", { auth });
     out["oura_responds"] = true;
     // The field NAMES, not their values: confirms the API answers without
     // dumping anyone's profile into a log.

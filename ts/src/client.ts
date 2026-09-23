@@ -123,12 +123,37 @@ export function cacheClear(): void {
   cache.clear();
 }
 
-/** The local calendar day. Oura keys its records by local day too. */
+/**
+ * The person's calendar day. Oura keys its records by local day too.
+ *
+ * `OURA_TIMEZONE` WINS OVER THE PROCESS'S ZONE. Over stdio they are the same
+ * thing: the server runs on the person's machine. A Cloudflare Worker's clock
+ * is UTC, so in Mexico City from 18:00 on, «today» was already tomorrow — and
+ * the person's actual today read as a CLOSED day, which the cache holds
+ * forever. The one invariant that made the cache safe, broken by a clock.
+ *
+ * A zone that does not exist is refused, not replaced with UTC: a silent
+ * fallback is exactly the wrong day this exists to prevent.
+ */
 export function today(): string {
+  const tz = (process.env.OURA_TIMEZONE ?? "").trim();
+  if (tz) {
+    try {
+      // `sv-SE` because its date format IS `YYYY-MM-DD`.
+      return new Date().toLocaleDateString("sv-SE", { timeZone: tz });
+    } catch {
+      throw new OuraError(
+        `OURA_TIMEZONE is «${tz}», which is not an IANA time zone. Use a name ` +
+        `like America/Mexico_City or Europe/Madrid.`);
+    }
+  }
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
+
+// For the one function whose local variable is also called `today`.
+const localToday = (): string => today();
 
 /**
  * True when `end` is a day that can no longer receive records.
@@ -559,16 +584,17 @@ function trim(data: Row[], start: string | undefined, end: string | undefined,
  * This does NOT guess which one: it lists what can be checked without going to
  * the network.
  */
-async function whyEmpty(collection: string, start?: string, end?: string) {
+async function whyEmpty(collection: string, start?: string, end?: string,
+                        auth?: Auth) {
   // THE USER'S TODAY, not UTC's. `toISOString()` is UTC, so anyone west of it in
   // the evening — every US timezone after about 5pm — asked about "last night"
   // and got «nothing further to report» instead of «the ring hasn't synced yet»,
   // which is the entire reason the `empty` key exists. East of UTC in the
   // morning it went the other way and called their today "in the future".
   //
-  // `sv-SE` because its locale format IS `YYYY-MM-DD`; the alternative is
-  // assembling it from getFullYear/getMonth/getDate by hand.
-  const today = new Date().toLocaleDateString("sv-SE");
+  // One definition of the day for the whole package, so `OURA_TIMEZONE`
+  // cannot be honoured by the cache and ignored here.
+  const today = localToday();
   const reasons: string[] = [];
   if (start && end) {
     if (start.slice(0, 10) > today) reasons.push("the requested range is in the future");
@@ -578,7 +604,7 @@ async function whyEmpty(collection: string, start?: string, end?: string) {
         "syncs with the app; the current day is usually missing or incomplete");
     }
   }
-  const missing = await missingScope(collection);
+  const missing = await missingScope(collection, auth);
   if (missing) reasons.push(missing);
   return {
     no_data: "the query succeeded; Oura has no records in that range",
@@ -596,6 +622,24 @@ export interface Options {
   latest?: boolean;
   format?: "json" | "csv";
   pageLimit?: number;
+  /** Whose request this is. Absent over stdio, where the machine's credentials
+   *  are the only ones; present in the Worker, one per grant. */
+  auth?: Auth;
+}
+
+/**
+ * A token source handed in by whoever runs the core, instead of read from this
+ * machine. The remote Worker has no env token, no credentials file and no
+ * keychain: each request carries its own grant.
+ */
+export interface Auth {
+  /** Stable per person. Part of the cache key, so one person's held answer is
+   *  never another's. */
+  identity: string;
+  token(): Promise<Secret>;
+  /** What that grant was given, if known. Undefined says nothing, rather than
+   *  guessing at someone's permissions. */
+  scopes?: readonly string[];
 }
 
 /**
@@ -611,9 +655,19 @@ export interface Options {
  * personal token carries no readable scope list, and saying nothing beats
  * guessing at somebody's permissions.
  */
-export async function missingScope(collection: string): Promise<string | undefined> {
+export async function missingScope(collection: string,
+                                   auth?: Auth): Promise<string | undefined> {
   const scope = SCOPE_OF[collection];
   if (!scope || inSandbox()) return undefined;
+  if (auth) {
+    // THE ADVICE CHANGES WITH WHERE IT IS READ. Whoever sees this sentence is
+    // in claude.ai or ChatGPT, where `oura-mcp --authorize` names nothing.
+    if (!auth.scopes || auth.scopes.includes(scope)) return undefined;
+    const granted = auth.scopes.join(", ") || "none";
+    return `this collection needs the \`${scope}\` scope and this connection ` +
+           `doesn't have it (granted: ${granted}). Disconnect and reconnect the ` +
+           `Oura connector, and approve that permission on Oura's page.`;
+  }
   if (process.env.OURA_PAT || process.env.OURA_PAT_FILE) return undefined;
   try {
     const { load } = await import("./credentials.js");
@@ -718,7 +772,9 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
   // caller was told its list had been split from a string. Caught by the
   // TypeScript suite on the first run after the cache landed; Python had the
   // same hole and no test that happened to make both calls.
-  const llave = JSON.stringify([base(), collection, start, end,
+  // `identity` FIRST: the Worker serves many requests from one isolate, and a
+  // held answer is only ever the asker's own.
+  const llave = JSON.stringify([o.auth?.identity ?? "", base(), collection, start, end,
                                 fields ?? null, wasString, latest, format,
                                 pageLimit]);
   const held = cache.get(llave);
@@ -733,7 +789,7 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
   }
 
   const root = base();
-  const tok = await token();
+  const tok = o.auth ? await o.auth.token() : await token();
   let data: Row[] = [];
   let pages = 0, nextToken: string | undefined;
   const waits: number[] = [];
@@ -761,7 +817,7 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
           "subscription to Oura has expired and their data is not available via " +
           "the API» — check that first, because no amount of re-authorizing " +
           "fixes a lapsed membership.";
-        const hint = await missingScope(collection);
+        const hint = await missingScope(collection, o.auth);
         const falta = hint ??
           `It may also lack the \`${SCOPE_OF[collection] ?? "?"}\` scope this ` +
           `collection needs.`;
@@ -877,7 +933,7 @@ export async function fetchAll(collection: string, o: Options = {}): Promise<Row
       `were trimmed. This is normal and nothing you asked for is missing: the ` +
       `margin exists because Oura's \`end_date\` is inconsistent across collections.`;
   }
-  if (!data.length) out["empty"] = await whyEmpty(collection, start, end);
+  if (!data.length) out["empty"] = await whyEmpty(collection, start, end, o.auth);
   if (inSandbox()) {
     // EVERY sandbox response says so. `oura_check` said it and the queries did
     // not, so someone asking "how did I sleep?" got a score out of Oura's fake

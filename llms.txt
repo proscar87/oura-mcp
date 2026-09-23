@@ -21,8 +21,9 @@ correct response.
 
 - `oura_collections` — all 19, what each carries and which parameters it takes.
 - `oura_query` — one collection in full over a range, paginating to the end.
-  Parameters: coleccion, dia, inicio, fin, campos, ultimo, formato.
   The range is INCLUSIVE on both ends.
+- `oura_today` — last night's sleep and today's readiness, with the days before
+  them, in one call. Computes nothing: the records come back raw.
 - `oura_check` — self-check: auth mode, granted scopes, expiry. Returns
   neither the token nor any health value.
 
@@ -65,6 +66,14 @@ Parameter names match Oura's own API: `collection`, `day`, `start`, `end`,
   stopped issuing them in December 2025.
 - `OURA_CREDENTIALS` — where the 0600 OAuth file lives.
 - `OURA_API_BASE_URL` — point at another origin (testing).
+- `OURA_TIMEZONE` — IANA zone that decides which day is «today». Defaults to
+  the machine's; required on the remote Worker, whose clock is UTC.
+
+## Remote
+
+claude.ai and ChatGPT connect by URL. `ts/worker` is the same server as a
+Cloudflare Worker each person deploys on their own account, for their own Oura
+account only, behind OAuth and a consent page. No shared instance exists.
 
 ## What it does NOT do
 

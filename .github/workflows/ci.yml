@@ -58,6 +58,37 @@ jobs:
       - run: npm test
         working-directory: ts
 
+  worker:
+    name: Remote Worker
+    runs-on: ubuntu-latest
+    # The remote mode is the one part of this repository that holds a
+    # credential on someone else's machine, so it is the one that gets the
+    # real runtime: types, the unit suite against fakes of Oura, and then
+    # `wrangler dev` — workerd, the real OAuth provider — driven through the
+    # whole flow in sandbox mode by tests/e2e.sh, forged approvals included.
+    # Oura's real login cannot run here; the unit suite covers that half.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      # The core it imports resolves its own dependencies from ts/.
+      - run: npm ci
+        working-directory: ts
+      - run: npm ci
+        working-directory: ts/worker
+      - run: npm run typecheck
+        working-directory: ts/worker
+      - run: npm test
+        working-directory: ts/worker
+      - name: The whole flow, in workerd
+        working-directory: ts/worker
+        run: |
+          npx wrangler dev --port 8787 --var OURA_SANDBOX:1 \
+            --var OURA_TIMEZONE:America/Mexico_City > wrangler.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf -o /dev/null localhost:8787/ && break; sleep 1; done
+          ./tests/e2e.sh || { cat wrangler.log; exit 1; }
+
   mcpb:
     name: Bundle
     runs-on: ubuntu-latest
