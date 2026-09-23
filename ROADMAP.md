@@ -2581,7 +2581,8 @@ JavaScript's `toFixed` away from zero, so the mean of sixteen whole numbers
 ending in .0625 would print differently per install. Python now copies
 JavaScript, and a parity case with exactly that tie fails if it stops.
 
-**Next: correlation (`oura_relate`)**, which has more ways to lie:
+**Then correlation (`oura_relate`)**, which had more ways to lie — built the
+same day, see the next section:
 
 - a shared weekly pattern correlates any two series;
 - a shared trend does too, which differencing removes and weekday means don't;
@@ -2591,4 +2592,33 @@ JavaScript, and a parity case with exactly that tie fails if it stops.
 - and Oura's day convention decides which night follows which day.
 
 Each gets a simulated null in the suite before the tool exists.
+
+### `oura_relate`, built the same day
+
+Each trap got a simulated null before the tool existed. False alarms at 95% on
+unrelated metrics, with each safeguard removed from the full method:
+
+| Removed | False alarms | The null that exposes it |
+|---|---|---|
+| Weekday means | 41–93% | both metrics higher on weekends |
+| Differencing | 58% | both drifting over months |
+| Bartlett's correction | up to 12% | differenced noise is anti-correlated |
+| Cost of the 14 weekday means | up to 13% | short windows |
+| **Nothing — the full method** | **about 5%** (measured up to 5.2%) | all of the above, and 30% of days missing |
+
+What it gives up for that: it needs about three months, longer with gaps (180
+days with 30% of days missing answers about nine times in ten; 90 days, only
+between one time in twenty and three in ten), and with a modest real effect three months catch it about nine times
+in ten. It measures whether **day-to-day changes** move together — not levels,
+not cause. Differencing makes a real relation at one lag show up, reversed, at
+the neighbouring lags, which the response says; the lag is one per call, and
+`first_pair` shows the alignment so Oura's «sleep is filed under the morning»
+convention cannot silently flip it.
+
+One mutation survived the nulls: differencing across a missing day adds noise
+but no bias, so no null could see it. A unit test guards it instead.
+
+**Trends are still not built.** A slope over autocorrelated days is the easiest
+signal of all to manufacture, and no method here has survived the same test
+yet.
 

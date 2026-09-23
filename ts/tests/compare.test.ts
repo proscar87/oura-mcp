@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Secret, cacheClear, type Auth } from "../src/client.js";
-import { compare } from "../src/server.js";
+import { compare, relate } from "../src/server.js";
 
 let asked: string[];
 
@@ -62,3 +62,27 @@ describe("oura_compare", () => {
     expect(String(r["error"])).toContain("one record per day");
   });
 });
+
+describe("oura_relate", () => {
+  const R = { x: "daily_activity.high_activity_time", y: "daily_readiness.score",
+              start: "2026-01-01", end: "2026-03-31", lag: 1 };
+
+  it("asks for each metric once, never past yesterday, with its grant", async () => {
+    ouraWith({ data: [] });
+    const auth: Auth = { identity: "ana", token: async () => new Secret("ana-token") };
+    const r = await relate(R, auth);
+    expect(r["excluded"]).toHaveProperty("today");
+    expect(asked).toHaveLength(2);
+    for (const a of asked) {
+      expect(a).toMatch(/^Bearer ana-token /);
+      expect(a).toContain("end_date=2026-04-01");   // yesterday + Oura's 2-day margin
+    }
+    expect(r["verdict"]).toBe("cannot_tell");
+  });
+
+  it("refuses a lag it cannot honour, and a metric against itself", async () => {
+    expect(String((await relate({ ...R, lag: 30 }))["error"])).toContain("lag");
+    expect(String((await relate({ ...R, y: R.x }))["error"])).toContain("itself");
+  });
+});
+

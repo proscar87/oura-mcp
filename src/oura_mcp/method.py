@@ -304,3 +304,149 @@ def compare_series(a: list, b: list, history: list) -> dict:
     }
     out["multiple_comparisons"] = MULTIPLE_COMPARISONS
     return out
+
+
+# ── oura_relate ─────────────────────────────────────────────────────────────
+# Correlation has more ways to lie than a difference of means. Each constant
+# below answers one, measured on simulated unrelated pairs before the tool
+# existed (false alarms at 95% when that safeguard is removed, in brackets):
+#
+# - Each weekday's own mean is removed from each metric first [41–93%]. Two
+#   metrics that both rise on weekends correlate without touching each other.
+# - Then day-to-day changes, only between consecutive calendar days [58%].
+#   Two metrics that both drift over months correlate the same way.
+# - Differencing makes noise anti-correlated with its neighbour, so the
+#   effective number of pairs comes from both series' own autocorrelations —
+#   Bartlett's correction over three lags — never credited above n [≤12%].
+# - Fourteen fitted weekday means are not free; they cost their degrees of
+#   freedom [≤13%].
+#
+# With all four, every null tried stayed at about 5% (measured up to 5.2%),
+# weekly rhythms, random walks, shared trends and 30% of days missing included.
+MAX_LAG = 7
+MIN_EFFECTIVE_PAIRS = 20
+_BARTLETT_LAGS = 3
+_WEEKDAY_COST = 12
+
+RELATE_MULTIPLE_COMPARISONS = (
+    "This is one lag and one pair of metrics. Trying several and keeping "
+    "whichever crosses finds a crossing by chance about one in twenty — and "
+    "because the method works on day-to-day changes, a real relation at one "
+    "lag also shows up, reversed, at the lags next to it.")
+
+
+def _deweek(days: list) -> dict:
+    """{ordinal: value minus that weekday's mean}, over the days given."""
+    groups: dict[int, list] = {}
+    for d, v in days:
+        groups.setdefault(datetime.date.fromisoformat(d).weekday(), []).append(v)
+    means = {k: _mean(v) for k, v in groups.items()}
+    return {_ordinal(d): v - means[datetime.date.fromisoformat(d).weekday()]
+            for d, v in days}
+
+
+def _changes(series: dict) -> dict:
+    """{ordinal: change since the day before}, only where both days exist."""
+    return {o: series[o] - series[o - 1] for o in sorted(series) if o - 1 in series}
+
+
+def _acf(series: dict, k: int) -> float:
+    """Lag-k autocorrelation, each sum over its own count (see `lag1`)."""
+    keys = sorted(series)
+    vals = [series[o] for o in keys]
+    if len(vals) < 3:
+        return 0.0
+    m = _mean(vals)
+    den = 0.0
+    for v in vals:
+        den += (v - m) * (v - m)
+    pairs = [(series[o], series[o + k]) for o in keys if o + k in series]
+    if den == 0.0 or not pairs:
+        return 0.0
+    num = 0.0
+    for a, b in pairs:
+        num += (a - m) * (b - m)
+    return (num / len(pairs)) / (den / len(vals))
+
+
+def relate_series(x: list, y: list, lag: int) -> dict:
+    """Whether the day-to-day changes of x and of y, `lag` days later, move
+    together more than two unrelated metrics' would."""
+    dx, dy = _changes(_deweek(x)), _changes(_deweek(y))
+    keys = [o for o in sorted(dx) if o + lag in dy]
+    out: dict = {}
+    out["lag"] = lag              # assigned, not in a literal: the surface guard reads `out[...]`
+    out["pairs"] = len(keys)
+    a = [dx[o] for o in keys]
+    b = [dy[o + lag] for o in keys]
+    if len(keys) >= 3:
+        ma, mb = _mean(a), _mean(b)
+        sxx = syy = sxy = 0.0
+        for u, v in zip(a, b):
+            sxx += (u - ma) * (u - ma)
+            syy += (v - mb) * (v - mb)
+            sxy += (u - ma) * (v - mb)
+    else:
+        sxx = syy = sxy = 0.0
+    if len(keys) >= 3 and (sxx == 0.0 or syy == 0.0):
+        out["verdict"] = "cannot_tell"
+        out["reading"] = (
+            "One of the two metrics did not change from one day to the next in "
+            "these days, so there is nothing for the other to move with. Constant "
+            "values are what sample data and a disconnected ring produce.")
+        return out
+
+    f = 1.0
+    for k in range(1, _BARTLETT_LAGS + 1):
+        f += 2 * _acf(dx, k) * _acf(dy, k)
+    f = max(f, 1.0)
+    effective = len(keys) / f - _WEEKDAY_COST
+    if effective < MIN_EFFECTIVE_PAIRS:
+        out["verdict"] = "cannot_tell"
+        out["reading"] = (
+            f"These days give {_num(max(effective, 0.0))} effective pairs of "
+            f"day-to-day changes, and at least {MIN_EFFECTIVE_PAIRS} are needed. "
+            f"Metrics that wander, repeat weekly and have gaps take about three "
+            f"months of consecutive days before a correlation can be told apart "
+            f"from chance.")
+        return out
+
+    r = sxy / math.sqrt(sxx * syy)
+    r = min(max(r, -0.999999), 0.999999)
+    z = math.atanh(r)
+    se = 1 / math.sqrt(effective - 3)
+    lo, hi = math.tanh(z - 1.96 * se), math.tanh(z + 1.96 * se)
+    visible = math.tanh(1.96 * se)
+    out["correlation"] = _r(r)
+    out["interval"] = [_r(lo), _r(hi)]
+    first = keys[0]
+    out["first_pair"] = {
+        "x_day": datetime.date.fromordinal(first).isoformat(),
+        "y_day": datetime.date.fromordinal(first + lag).isoformat(),
+    }
+    if abs(z) > 1.96 * se:
+        out["verdict"] = "outside_noise"
+        out["reading"] = (
+            f"Day-to-day changes in these two metrics move together (r = "
+            f"{_signed(r)}, 95% interval {_num(lo)} to {_num(hi)}) more than two "
+            f"unrelated metrics would, once each weekday's usual level is taken "
+            f"out. It does not say which one causes the other, or that either "
+            f"does: something else can move both.")
+    else:
+        out["verdict"] = "within_noise"
+        out["reading"] = (
+            f"Day-to-day changes in these two metrics move together no more than "
+            f"two unrelated metrics would (r = {_signed(r)}, 95% interval "
+            f"{_num(lo)} to {_num(hi)}). That is not evidence of no relation: "
+            f"with these days, a correlation smaller than about ±{_num(visible)} "
+            f"would be missed more often than seen. And it says nothing about "
+            f"cause either way.")
+    out["method"] = {
+        "weekday_means_removed": True,
+        "day_to_day_changes": True,
+        "effective_pairs": _r(effective, 1),
+        "autocorrelation_correction": _r(f),
+        "confidence": 0.95,
+    }
+    out["multiple_comparisons"] = RELATE_MULTIPLE_COMPARISONS
+    return out
