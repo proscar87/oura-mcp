@@ -1,5 +1,29 @@
 # Changelog
 
+## 0.3.6 — 22 September 2026
+
+**A scope you granted was reported as missing.** Oura's token endpoint now
+grants `extapi:daily extapi:heartrate …` where it used to grant `daily
+heartrate …` (reported by a user of another Oura server on 1 September,
+davidmosiah/oura-mcp#11). The string was stored raw and compared against
+`daily`, so anyone who authorized after the change got, on every empty day:
+
+> this collection needs the `workout` scope and your credentials don't have it
+> (you granted: extapi:daily, extapi:workout). Run `oura-mcp --authorize` again
+
+— advice that cannot work, because the next grant arrives prefixed too. And
+`oura_check` listed all eight scopes as ungranted. The records themselves were
+never affected; the diagnosis was.
+
+Scopes are now normalized where credentials are built, so a new grant, a file
+already written by 0.3.5 and the keychain all read the same. `spo2Daily`, the
+name before spec 1.40, is read as `spo2`. Nothing to do on upgrade: existing
+credentials are corrected on load, no re-authorization needed.
+
+Not validated against the real API — the prefixed grant is taken from that
+report, not observed on an account here. A scope that was NOT granted is still
+named, and a test holds that.
+
 ## 0.3.5 — 12 September 2026
 
 **A closed day is now answered from memory, and the response says so.** Ask the
