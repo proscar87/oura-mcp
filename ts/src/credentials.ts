@@ -51,6 +51,25 @@ export const SCOPES = ["email", "personal", "daily", "heartrate", "workout",
                          "tag", "session", "spo2"] as const;
 
 /**
+ * Oura's spellings of those same scopes. Since around September 2026 the token
+ * endpoint grants `extapi:daily`, not `daily`; and the spec before 1.40 called
+ * `spo2` `spo2Daily`. Compared raw, a scope the user DID grant reads as missing,
+ * and the only advice that follows — authorize again — cannot fix it.
+ */
+const SCOPE_ALIASES: Record<string, string> = { spo2Daily: "spo2" };
+
+/** The scopes as this server names them, whatever Oura called them. */
+export function normalizeScopes(scopes: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const raw of scopes) {
+    const bare = raw.startsWith("extapi:") ? raw.slice("extapi:".length) : raw;
+    const a = SCOPE_ALIASES[bare] ?? bare;
+    if (!out.includes(a)) out.push(a);
+  }
+  return out;
+}
+
+/**
  * Margin before treating an access token as expired. One that expires in three
  * seconds is, practically speaking, already expired: the request launched with
  * it will arrive late.
@@ -75,12 +94,18 @@ export function credentialsPath(): string {
 }
 
 export class Credentials {
+  readonly scopes: readonly string[];
+
   constructor(
     readonly access: Secret,
     readonly refreshToken: Secret | null,
     readonly expiresAt: number,              // epoch en ms
-    readonly scopes: readonly string[] = [],
-  ) {}
+    scopes: readonly string[] = [],
+  ) {
+    // Here rather than where scopes are read, so that a grant and a file
+    // written by 0.3.5 arrive the same way.
+    this.scopes = normalizeScopes(scopes);
+  }
 
   expired(margen = EXPIRY_MARGIN): boolean {
     return Date.now() + margen >= this.expiresAt;

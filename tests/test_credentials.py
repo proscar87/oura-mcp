@@ -562,3 +562,29 @@ def test_only_a_400_triggers_the_fallback(monkeypatch):
         with pytest.raises(OuraError):
             cr._post({"grant_type": "refresh_token"})
         assert vistos == [cr.TOKEN_URL], codigo
+
+
+def test_oura_prefixed_scopes_are_read_as_the_scopes_they_name(monkeypatch):
+    """Oura started answering `extapi:daily extapi:heartrate …` where it used to
+    answer `daily heartrate …` (reported against another server on 1 Sep 2026,
+    davidmosiah/oura-mcp#11). Stored raw, every comparison against `daily`
+    missed, and each empty day told the user they had not granted a permission
+    they had — and re-authorizing could never fix it, because the next grant came
+    back prefixed too. The old spec's `spo2Daily` is the same scope as `spo2`."""
+    _fake_token_endpoint(monkeypatch, {
+        "access_token": "A2", "refresh_token": "R2", "expires_in": 3600,
+        "scope": "extapi:daily extapi:heartrate extapi:personal spo2Daily"})
+    nueva = cr.refresh(_cred(), "id", "s")
+    assert nueva.scopes == ("daily", "heartrate", "personal", "spo2")
+
+
+def test_a_file_saved_with_prefixed_scopes_loads_them_normalized(tmp_path, monkeypatch):
+    """0.3.5 already wrote `extapi:` scopes to disk for anyone who authorized
+    after Oura's change; fixing only new grants would leave them misdiagnosed."""
+    ruta = tmp_path / "c.json"
+    ruta.write_text(json.dumps({"access": "A", "refresh_token": "R",
+                                "expires_at": time.time() + 3600,
+                                "scopes": ["extapi:daily", "extapi:workout"]}))
+    monkeypatch.setenv("OURA_CREDENTIALS", str(ruta))
+    monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
+    assert cr.load().scopes == ("daily", "workout")

@@ -1155,6 +1155,41 @@ def test_an_empty_response_names_the_scope_you_did_not_grant(monkeypatch, tmp_pa
     assert "--authorize" in razones, "it has to say what to do next"
 
 
+def test_a_prefixed_grant_does_not_invent_a_missing_scope(monkeypatch, tmp_path):
+    """The case users actually hit: Oura now grants `extapi:workout`, the day is
+    simply empty, and the reply must not send them to re-authorize a scope they
+    have. The unprefixed scope they did NOT grant must still be named."""
+    monkeypatch.setenv("OURA_CREDENTIALS", str(tmp_path / "c.json"))
+    monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
+    monkeypatch.delenv("OURA_PAT", raising=False)
+    monkeypatch.delenv("OURA_PAT_FILE", raising=False)
+    monkeypatch.delenv("OURA_SANDBOX", raising=False)
+
+    from oura_mcp import credentials as cr
+    cr.save(cr.Credentials(client.Secret("A"), client.Secret("R"),
+                           time.time() + 3600, ("extapi:daily", "extapi:workout")))
+
+    _fake_oura([[], []], monkeypatch)
+    monkeypatch.delenv("OURA_PAT", raising=False)      # _fake_oura sets one
+    r = client.fetch("workout", "2026-01-01", "2026-01-05")
+    assert "scope" not in " ".join(r["empty"]["what_we_know"])
+
+    r = client.fetch("session", "2026-01-01", "2026-01-05")
+    assert "`session` scope" in " ".join(r["empty"]["what_we_know"])
+
+
+def test_the_status_does_not_list_prefixed_grants_as_ungranted(monkeypatch, tmp_path):
+    monkeypatch.setenv("OURA_CREDENTIALS", str(tmp_path / "c.json"))
+    monkeypatch.setenv("OURA_NO_KEYCHAIN", "1")
+    monkeypatch.delenv("OURA_PAT", raising=False)
+    monkeypatch.delenv("OURA_PAT_FILE", raising=False)
+
+    from oura_mcp import credentials as cr, server
+    cr.save(cr.Credentials(client.Secret("A"), client.Secret("R"), time.time() + 3600,
+                           tuple("extapi:" + a for a in cr.SCOPES)))
+    assert server._oauth_state()["ungranted_scopes"] == []
+
+
 def test_a_negative_retry_after_does_not_crash(monkeypatch):
     """`Retry-After: -1` reached `time.sleep(-1)`, which raises ValueError — not
     an OuraError, so the tool's handler didn't catch it and the call died with a
