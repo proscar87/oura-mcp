@@ -278,7 +278,7 @@ export async function post(data: Record<string, string>): Promise<Record<string,
   }
 }
 
-function fromResponse(r: Record<string, unknown>, previous: readonly string[] = []): Credentials {
+export function fromResponse(r: Record<string, unknown>, previous: readonly string[] = []): Credentials {
   if (typeof r["access_token"] !== "string") {
     throw new OuraError("Oura responded without `access_token`");
   }
