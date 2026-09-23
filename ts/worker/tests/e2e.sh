@@ -54,7 +54,7 @@ tool() { rpc "{\"jsonrpc\":\"2.0\",\"id\":9,\"method\":\"tools/call\",\"params\"
 
 has "$(rpc '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"e2e","version":"1"}}}')" '"name":"oura"' "initialize"
 TOOLS=$(rpc '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' | python3 -c "import json,sys;print(','.join(t['name'] for t in json.load(sys.stdin)['result']['tools']))")
-eq "$TOOLS" "oura_collections,oura_query,oura_today,oura_compare,oura_check" "tools/list"
+eq "$TOOLS" "oura_collections,oura_query,oura_today,oura_compare,oura_relate,oura_check" "tools/list"
 Q=$(tool oura_query '{"collection":"daily_sleep","start":"2026-01-01","end":"2026-01-03"}')
 has "$Q" '"synthetic"' "sample data says it is sample data"
 has "$Q" '"n": 3' "a three-day range is three records"
@@ -62,4 +62,7 @@ has "$(tool oura_check '{}')" '"oura_responds": true' "oura_check reaches Oura"
 C=$(tool oura_compare '{"metric":"daily_readiness.score","a_start":"2026-03-01","a_end":"2026-03-14","b_start":"2026-03-15","b_end":"2026-03-28"}')
 has "$C" '"verdict"' "oura_compare answers with a verdict"
 has "$C" '"synthetic"' "and says the numbers it compared are sample data"
+X=$(tool oura_relate '{"x":"daily_activity.steps","y":"daily_readiness.score","start":"2026-01-01","end":"2026-04-30","lag":1}')
+has "$X" '"verdict"' "oura_relate answers with a verdict"
+has "$X" '"synthetic"' "and says the numbers it related are sample data"
 echo "all passed"

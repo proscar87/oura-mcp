@@ -1,23 +1,24 @@
-"""MCP server: five tools over Oura's 19 collections.
+"""MCP server: six tools over Oura's 19 collections.
 
-FIVE, NOT NINETEEN. A server with one tool per collection forces the model to
+SIX, NOT NINETEEN. A server with one tool per collection forces the model to
 choose among 19 similar names before knowing what any of them contain, and each
 one has to be documented separately. Here the collection is a parameter and the
 catalog is consulted when needed, not memorised.
 
-ONE ANALYSIS TOOL, AND THE CONDITION IT EXISTS UNDER. Through 0.3.x there were
+TWO ANALYSIS TOOLS, AND THE CONDITION THEY EXIST UNDER. Through 0.3.x there were
 none, for a reason that still holds: an average computed in here reaches the
 model as a number without its method. Across nine years of real data, **three
 out of four changes between two consecutive measurements fall within the
 metric's own normal oscillation**, so "your HRV is up 12%" without saying how
 much that metric swings on its own isn't informing: it's manufacturing a signal.
 
-`oura_compare` is the answer to that objection rather than an exception to it:
-it returns the band the metric moves in on its own — measured from the person's
-history, corrected for autocorrelation — with the difference, and reads «within
-noise» by default. The method, and the simulations that chose it, are in
-`method.py` and `tests/test_compare.py`. No trends, no correlations, no anomaly
-detection: none of those has a method here yet that survives the same test.
+`oura_compare` and `oura_relate` are the answer to that objection rather than
+an exception to it: each returns the band the metric moves in on its own —
+measured from the person's own data, corrected for autocorrelation — with the
+number, and reads «within noise» by default. The methods, and the simulations
+that chose them, are in `method.py`, `tests/test_compare.py` and
+`tests/test_relate.py`. No trends and no anomaly detection: neither has a
+method here yet that survives the same test.
 """
 
 from __future__ import annotations
@@ -33,7 +34,7 @@ from pydantic import Field
 from .client import OuraError, _shift_days, _today, fetch
 
 TOOLS_EXPUESTAS = ("oura_collections", "oura_query", "oura_today", "oura_compare",
-                   "oura_check")
+                   "oura_relate", "oura_check")
 """The tool names, in the order they are declared.
 
 Exists so the documentation guard can count them instead of trusting a number
@@ -49,7 +50,7 @@ draw conclusions, and a caller has to be able to tell those apart without
 reading the source."""
 from .collections import COLLECTIONS, WITH_DATE, describe, shape
 
-# ALL FIVE ARE READ-ONLY, and that isn't a promise: there isn't a single write
+# ALL SIX ARE READ-ONLY, and that isn't a promise: there isn't a single write
 # in the whole package — no POST, no PUT, no DELETE. Declaring it stops the
 # client asking for confirmation on every call, and Claude's connectors
 # directory requires it (`title` and `readOnlyHint` on every tool).
@@ -142,13 +143,14 @@ server = MCPServer(
         "250,000 characters, and 92% of it is a single field. If the response "
         "carries `large_response`, ask again with `fields` limited to what you "
         "need.\n\n"
-        "It computes exactly one thing, and only when asked: `oura_compare` "
+        "It computes exactly two things, and only when asked: `oura_compare` "
         "tests whether two periods differ by more than the metric's own noise, "
-        "measured from the person's history, and returns that band with the "
-        "verdict. Report the band and the verdict together, and read "
-        "`within_noise` as «not evidence of a change», never as «no change». "
-        "Everything else is raw data; no other average, delta or trend comes "
-        "from here."
+        "and `oura_relate` whether two metrics' day-to-day changes move "
+        "together beyond chance. Each returns its band or interval with the "
+        "verdict. Report them together, read `within_noise` as «not evidence "
+        "of a change or a relation», never as «none», and never report a "
+        "correlation as a cause. Everything else is raw data; no other "
+        "average, delta or trend comes from here."
     ),
 )
 
@@ -415,6 +417,108 @@ def oura_compare(
     for k in ("synthetic", "cached", "rate_limited"):
         if k in r:
             out[k] = r[k]
+    return out
+
+
+@server.tool(title="Do two metrics move together?",
+               annotations=ToolAnnotations(title="Do two metrics move together?",
+                                           **_SOLO_LECTURA))
+def oura_relate(
+    x: Annotated[str, Field(
+        description="First metric, `collection.field`, e.g. "
+                    "`daily_activity.high_activity_time`. Daily collections "
+                    "and `sleep` only.")],
+    y: Annotated[str, Field(
+        description="Second metric, `collection.field`, e.g. "
+                    "`daily_readiness.score`.")],
+    start: Annotated[str, Field(description="YYYY-MM-DD. About three months "
+                                            "or more is needed to answer.")],
+    end: Annotated[str, Field(description="YYYY-MM-DD, inclusive")],
+    lag: Annotated[int, Field(
+        description="Days from x to y, 0-7. Oura files a night's sleep and "
+                    "the next morning's readiness under the day you woke up, "
+                    "so activity on a day meets the sleep that followed it at "
+                    "lag=1. ONE lag per question: trying several is several "
+                    "tests.")] = 0,
+) -> dict:
+    """Do the day-to-day changes of two metrics move together, beyond chance?
+
+    The second calculation this server makes, held to the same rule as
+    `oura_compare`: the method travels with the number. Two metrics that both
+    rise on weekends, or both drift over months, correlate without touching
+    each other, so each weekday's usual level is removed and only day-to-day
+    changes are compared, with the effective number of pairs corrected for
+    autocorrelation. It answers `outside_noise`, `within_noise`, or
+    `cannot_tell` — usually for anything under about three months.
+
+    It measures co-movement, not cause and not direction. `first_pair` shows
+    which day of x met which day of y, so a wrong `lag` is visible.
+    """
+    from . import method as M
+
+    for m in (x, y):
+        problem = M.check_metric(m)
+        if problem:
+            return {"error": problem}
+    if x == y:
+        return {"error": "a metric correlates with itself perfectly; that says nothing"}
+    if isinstance(lag, bool) or not isinstance(lag, int) or not 0 <= lag <= M.MAX_LAG:
+        return {"error": f"`lag` must be a whole number of days from 0 to {M.MAX_LAG}; "
+                         f"got {lag}"}
+    try:
+        _shift_days(start, 0)
+        _shift_days(end, 0)
+        hoy = _today()
+    except OuraError as e:
+        return {"error": str(e)}
+    if start > end:
+        return {"error": "the range runs backwards: its start is after its end"}
+
+    excluded: dict = {}
+    ayer = _shift_days(hoy, -1)
+    if end >= hoy:
+        excluded["today"] = ("left out: today is still accumulating, and a "
+                             "partial day is not a day-to-day change")
+        end = ayer
+    if start > end:
+        return {"error": "the range has no closed day in it: it starts today or later"}
+    y_end = min(_shift_days(end, lag), ayer)
+
+    series = {}
+    for key, metric, until in (("x", x, end), ("y", y, y_end)):
+        collection, field = metric.split(".", 1)
+        top = field.split(".", 1)[0]
+        fields = [top, "type", "total_sleep_duration"] if collection == "sleep" else [top]
+        try:
+            r = fetch(collection, start, until, fields=fields)
+        except OuraError as e:
+            return {"error": str(e)}
+        if "truncated" in r or "pagination_cycle" in r:
+            return {"error": "Oura's answer came back incomplete, and a "
+                             "correlation over part of the days is a correlation "
+                             "about other days. Try a shorter range."}
+        s = M.series(r.get("data") or [], collection, field)
+        if s["non_numeric"]:
+            return {"error": f"`{field}` is not a number in `{collection}`; "
+                             f"only numeric fields can be related"}
+        series[key] = (s, r)
+
+    out = M.relate_series(series["x"][0]["values"], series["y"][0]["values"], lag)
+    out["x"] = x
+    out["y"] = y
+    for key in ("x", "y"):
+        s, r = series[key]
+        if s["missing_values"]:
+            excluded[f"missing_values_{key}"] = s["missing_values"]
+        if s.get("without_main_sleep"):
+            excluded[f"days_without_main_sleep_{key}"] = s["without_main_sleep"]
+        for k in ("synthetic", "cached", "rate_limited"):
+            if k in r:
+                out[k] = r[k]
+    if x.startswith("sleep.") or y.startswith("sleep."):
+        out["main_sleep_rule"] = M.MAIN_SLEEP_RULE
+    if excluded:
+        out["excluded"] = excluded
     return out
 
 

@@ -251,3 +251,138 @@ export function compareSeries(a: Day[], b: Day[], history: Day[]): Record<string
   out["multiple_comparisons"] = MULTIPLE_COMPARISONS;
   return out;
 }
+
+// ── oura_relate ────────────────────────────────────────────────────────────
+// The twin of `relate_series` in method.py, where each constant's reason — and
+// the false-alarm rate measured without it — is written down.
+export const MAX_LAG = 7;
+export const MIN_EFFECTIVE_PAIRS = 20;
+const BARTLETT_LAGS = 3;
+const WEEKDAY_COST = 12;
+
+export const RELATE_MULTIPLE_COMPARISONS =
+  "This is one lag and one pair of metrics. Trying several and keeping " +
+  "whichever crosses finds a crossing by chance about one in twenty — and " +
+  "because the method works on day-to-day changes, a real relation at one " +
+  "lag also shows up, reversed, at the lags next to it.";
+
+const weekday = (day: string) =>
+  new Date(Date.UTC(+day.slice(0, 4), +day.slice(5, 7) - 1, +day.slice(8, 10))).getUTCDay();
+const iso = (o: number) => new Date(o * 86_400_000).toISOString().slice(0, 10);
+
+function deweek(days: Day[]): Map<number, number> {
+  const groups = new Map<number, number[]>();
+  for (const [d, v] of days) {
+    const w = weekday(d);
+    if (!groups.has(w)) groups.set(w, []);
+    groups.get(w)!.push(v);
+  }
+  const means = new Map<number, number>();
+  for (const [k, v] of groups) means.set(k, mean(v));
+  const out = new Map<number, number>();
+  for (const [d, v] of days) out.set(ordinal(d), v - means.get(weekday(d))!);
+  return out;
+}
+
+export function changes(series: Map<number, number>): Map<number, number> {
+  const out = new Map<number, number>();
+  for (const o of [...series.keys()].sort((a, b) => a - b)) {
+    if (series.has(o - 1)) out.set(o, series.get(o)! - series.get(o - 1)!);
+  }
+  return out;
+}
+
+function acf(series: Map<number, number>, k: number): number {
+  const keys = [...series.keys()].sort((a, b) => a - b);
+  const vals = keys.map((o) => series.get(o)!);
+  if (vals.length < 3) return 0.0;
+  const m = mean(vals);
+  let den = 0.0;
+  for (const v of vals) den += (v - m) * (v - m);
+  const pairs: [number, number][] = [];
+  for (const o of keys) if (series.has(o + k)) pairs.push([series.get(o)!, series.get(o + k)!]);
+  if (den === 0.0 || !pairs.length) return 0.0;
+  let num = 0.0;
+  for (const [a, b] of pairs) num += (a - m) * (b - m);
+  return (num / pairs.length) / (den / vals.length);
+}
+
+export function relateSeries(x: Day[], y: Day[], lag: number): Record<string, unknown> {
+  const dx = changes(deweek(x)), dy = changes(deweek(y));
+  const keys = [...dx.keys()].sort((p, q) => p - q).filter((o) => dy.has(o + lag));
+  const out: Record<string, unknown> = {};
+  out["lag"] = lag;
+  out["pairs"] = keys.length;
+  const a = keys.map((o) => dx.get(o)!), b = keys.map((o) => dy.get(o + lag)!);
+  let sxx = 0.0, syy = 0.0, sxy = 0.0;
+  if (keys.length >= 3) {
+    const ma = mean(a), mb = mean(b);
+    for (let i = 0; i < a.length; i++) {
+      const u = a[i]!, v = b[i]!;
+      sxx += (u - ma) * (u - ma);
+      syy += (v - mb) * (v - mb);
+      sxy += (u - ma) * (v - mb);
+    }
+  }
+  if (keys.length >= 3 && (sxx === 0.0 || syy === 0.0)) {
+    out["verdict"] = "cannot_tell";
+    out["reading"] =
+      "One of the two metrics did not change from one day to the next in " +
+      "these days, so there is nothing for the other to move with. Constant " +
+      "values are what sample data and a disconnected ring produce.";
+    return out;
+  }
+
+  let f = 1.0;
+  for (let k = 1; k <= BARTLETT_LAGS; k++) f += 2 * acf(dx, k) * acf(dy, k);
+  f = Math.max(f, 1.0);
+  const effective = keys.length / f - WEEKDAY_COST;
+  if (effective < MIN_EFFECTIVE_PAIRS) {
+    out["verdict"] = "cannot_tell";
+    out["reading"] =
+      `These days give ${num(Math.max(effective, 0.0))} effective pairs of ` +
+      `day-to-day changes, and at least ${MIN_EFFECTIVE_PAIRS} are needed. ` +
+      `Metrics that wander, repeat weekly and have gaps take about three ` +
+      `months of consecutive days before a correlation can be told apart ` +
+      `from chance.`;
+    return out;
+  }
+
+  let rr = sxy / Math.sqrt(sxx * syy);
+  rr = Math.min(Math.max(rr, -0.999999), 0.999999);
+  const z = Math.atanh(rr);
+  const se = 1 / Math.sqrt(effective - 3);
+  const lo = Math.tanh(z - 1.96 * se), hi = Math.tanh(z + 1.96 * se);
+  const visible = Math.tanh(1.96 * se);
+  out["correlation"] = r(rr);
+  out["interval"] = [r(lo), r(hi)];
+  const first = keys[0]!;
+  out["first_pair"] = { x_day: iso(first), y_day: iso(first + lag) };
+  if (Math.abs(z) > 1.96 * se) {
+    out["verdict"] = "outside_noise";
+    out["reading"] =
+      `Day-to-day changes in these two metrics move together (r = ` +
+      `${signed(rr)}, 95% interval ${num(lo)} to ${num(hi)}) more than two ` +
+      `unrelated metrics would, once each weekday's usual level is taken ` +
+      `out. It does not say which one causes the other, or that either ` +
+      `does: something else can move both.`;
+  } else {
+    out["verdict"] = "within_noise";
+    out["reading"] =
+      `Day-to-day changes in these two metrics move together no more than ` +
+      `two unrelated metrics would (r = ${signed(rr)}, 95% interval ` +
+      `${num(lo)} to ${num(hi)}). That is not evidence of no relation: ` +
+      `with these days, a correlation smaller than about ±${num(visible)} ` +
+      `would be missed more often than seen. And it says nothing about ` +
+      `cause either way.`;
+  }
+  out["method"] = {
+    weekday_means_removed: true,
+    day_to_day_changes: true,
+    effective_pairs: r(effective, 1),
+    autocorrelation_correction: r(f),
+    confidence: 0.95,
+  };
+  out["multiple_comparisons"] = RELATE_MULTIPLE_COMPARISONS;
+  return out;
+}
