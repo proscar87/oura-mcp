@@ -14,7 +14,7 @@ asks for is below, ready to paste.
 
 **Short description**
 
-> The Oura Ring v2 API as an MCP server. All 19 collections, four tools, and it
+> The Oura Ring v2 API as an MCP server. All 19 collections, five tools, and it
 > paginates to the end so a partial answer never passes for a complete one.
 
 **Long description**
@@ -33,9 +33,12 @@ asks for is below, ready to paste.
 > rejects `latest=true` where Oura would silently return everything, and names
 > field projections Oura ignored.
 >
-> It deliberately performs no analysis: no correlations, no anomaly detection,
-> no period comparison. An average computed inside the server reaches the model
-> as a number without its method.
+> It performs exactly one calculation, `oura_compare`, and ships its method with
+> it: whether two periods differ by more than the metric's own noise, measured
+> from the person's own history and corrected for day-to-day dependence, with
+> the band returned alongside the verdict. Nothing else is computed — no
+> correlations, no trends — because an average without its method reaches the
+> model as a signal that may not be there.
 
 **Works without credentials?** Yes. It runs on Oura's official sample data out
 of the box, and every sample response carries a `synthetic` key saying so, so
@@ -56,9 +59,10 @@ locally at
 `~/.config/oura-mcp/credenciales.json` with `0600` permissions and can be erased
 with `oura-mcp --forget`.
 
-**Tools:** `oura_collections`, `oura_query`, `oura_today`, `oura_check` — all
-read-only. `oura_today` composes the other two: it returns last night's sleep
-and today's readiness with the days before them, RAW, and computes no average,
-no delta and no trend.
+**Tools:** `oura_collections`, `oura_query`, `oura_today`, `oura_compare`,
+`oura_check` — all read-only. `oura_today` composes the others: it returns last
+night's sleep and today's readiness with the days before them, RAW, and
+computes nothing. `oura_compare` answers `within_noise`, `outside_noise` or
+`cannot_tell`, always with the noise band it was judged against.
 
 **License:** MIT

@@ -1,15 +1,17 @@
 /**
- * MCP server: four tools over Oura's 19 collections.
+ * MCP server: five tools over Oura's 19 collections.
  *
- * FOUR, NOT NINETEEN. A server with one tool per collection forces the model
+ * FIVE, NOT NINETEEN. A server with one tool per collection forces the model
  * to choose among 19 similar names before knowing what any of them contain. Here
  * the collection is a parameter and the catalog is consulted when needed.
  *
- * THERE ARE NO ANALYSIS TOOLS. An average computed in here reaches the model
- * as a number without its method. Across nine years of real data, three out of
- * four changes between consecutive measurements fall within the metric's own
- * normal oscillation. Handing over "your HRV is up 12%" without saying how much
- * that metric swings on its own isn't informing: it's manufacturing a signal.
+ * ONE ANALYSIS TOOL, AND THE CONDITION IT EXISTS UNDER. An average computed in
+ * here reaches the model as a number without its method: across nine years of
+ * real data, three out of four changes between consecutive measurements fall
+ * within the metric's own normal oscillation. `oura_compare` answers that by
+ * returning the band the metric moves in on its own, with the difference, and
+ * reading «within noise» by default. The method lives in `method.ts`, twin of
+ * Python's `method.py`, where the reasoning is written down.
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -40,7 +42,7 @@ export const VERSION: string = (() => {
 })();
 
 /**
- * ALL FOUR ARE READ-ONLY, and that isn't a promise: there is no POST, PUT or
+ * ALL FIVE ARE READ-ONLY, and that isn't a promise: there is no POST, PUT or
  * DELETE anywhere in the package. Declaring it stops the client asking for
  * confirmation on every call, and Claude's connectors directory requires it.
  *
@@ -91,8 +93,13 @@ export const INSTRUCTIONS =
   "4. Some collections are enormous: 30 days of `daily_activity` is 250,000 " +
   "characters, and 92% of it is a single field. If the response carries " +
   "`large_response`, ask again with `fields` limited to what you need.\n\n" +
-  "This server deliberately computes no averages and no trends: it hands over " +
-  "the data so the analysis happens where the method can be cited.";
+  "It computes exactly one thing, and only when asked: `oura_compare` " +
+  "tests whether two periods differ by more than the metric's own noise, " +
+  "measured from the person's history, and returns that band with the " +
+  "verdict. Report the band and the verdict together, and read " +
+  "`within_noise` as «not evidence of a change», never as «no change». " +
+  "Everything else is raw data; no other average, delta or trend comes " +
+  "from here.";
 
 // The connected server, kept so the tool handlers can reach the client.
 let live: McpServer | undefined;
@@ -253,6 +260,36 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
   });
 
+  srv.registerTool("oura_compare", {
+    title: "Compare two periods against the noise",
+    description:
+      "Is the difference between two periods larger than this metric's own " +
+      "noise? THE ONE CALCULATION THIS SERVER MAKES, and it comes with its " +
+      "method. «Your HRV is up 12%» is a number without one: daily metrics " +
+      "swing on their own, and a good night tends to follow a good night, so a " +
+      "textbook comparison calls noise a change about a third of the time. This " +
+      "one measures how much the metric moves on its own from the person's " +
+      "preceding 120 days, and answers `within_noise`, `outside_noise`, or " +
+      "`cannot_tell` when it has too little to know. «within noise» is not " +
+      "«no change»: with those days, a real change smaller than `noise_band` " +
+      "is missed more often than seen. Today is left out — it is still accumulating. It says " +
+      "whether the level differs, never why.",
+    inputSchema: {
+      metric: z.string().describe(
+        "`collection.field`, e.g. `daily_readiness.score`, `sleep.average_hrv`, " +
+        "`daily_activity.steps`, `daily_readiness.contributors.hrv_balance`. " +
+        "Daily collections and `sleep` only."),
+      a_start: z.string().describe("First period, YYYY-MM-DD"),
+      a_end: z.string().describe("First period, YYYY-MM-DD, inclusive"),
+      b_start: z.string().describe("Second period, YYYY-MM-DD"),
+      b_end: z.string().describe("Second period, YYYY-MM-DD, inclusive"),
+    },
+    annotations: { title: "Compare two periods against the noise", ...READ_ONLY },
+  }, async (args) => {
+    const out = await compare(args, auth);
+    return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
+  });
+
   srv.registerTool("oura_check", {
     title: "Self-check of the Oura connection",
     description:
@@ -283,12 +320,94 @@ interface QueryArgs {
 }
 
 export const NOTHING_COMPUTED =
-  "raw records only: this server computed no average, no delta and no trend. " +
+  "raw records only: this call computed no average, no delta and no trend. " +
   "Compare them yourself so the method travels with the number.";
 
 /** The tool names, in the order they are declared. Mirrors TOOLS_EXPUESTAS. */
 export const TOOLS_EXPOSED = ["oura_collections", "oura_query", "oura_today",
-                              "oura_check"] as const;
+                              "oura_compare", "oura_check"] as const;
+
+interface CompareArgs {
+  metric: string;
+  a_start: string;
+  a_end: string;
+  b_start: string;
+  b_end: string;
+}
+
+/** The twin of Python's `oura_compare`. The method itself is in `method.ts`. */
+export async function compare(a: CompareArgs, auth?: Auth): Promise<Record<string, unknown>> {
+  const M = await import("./method.js");
+  const problem = M.checkMetric(a.metric);
+  if (problem) return { error: problem };
+  const i = a.metric.indexOf(".");
+  const collection = a.metric.slice(0, i), field = a.metric.slice(i + 1);
+  let { a_start, a_end, b_start, b_end } = a;
+  let hoy: string;
+  try {
+    for (const d of [a_start, a_end, b_start, b_end]) shiftDays(d, 0);
+    hoy = localDay();
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  if (a_start > a_end || b_start > b_end) {
+    return { error: "a period runs backwards: its start is after its end" };
+  }
+  if (!(a_end < b_start || b_end < a_start)) {
+    return { error: "the periods overlap; a day cannot be evidence for both" };
+  }
+
+  const excluded: Record<string, unknown> = {};
+  const ayer = shiftDays(hoy, -1);
+  if (a_end >= hoy || b_end >= hoy) {
+    excluded["today"] = "left out: today is still accumulating, and a " +
+                        "partial day would pull its period down";
+    if (a_end > ayer) a_end = ayer;
+    if (b_end > ayer) b_end = ayer;
+  }
+  if (a_start > a_end || b_start > b_end) {
+    return { error: "a period has no closed day in it: it starts today or later" };
+  }
+
+  const first = a_start < b_start ? a_start : b_start;
+  const hStart = shiftDays(first, -M.HISTORY_DAYS);
+  const last = a_end > b_end ? a_end : b_end;
+  const top = field.split(".", 1)[0]!;
+  const fields = collection === "sleep" ? [top, "type", "total_sleep_duration"] : [top];
+  let r: Record<string, unknown>;
+  try {
+    r = await fetchAll(collection, { start: hStart, end: last, fields, auth });
+  } catch (e) {
+    if (e instanceof OuraError) return { error: e.message };
+    throw e;
+  }
+  if ("truncated" in r || "pagination_cycle" in r) {
+    return { error: "Oura's answer came back incomplete, and a band computed " +
+                    "on part of the days would be a band about other days. " +
+                    "Try a shorter range." };
+  }
+
+  const s = M.series((r["data"] as Record<string, unknown>[]) ?? [], collection, field);
+  if (s.non_numeric) {
+    return { error: `\`${field}\` is not a number in \`${collection}\`; ` +
+                    `only numeric fields can be compared` };
+  }
+  const vals = s.values;
+  const history = vals.filter(([d]) => d < first);
+  const pa = vals.filter(([d]) => a_start <= d && d <= a_end);
+  const pb = vals.filter(([d]) => b_start <= d && d <= b_end);
+
+  const out = M.compareSeries(pa, pb, history);
+  out["metric"] = a.metric;
+  Object.assign(out["period_a"] as object, { start: a_start, end: a_end });
+  Object.assign(out["period_b"] as object, { start: b_start, end: b_end });
+  if (s.missing_values) excluded["missing_values"] = s.missing_values;
+  if (s.without_main_sleep) excluded["days_without_main_sleep"] = s.without_main_sleep;
+  if (collection === "sleep") out["main_sleep_rule"] = M.MAIN_SLEEP_RULE;
+  if (Object.keys(excluded).length) out["excluded"] = excluded;
+  for (const k of ["synthetic", "cached", "rate_limited"]) if (k in r) out[k] = r[k];
+  return out;
+}
 
 /**
  * Last night's sleep and today's readiness, with the days before them.

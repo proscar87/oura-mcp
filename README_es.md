@@ -11,7 +11,7 @@
      puede subir es decoración; una que puede bajar es evidencia. -->
 
 La API v2 de [Oura](https://ouraring.com) como servidor
-[MCP](https://modelcontextprotocol.io). Las 19 colecciones, cuatro herramientas,
+[MCP](https://modelcontextprotocol.io). Las 19 colecciones, cinco herramientas,
 ninguna dependencia más allá del SDK de MCP.
 
 ### Un día local de frecuencia cardiaca son 1,231 muestras repartidas en 2 páginas
@@ -258,13 +258,14 @@ El despliegue, paso a paso, y exactamente qué se ha verificado y qué no:
 | `oura_collections` | Las 19, qué lleva cada una y qué parámetros acepta |
 | `oura_query` | Una colección entera sobre un rango, paginando hasta el final |
 | `oura_today` | El sueño de anoche y la preparación de hoy, con los días previos |
+| `oura_compare` | Si dos periodos difieren más que el ruido propio de la métrica |
 | `oura_check` | Autodiagnóstico que no expone nada |
 
-**Cuatro, no diecinueve.** Un servidor con una herramienta por colección obliga al
+**Cinco, no diecinueve.** Un servidor con una herramienta por colección obliga al
 modelo a elegir entre 19 nombres parecidos antes de saber qué contiene ninguno.
 Aquí la colección es un parámetro y el catálogo se consulta cuando hace falta.
 
-Las cuatro se declaran de solo lectura, y eso no es una promesa: no hay ningún
+Las cinco se declaran de solo lectura, y eso no es una promesa: no hay ningún
 `POST`, `PUT` ni `DELETE` en todo el paquete, y hay un test que lee el código
 fuente para que siga siendo así.
 
@@ -278,6 +279,39 @@ datos reales, tres de cada cuatro cambios entre mediciones consecutivas caen
 dentro de la oscilación normal de la propia métrica, así que un porcentaje sin
 ese contexto fabrica una señal en vez de informar de una. Su único parámetro es
 `days`, de 1 a 30, con 7 por defecto.
+
+### `oura_compare`: el único cálculo, con su método
+
+«¿Subió mi HRV desde que dejé de tomar?» es la pregunta que la gente trae de
+verdad, y entregar dos promedios la contesta mal: las métricas diarias oscilan
+solas, y una buena noche suele venir después de otra buena noche, así que una
+comparación de libro de texto **llama cambio al ruido ordinario como una de cada
+tres veces** (medido: 34–38% con la autocorrelación que suelen tener estas
+métricas).
+
+`oura_compare` recibe una `metric` —`collection.field`, como
+`daily_readiness.score`, `sleep.average_hrv` o `daily_activity.steps`— y dos
+periodos, `a_start`/`a_end` y `b_start`/`b_end`. Responde con los dos promedios,
+la diferencia y la **banda en la que esta métrica se mueve sola en periodos de
+ese largo**, medida con **tus propios 120 días anteriores** y corregida por esa
+dependencia de un día al siguiente. Luego, uno de tres veredictos:
+
+- `outside_noise`: la diferencia es mayor que la banda. El nivel es distinto;
+  no por qué, ni que vaya a durar.
+- `within_noise`: no lo es. **Esto no es «no hubo cambio»**: con esos días, un
+  cambio real más chico que la banda se perdería más veces de las que se vería,
+  y la respuesta lo dice.
+- `cannot_tell`: menos de 7 días con valor en un periodo, o menos de 60 días de
+  historia para medir la banda, o una métrica que nunca varió (como pasa con los
+  datos de muestra de Oura). No se adivina ninguna banda.
+
+El método se eligió por simulación, no antes de ella: con la banda estimada a
+partir de tu historia y un valor crítico de t, el ruido se llama cambio **como
+mucho una vez de cada veinte, más o menos**, en todas las autocorrelaciones
+probadas, y la suite de tests lo mantiene ahí. Hoy queda fuera, porque todavía
+se está acumulando. `sleep` usa el sueño principal más largo de cada día, y la
+respuesta dice esa regla. Hacer muchas comparaciones y quedarte con la que cruza
+encuentra un cruce por azar, y la respuesta también lo dice.
 
 ### Parámetros de `oura_query`
 
@@ -331,8 +365,8 @@ registrado en el CHANGELOG como un cambio incompatible.)*
 
 ## Lo que este servidor NO hace
 
-**No analiza.** Ni correlaciones, ni detección de anomalías, ni comparación entre
-periodos, que es justamente donde otros servidores ponen su valor.
+**No analiza más allá de `oura_compare`.** Ni correlaciones, ni tendencias, ni
+detección de anomalías, que es justamente donde otros servidores ponen su valor.
 
 La razón: un promedio calculado aquí dentro le llega al modelo como un número sin
 su método. A lo largo de nueve años de datos reales, **tres de cada cuatro
@@ -341,7 +375,13 @@ la propia métrica**. Un servidor que te suelta «tu HRV subió 12%» sin decir
 cuánto oscila esa métrica por sí sola no te está informando: te está fabricando
 una señal.
 
-Aquí obtienes los datos. El análisis pertenece a donde se pueda citar el método;
+`oura_compare` existe porque responde a esa objeción en vez de ignorarla: la
+banda viene con el número. Lo demás todavía no tiene aquí un método que
+sobreviva a las mismas simulaciones, así que no está. La correlación es la
+siguiente candidata, y tiene más formas de engañar: patrones semanales
+compartidos, tendencias compartidas y probar varios desfases hasta que uno cruce.
+
+Todo lo demás lo obtienes en crudo. El análisis pertenece a donde se pueda citar el método;
 por ejemplo a [cotejo](https://github.com/proscar87/cotejo), que hace exactamente
 esa distinción para los biomarcadores en sangre.
 

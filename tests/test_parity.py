@@ -139,3 +139,98 @@ def test_the_calendar_rule_agrees(dias_atras):
     esperado = _range_has_closed(fecha)
     obtenido = json.loads(_node(f'rangeHasClosed("{fecha}")', []))
     assert obtenido == esperado, f"{fecha}: python={esperado} typescript={obtenido}"
+
+
+# ── oura_compare: the one computed answer, computed the same way ──────────
+METHOD = ROOT / "ts" / "dist" / "method.js"
+
+
+def _compare_cases():
+    import datetime as dt
+    import math
+    import random
+    rng = random.Random(11)
+    cases = []
+
+    def ar1(n, rho):
+        x = [rng.gauss(0, 1) / math.sqrt(1 - rho * rho)]
+        for _ in range(n - 1):
+            x.append(rho * x[-1] + rng.gauss(0, 1))
+        return x
+
+    def days(start, vals):
+        d0 = dt.date(2026, 1, 1).toordinal() + start
+        return [[dt.date.fromordinal(d0 + i).isoformat(), v] for i, v in enumerate(vals)]
+
+    for rho, n, shift in ((0.0, 7, 0), (0.4, 14, 0), (0.65, 21, 2.5), (0.8, 10, -3)):
+        s = ar1(120 + 2 * n + 5, rho)
+        b = [v + shift for v in s[125 + n:]]
+        cases.append((days(0, s[:120]), days(120, s[120:120 + n]), days(125 + n, b)))
+    # Whole numbers over sixteen days: means that end in .0625, the rounding
+    # tie where Python and JavaScript disagree unless one copies the other.
+    whole = [float(rng.randint(5000, 12000)) for _ in range(152)]
+    cases.append((days(0, whole[:120]), days(120, whole[120:136]), days(136, whole[136:152])))
+    # Days missing at random — the ring on its charger — from every part.
+    s = ar1(170, 0.6)
+    gapped = [[d, v] for d, v in days(0, s) if rng.random() >= 0.3]
+    first_a, first_b = dt.date(2026, 1, 1).toordinal() + 120, dt.date(2026, 1, 1).toordinal() + 145
+    iso = lambda o: dt.date.fromordinal(o).isoformat()
+    cases.append(([x for x in gapped if x[0] < iso(first_a)],
+                  [x for x in gapped if iso(first_a) <= x[0] < iso(first_a + 21)],
+                  [x for x in gapped if iso(first_b) <= x[0]]))
+    # A metric that never varies, as Oura's sandbox serves it.
+    cases.append((days(0, [80.0] * 120), days(120, [80.0] * 14), days(134, [80.0] * 14)))
+    # Not enough history, and not enough days: the two «cannot_tell» paths.
+    s = ar1(90, 0.5)
+    cases.append((days(0, s[:40]), days(40, s[40:54]), days(54, s[54:68])))
+    cases.append((days(0, s[:70]), days(70, s[70:75]), days(75, s[75:90])))
+    return cases
+
+
+@pytest.mark.skipif(not METHOD.exists(), reason="needs ts/dist/method.js")
+def test_compare_gives_the_same_answer_in_both():
+    from oura_mcp import method as M
+    cases = _compare_cases()
+    guion = (
+        f'import {{ compareSeries }} from "{METHOD}";\n'
+        'const cs = JSON.parse(await new Promise(r => {'
+        "  let s = ''; process.stdin.on('data', c => s += c);"
+        "  process.stdin.on('end', () => r(s)); }));\n"
+        "console.log(JSON.stringify(cs.map(([h, a, b]) => compareSeries(a, b, h))));"
+    )
+    r = subprocess.run(["node", "--input-type=module", "-e", guion],
+                       input=json.dumps(cases), capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr[:400]
+    ts = json.loads(r.stdout)
+    py = [M.compare_series([tuple(x) for x in a], [tuple(x) for x in b], [tuple(x) for x in h])
+          for h, a, b in cases]
+    py = json.loads(json.dumps(py))
+    verdicts = [p["verdict"] for p in py]
+    assert "outside_noise" in verdicts and "within_noise" in verdicts and "cannot_tell" in verdicts
+    for i, (p, t) in enumerate(zip(py, ts)):
+        assert p == t, f"case {i}: {p} != {t}"
+
+
+@pytest.mark.skipif(not METHOD.exists(), reason="needs ts/dist/method.js")
+def test_the_main_sleep_rule_picks_the_same_night_in_both():
+    from oura_mcp import method as M
+    records = [
+        {"day": "2026-01-01", "type": "long_sleep", "total_sleep_duration": 25000, "average_hrv": 40},
+        {"day": "2026-01-01", "type": "late_nap", "total_sleep_duration": 1800, "average_hrv": 90},
+        {"day": "2026-01-02", "type": "long_sleep", "total_sleep_duration": 20000, "average_hrv": 50},
+        {"day": "2026-01-02", "type": "long_sleep", "total_sleep_duration": 26000, "average_hrv": 44},
+        {"day": "2026-01-03", "type": "sleep", "total_sleep_duration": 3000, "average_hrv": 70},
+        {"day": "2026-01-04", "type": "long_sleep", "total_sleep_duration": 26000, "average_hrv": None},
+        {"day": "2026-01-05", "type": "long_sleep", "total_sleep_duration": 26000, "average_hrv": True},
+    ]
+    guion = (
+        f'import {{ series }} from "{METHOD}";\n'
+        'const d = JSON.parse(await new Promise(r => {'
+        "  let s = ''; process.stdin.on('data', c => s += c);"
+        "  process.stdin.on('end', () => r(s)); }));\n"
+        "console.log(JSON.stringify(series(d, 'sleep', 'average_hrv')));"
+    )
+    r = subprocess.run(["node", "--input-type=module", "-e", guion],
+                       input=json.dumps(records), capture_output=True, text=True, timeout=60)
+    assert r.returncode == 0, r.stderr[:400]
+    assert json.loads(r.stdout) == json.loads(json.dumps(M.series(records, "sleep", "average_hrv")))

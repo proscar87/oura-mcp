@@ -653,6 +653,8 @@ Held over from AGENTS.md, and with more reason now that every competitor does th
 opposite:
 
 - Analysis tools, correlations, anomaly detection, period comparison.
+  *(Superseded on 23 September 2026 for period comparison only: see
+  «Analysis, with its method» at the end.)*
 - One tool per collection.
 - **Webhooks.** They exist in the spec, but they require a public endpoint and
   break the local model. A server running on your machine can't receive a POST
@@ -2441,7 +2443,9 @@ trailing slash.
 **More tools, and server-side analysis.** `thebriangao/totem` runs 47 tools and
 still computes no trends, averages or correlations. Tool count was never what
 forces analysis into a server, so growing ours wouldn't threaten the line we
-drew — and wouldn't help either. Three tools stay.
+drew — and wouldn't help either. Three tools stay. *(They became five: `oura_today`
+in 0.3.5, and `oura_compare` on 23 September — the second by a deliberate
+reversal, recorded at the end.)*
 
 **Chasing stars.** The most-starred WHOOP repository (`OpenStrap/edge`, 427
 stars) is about using the hardware *without a subscription*. Oura doesn't
@@ -2539,4 +2543,52 @@ instead.
 **Not verified: a real deployment, a real Oura login, and claude.ai or ChatGPT
 completing the connection.** The branch ships as a PR, not a release, until
 Oscar has done it once.
+
+---
+
+## Analysis, with its method — 23 September 2026
+
+Oscar asked for trends, correlations and analysis. The objection that kept them
+out still holds, so the rule was changed rather than dropped: **an analysis
+tool ships only if the method travels with the number, and a simulation in the
+test suite holds it to its error rate.** Written into AGENTS.md as the rule for
+whatever comes next.
+
+**`oura_compare` is the first, and the simulations chose its method.**
+
+| How the noise band was estimated | False alarms at ρ=0.65 |
+|---|---|
+| Textbook: independent days | 34–38% |
+| Autocorrelation from the two periods, t | 11–21% |
+| …with Kendall's bias correction | 7–14% |
+| **Autocorrelation from the person's preceding 120 days, t** | **about 5%** (measured up to 5.7%) |
+
+With too little history (under 60 days) or too few days in a period (under 7)
+it answers `cannot_tell` rather than guess. Its power is low when the metric is
+strongly autocorrelated and the periods are short — which is why every answer
+says a real change smaller than the band would be missed more often than seen.
+
+**Found after the first push, by review:** real rings have gaps, and the lag-1
+estimate summed over the pairs that survived but divided by every value, so ρ
+shrank with the missing days and false alarms crept back (8.7% at 30% missing).
+Each sum is now over its own count, the history needs 20 consecutive pairs,
+and a simulated null with 25–30% of days missing holds it. A weekly pattern
+with uneven weekday mixes turned out to make the method more cautious, not
+less (0.2–3.8%), so it got a guard test rather than a rule.
+
+**One parity trap found before it shipped:** Python rounds ties to even and
+JavaScript's `toFixed` away from zero, so the mean of sixteen whole numbers
+ending in .0625 would print differently per install. Python now copies
+JavaScript, and a parity case with exactly that tie fails if it stops.
+
+**Next: correlation (`oura_relate`)**, which has more ways to lie:
+
+- a shared weekly pattern correlates any two series;
+- a shared trend does too, which differencing removes and weekday means don't;
+- differenced noise is negatively autocorrelated, so n_eff must be estimated,
+  not assumed;
+- testing several lags is several tests;
+- and Oura's day convention decides which night follows which day.
+
+Each gets a simulated null in the suite before the tool exists.
 
