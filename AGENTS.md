@@ -129,9 +129,32 @@ organization required. Annotations, privacy policy, icon and bundle are all in
 place. Missing: the submission itself, which is a Google Form behind a sign-in
 and therefore Oscar's to send. `SUBMISSION.md` has every answer written out.
 
-The other door — remote connector — **requires a Team or Enterprise
-organization** and hosting third-party health data. That's a decision, not a
-to-do.
+The other door — a *listed* remote connector — **requires a Team or
+Enterprise organization** and hosting third-party health data. That's still a
+decision, not a to-do.
+
+What exists instead, since September 2026, is the remote server as something
+**each person deploys for themselves**: `ts/worker`, a Cloudflare Worker added
+to claude.ai or ChatGPT as a *custom* connector, which any plan allows. Nobody
+operates a shared instance, so nobody holds anyone else's data. Its rules, which
+are not negotiable when changing it:
+
+- **One owner, fail closed.** `OURA_OWNER_EMAIL` is compared after Oura's
+  login; with it unset, nobody gets in.
+- **Its own consent screen** before anyone is sent to Oura, bound to the
+  browser by a `SameSite=Lax` cookie and an `Origin` check. Oura skips consent
+  for an account that already approved, so without this a crafted link hands
+  over the owner's authorization (the confused-deputy attack).
+- **Oura's tokens live in one Durable Object** and are refreshed only there,
+  one at a time. Not in the provider's grant props: KV has no transactions and
+  Oura's refresh token is single-use.
+- **`OURA_TIMEZONE` is required.** A Worker's clock is UTC; without it the
+  person's today reads as closed and the cache holds it forever.
+- The core it imports must never assume one process is one person: the cache
+  key starts with the grant's identity, and the token comes from `Auth`.
+
+Its dependencies live in `ts/worker/package.json` and never in `ts/`, whose
+dependencies are what the `.mcpb` bundles.
 
 ### Discovery
 The three files are in, and both listings were filed on 10 August 2026:

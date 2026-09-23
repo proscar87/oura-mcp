@@ -51,6 +51,11 @@ docker run -i --rm -e OURA_SANDBOX=1 ghcr.io/proscar87/oura-mcp
 Sin esa opción el contenedor no tiene stdin, el saludo inicial nunca llega y el
 cliente informa de un servidor que no aparece.
 
+¿Usas **claude.ai** o **ChatGPT** en el navegador? Esos se conectan por URL, así
+que el servidor tiene que vivir en algún lugar público: despliégalo como Worker
+en tu propia cuenta de Cloudflare — gratis, unos diez minutos, solo tuyo. Consulta
+[Remoto: claude.ai y ChatGPT](#remoto-claudeai-y-chatgpt).
+
 ---
 
 ## El problema, medido
@@ -227,6 +232,25 @@ que no pueden mostrar una URL.
 terminal, así que poner ahí solo el nombre falla en silencio: uno de los errores
 más comunes al configurar un servidor MCP.
 
+### Remoto: claude.ai y ChatGPT
+
+claude.ai llega a un conector desde la nube de Anthropic y ChatGPT desde la de
+OpenAI, no desde tu computadora — así que un servidor en tu máquina es invisible
+para ambos. [`ts/worker`](ts/worker/README.md) es el mismo servidor como un
+Worker de Cloudflare que **tú despliegas en tu propia cuenta, solo para tu propia
+cuenta de Oura**. Nadie corre una instancia compartida, así que tus tokens y tus
+datos no pasan por nadie más.
+
+Agrega tres cosas que el servidor local no necesita: su propia página de
+consentimiento, que muestra qué app está pidiendo acceso y adónde irá el
+resultado; una verificación, después del login de Oura, de que la cuenta es la
+que configuraste — a cualquier otra se le rechaza, y sin dueño configurado no
+entra nadie; y un único lugar donde se renueva el refresh token de un solo uso de
+Oura, una solicitud a la vez.
+
+El despliegue, paso a paso, y exactamente qué se ha verificado y qué no:
+[ts/worker/README.md](ts/worker/README.md).
+
 ## Las herramientas
 
 | | |
@@ -374,6 +398,14 @@ No se escriben datos de salud en disco, y esa es la restricción alrededor de la
 cual se diseñó la caché, no una afirmación hecha después. Las respuestas de un
 día que ya cerró se guardan **solo en memoria**, mientras dure el proceso, y
 `--forget` las borra. Nada relativo a tu sueño sobrevive al cierre del servidor.
+
+**Si despliegas el Worker remoto**, vale lo mismo con una diferencia: corre en
+*tu* cuenta de Cloudflare en vez de en tu máquina, así que ahí es donde viven tus
+tokens de Oura — en un Durable Object — y los tokens que las apps usan para
+hablar con él se guardan en KV con hash, con lo que llevan cifrado. Los datos de
+salud siguen sin almacenarse nunca: se traen en cada solicitud y solo se
+mantienen en la memoria del Worker. Nadie más que tú lo opera. Detalles:
+[ts/worker/README.md](ts/worker/README.md#what-is-stored-and-where).
 
 **Con quién se comparte.** Con nadie. La única conexión saliente es a
 `api.ouraring.com`, con tu token, para traer lo que pediste. El uso que Oura hace

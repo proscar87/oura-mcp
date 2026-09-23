@@ -44,6 +44,11 @@ docker run -i --rm -e OURA_SANDBOX=1 ghcr.io/proscar87/oura-mcp
 `-i` 不是可选项：MCP 服务器通过 stdin 和 stdout 通信，而不是通过端口。少了它，
 容器就没有 stdin，握手永远不会到达，客户端只会报告说服务器没起来。
 
+在浏览器里用 **claude.ai** 或 **ChatGPT**？它们是通过 URL 连接的，所以服务器
+必须放在某个公开的地方：把它作为 Worker 部署到你自己的 Cloudflare 账号上 ——
+免费，大约十分钟，只属于你一个人。见
+[远程接入 claude.ai 和 ChatGPT](#远程接入-claudeai-和-chatgpt)。
+
 ---
 
 ## 被测量出来的问题
@@ -203,6 +208,22 @@ Oura 唯一仍然要求的，是每个应用都必须注册，所以你需要去
 `which oura-mcp` 会给你完整路径。Claude Desktop 不会继承你终端的 `PATH`，
 所以在那里只写一个裸名字会静默失败 —— 这是配置 MCP 服务器时最常见的错误之一。
 
+### 远程接入 claude.ai 和 ChatGPT
+
+claude.ai 从 Anthropic 的云端连接连接器，ChatGPT 从 OpenAI 的云端连接，
+都不是从你的电脑 —— 所以你机器上的服务器对它们俩来说都是看不见的。
+[`ts/worker`](ts/worker/README.md) 是同一个服务器的 Cloudflare Worker 版本，
+**由你部署在你自己的账号上，只给你自己的 Oura 账号用**。没有人运营共享实例，
+所以你的 token 和你的数据不经过任何其他人。
+
+它多了三样本地服务器不需要的东西：自己的授权同意页面，显示是哪个应用在请求、
+结果会被送到哪里；在 Oura 登录之后检查账号是不是你配置的那一个 ——
+其他任何人都会被拒之门外，而没配置所有者时谁也进不来；以及一个唯一的地方，
+负责续期 Oura 只能用一次的 refresh token，一次只处理一个请求。
+
+部署的每一步，以及到底哪些验证过、哪些没验证过：
+[ts/worker/README.md](ts/worker/README.md)。
+
 ## 这些工具
 
 | | |
@@ -330,6 +351,13 @@ Oura 重复了某个 token；还有 `ignored_fields`、`discarded_out_of_range`�
 不是事后补上的一句声明。已经过完的那一天的答案**只保存在内存里**，
 活不过进程本身，`--forget` 会把它们清掉。关于你睡眠的任何东西，
 都不会在服务器退出之后留下来。
+
+**如果你部署了远程 Worker，**上面这些照样成立，只有一处不同：它跑在*你的*
+Cloudflare 账号上，而不是你的机器上，所以你的 Oura token 就存在那里 ——
+在一个 Durable Object 里 —— 而各个应用访问它用的 token 以哈希形式存在 KV 里，
+其中携带的内容是加密的。健康数据仍然从不存储：每次请求时去取，
+只保留在 Worker 的内存里。除了你，没有人运营它。详情：
+[ts/worker/README.md](ts/worker/README.md#what-is-stored-and-where)。
 
 **分享给了谁。**没有任何人。唯一的外发连接是到 `api.ouraring.com`，
 带上你的 token，去取你要的东西。Oura 如何使用你的数据，
