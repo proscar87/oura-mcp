@@ -191,7 +191,7 @@ def test_no_document_repeats_the_phrase_that_stopped_being_true():
 # at which point the guard was defending a number that had stopped being true —
 # and it would have passed while every document said three.
 _NUMERO = {1: ("one", "uno"), 2: ("two", "dos"), 3: ("three", "tres"),
-           4: ("four", "cuatro"), 5: ("five", "cinco")}
+           4: ("four", "cuatro"), 5: ("five", "cinco"), 6: ("six", "seis")}
 
 
 def test_no_document_names_the_wrong_tool_count():

@@ -1,16 +1,16 @@
 /**
- * MCP server: five tools over Oura's 19 collections.
+ * MCP server: six tools over Oura's 19 collections.
  *
- * FIVE, NOT NINETEEN. A server with one tool per collection forces the model
+ * SIX, NOT NINETEEN. A server with one tool per collection forces the model
  * to choose among 19 similar names before knowing what any of them contain. Here
  * the collection is a parameter and the catalog is consulted when needed.
  *
- * ONE ANALYSIS TOOL, AND THE CONDITION IT EXISTS UNDER. An average computed in
+ * TWO ANALYSIS TOOLS, AND THE CONDITION THEY EXIST UNDER. An average computed in
  * here reaches the model as a number without its method: across nine years of
  * real data, three out of four changes between consecutive measurements fall
- * within the metric's own normal oscillation. `oura_compare` answers that by
- * returning the band the metric moves in on its own, with the difference, and
- * reading «within noise» by default. The method lives in `method.ts`, twin of
+ * within the metric's own normal oscillation. `oura_compare` and `oura_relate`
+ * answer that by returning the band the metric moves in on its own with the
+ * number, and reading «within noise» by default. The method lives in `method.ts`, twin of
  * Python's `method.py`, where the reasoning is written down.
  */
 
@@ -42,7 +42,7 @@ export const VERSION: string = (() => {
 })();
 
 /**
- * ALL FIVE ARE READ-ONLY, and that isn't a promise: there is no POST, PUT or
+ * ALL SIX ARE READ-ONLY, and that isn't a promise: there is no POST, PUT or
  * DELETE anywhere in the package. Declaring it stops the client asking for
  * confirmation on every call, and Claude's connectors directory requires it.
  *
@@ -93,13 +93,14 @@ export const INSTRUCTIONS =
   "4. Some collections are enormous: 30 days of `daily_activity` is 250,000 " +
   "characters, and 92% of it is a single field. If the response carries " +
   "`large_response`, ask again with `fields` limited to what you need.\n\n" +
-  "It computes exactly one thing, and only when asked: `oura_compare` " +
+  "It computes exactly two things, and only when asked: `oura_compare` " +
   "tests whether two periods differ by more than the metric's own noise, " +
-  "measured from the person's history, and returns that band with the " +
-  "verdict. Report the band and the verdict together, and read " +
-  "`within_noise` as «not evidence of a change», never as «no change». " +
-  "Everything else is raw data; no other average, delta or trend comes " +
-  "from here.";
+  "and `oura_relate` whether two metrics' day-to-day changes move " +
+  "together beyond chance. Each returns its band or interval with the " +
+  "verdict. Report them together, read `within_noise` as «not evidence " +
+  "of a change or a relation», never as «none», and never report a " +
+  "correlation as a cause. Everything else is raw data; no other " +
+  "average, delta or trend comes from here.";
 
 // The connected server, kept so the tool handlers can reach the client.
 let live: McpServer | undefined;
@@ -290,6 +291,44 @@ export function createServer(opts: ServerOptions = {}): McpServer {
     return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
   });
 
+  srv.registerTool("oura_relate", {
+    title: "Do two metrics move together?",
+    description:
+      "Do the day-to-day changes of two metrics move together, beyond chance? " +
+      "The second calculation this server makes, held to the same rule as " +
+      "`oura_compare`: the method travels with the number. Two metrics that " +
+      "both rise on weekends, or both drift over months, correlate without " +
+      "touching each other, so each weekday's usual level is removed and only " +
+      "day-to-day changes are compared, with the effective number of pairs " +
+      "corrected for autocorrelation. It answers `outside_noise`, " +
+      "`within_noise`, or `cannot_tell` — usually for anything under about " +
+      "three months. It measures co-movement, not cause and not direction. " +
+      "`first_pair` shows which day of x met which day of y, so a wrong `lag` " +
+      "is visible.",
+    inputSchema: {
+      x: z.string().describe(
+        "First metric, `collection.field`, e.g. " +
+        "`daily_activity.high_activity_time`. Daily collections " +
+        "and `sleep` only."),
+      y: z.string().describe(
+        "Second metric, `collection.field`, e.g. " +
+        "`daily_readiness.score`."),
+      start: z.string().describe("YYYY-MM-DD. About three months " +
+                                 "or more is needed to answer."),
+      end: z.string().describe("YYYY-MM-DD, inclusive"),
+      lag: z.number().int().optional().describe(
+        "Days from x to y, 0-7. Oura files a night's sleep and " +
+        "the next morning's readiness under the day you woke up, " +
+        "so activity on a day meets the sleep that followed it at " +
+        "lag=1. ONE lag per question: trying several is several " +
+        "tests."),
+    },
+    annotations: { title: "Do two metrics move together?", ...READ_ONLY },
+  }, async (args) => {
+    const out = await relate(args, auth);
+    return { content: [{ type: "text", text: JSON.stringify(out, null, 2) }] };
+  });
+
   srv.registerTool("oura_check", {
     title: "Self-check of the Oura connection",
     description:
@@ -325,7 +364,93 @@ export const NOTHING_COMPUTED =
 
 /** The tool names, in the order they are declared. Mirrors TOOLS_EXPUESTAS. */
 export const TOOLS_EXPOSED = ["oura_collections", "oura_query", "oura_today",
-                              "oura_compare", "oura_check"] as const;
+                              "oura_compare", "oura_relate", "oura_check"] as const;
+
+interface RelateArgs {
+  x: string;
+  y: string;
+  start: string;
+  end: string;
+  lag?: number;
+}
+
+/** The twin of Python's `oura_relate`. The method itself is in `method.ts`. */
+export async function relate(a: RelateArgs, auth?: Auth): Promise<Record<string, unknown>> {
+  const M = await import("./method.js");
+  for (const m of [a.x, a.y]) {
+    const problem = M.checkMetric(m);
+    if (problem) return { error: problem };
+  }
+  if (a.x === a.y) {
+    return { error: "a metric correlates with itself perfectly; that says nothing" };
+  }
+  const lag = a.lag ?? 0;
+  if (!Number.isInteger(lag) || lag < 0 || lag > M.MAX_LAG) {
+    return { error: `\`lag\` must be a whole number of days from 0 to ${M.MAX_LAG}; ` +
+                    `got ${lag}` };
+  }
+  let { start, end } = a;
+  let hoy: string;
+  try {
+    shiftDays(start, 0);
+    shiftDays(end, 0);
+    hoy = localDay();
+  } catch (e) {
+    return { error: (e as Error).message };
+  }
+  if (start > end) return { error: "the range runs backwards: its start is after its end" };
+
+  const excluded: Record<string, unknown> = {};
+  const ayer = shiftDays(hoy, -1);
+  if (end >= hoy) {
+    excluded["today"] = "left out: today is still accumulating, and a " +
+                        "partial day is not a day-to-day change";
+    end = ayer;
+  }
+  if (start > end) {
+    return { error: "the range has no closed day in it: it starts today or later" };
+  }
+  const yEnd = shiftDays(end, lag) < ayer ? shiftDays(end, lag) : ayer;
+
+  const got: Record<string, [ReturnType<typeof M.series>, Record<string, unknown>]> = {};
+  for (const [key, metric, until] of [["x", a.x, end], ["y", a.y, yEnd]] as const) {
+    const i = metric.indexOf(".");
+    const collection = metric.slice(0, i), field = metric.slice(i + 1);
+    const top = field.split(".", 1)[0]!;
+    const fields = collection === "sleep" ? [top, "type", "total_sleep_duration"] : [top];
+    let r: Record<string, unknown>;
+    try {
+      r = await fetchAll(collection, { start, end: until, fields, auth });
+    } catch (e) {
+      if (e instanceof OuraError) return { error: e.message };
+      throw e;
+    }
+    if ("truncated" in r || "pagination_cycle" in r) {
+      return { error: "Oura's answer came back incomplete, and a " +
+                      "correlation over part of the days is a correlation " +
+                      "about other days. Try a shorter range." };
+    }
+    const s = M.series((r["data"] as Record<string, unknown>[]) ?? [], collection, field);
+    if (s.non_numeric) {
+      return { error: `\`${field}\` is not a number in \`${collection}\`; ` +
+                      `only numeric fields can be related` };
+    }
+    got[key] = [s, r];
+  }
+
+  const out = M.relateSeries(got["x"]![0].values, got["y"]![0].values, lag);
+  out["x"] = a.x;
+  out["y"] = a.y;
+  for (const key of ["x", "y"]) {
+    const [s, r] = got[key]!;
+    if (s.missing_values) excluded[`missing_values_${key}`] = s.missing_values;
+    if (s.without_main_sleep) excluded[`days_without_main_sleep_${key}`] = s.without_main_sleep;
+    for (const k of ["synthetic", "cached", "rate_limited"]) if (k in r) out[k] = r[k];
+  }
+  if (a.x.startsWith("sleep.") || a.y.startsWith("sleep.")) out["main_sleep_rule"] = M.MAIN_SLEEP_RULE;
+  if (Object.keys(excluded).length) out["excluded"] = excluded;
+  return out;
+}
 
 interface CompareArgs {
   metric: string;

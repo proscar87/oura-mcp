@@ -14,7 +14,7 @@ asks for is below, ready to paste.
 
 **Short description**
 
-> The Oura Ring v2 API as an MCP server. All 19 collections, five tools, and it
+> The Oura Ring v2 API as an MCP server. All 19 collections, six tools, and it
 > paginates to the end so a partial answer never passes for a complete one.
 
 **Long description**
@@ -33,12 +33,13 @@ asks for is below, ready to paste.
 > rejects `latest=true` where Oura would silently return everything, and names
 > field projections Oura ignored.
 >
-> It performs exactly one calculation, `oura_compare`, and ships its method with
-> it: whether two periods differ by more than the metric's own noise, measured
-> from the person's own history and corrected for day-to-day dependence, with
-> the band returned alongside the verdict. Nothing else is computed — no
-> correlations, no trends — because an average without its method reaches the
-> model as a signal that may not be there.
+> It performs exactly two calculations and ships the method with each:
+> `oura_compare`, whether two periods differ by more than the metric's own
+> noise, and `oura_relate`, whether two metrics' day-to-day changes move
+> together beyond chance once weekly rhythm and autocorrelation are taken out.
+> Each returns its band or interval with the verdict. Nothing else is computed —
+> no trends, no advice — because a number without its method reaches the model
+> as a signal that may not be there.
 
 **Works without credentials?** Yes. It runs on Oura's official sample data out
 of the box, and every sample response carries a `synthetic` key saying so, so
@@ -60,9 +61,10 @@ locally at
 with `oura-mcp --forget`.
 
 **Tools:** `oura_collections`, `oura_query`, `oura_today`, `oura_compare`,
-`oura_check` — all read-only. `oura_today` composes the others: it returns last
+`oura_relate`, `oura_check` — all read-only. `oura_today` composes the others: it returns last
 night's sleep and today's readiness with the days before them, RAW, and
 computes nothing. `oura_compare` answers `within_noise`, `outside_noise` or
-`cannot_tell`, always with the noise band it was judged against.
+`cannot_tell`, always with the noise band it was judged against; `oura_relate`
+the same verdicts with a correlation interval, and never a cause.
 
 **License:** MIT

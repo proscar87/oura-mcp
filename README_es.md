@@ -11,7 +11,7 @@
      puede subir es decoración; una que puede bajar es evidencia. -->
 
 La API v2 de [Oura](https://ouraring.com) como servidor
-[MCP](https://modelcontextprotocol.io). Las 19 colecciones, cinco herramientas,
+[MCP](https://modelcontextprotocol.io). Las 19 colecciones, seis herramientas,
 ninguna dependencia más allá del SDK de MCP.
 
 ### Un día local de frecuencia cardiaca son 1,231 muestras repartidas en 2 páginas
@@ -259,13 +259,14 @@ El despliegue, paso a paso, y exactamente qué se ha verificado y qué no:
 | `oura_query` | Una colección entera sobre un rango, paginando hasta el final |
 | `oura_today` | El sueño de anoche y la preparación de hoy, con los días previos |
 | `oura_compare` | Si dos periodos difieren más que el ruido propio de la métrica |
+| `oura_relate` | Si los cambios de un día a otro de dos métricas se mueven juntos más allá del azar |
 | `oura_check` | Autodiagnóstico que no expone nada |
 
-**Cinco, no diecinueve.** Un servidor con una herramienta por colección obliga al
+**Seis, no diecinueve.** Un servidor con una herramienta por colección obliga al
 modelo a elegir entre 19 nombres parecidos antes de saber qué contiene ninguno.
 Aquí la colección es un parámetro y el catálogo se consulta cuando hace falta.
 
-Las cinco se declaran de solo lectura, y eso no es una promesa: no hay ningún
+Las seis se declaran de solo lectura, y eso no es una promesa: no hay ningún
 `POST`, `PUT` ni `DELETE` en todo el paquete, y hay un test que lee el código
 fuente para que siga siendo así.
 
@@ -312,6 +313,35 @@ probadas, y la suite de tests lo mantiene ahí. Hoy queda fuera, porque todavía
 se está acumulando. `sleep` usa el sueño principal más largo de cada día, y la
 respuesta dice esa regla. Hacer muchas comparaciones y quedarte con la que cruza
 encuentra un cruce por azar, y la respuesta también lo dice.
+
+### `oura_relate`: correlación, sin las formas en que miente
+
+«¿Los días de entrenamiento duro me bajan la preparación a la mañana siguiente?»
+Correlacionar dos columnas la contesta mal de dos maneras conocidas: dos métricas
+que suben los fines de semana se correlacionan sin tocarse, y lo mismo dos que
+derivan a lo largo de meses. Medido con métricas simuladas sin relación entre sí,
+una correlación simple las llamó relacionadas **41–93% de las veces** con un
+ritmo semanal compartido, y 58% con una tendencia compartida.
+
+`oura_relate` recibe dos métricas, `x` y `y`, un rango `start`/`end` y un `lag`
+en días (0–7). Le quita a cada métrica el nivel habitual de cada día de la
+semana, compara solo los **cambios de un día al siguiente** entre días
+consecutivos, corrige el número de pares por la autocorrelación y devuelve la
+correlación con su intervalo del 95% y los mismos tres veredictos. Todos los
+nulos simulados —ritmos semanales, caminatas aleatorias, tendencias compartidas,
+30% de días faltantes— se quedan en torno al 5% (medido: hasta 5.2%).
+
+- **El desfase lo eliges tú, una vez.** Oura archiva el sueño de una noche y la
+  preparación de la mañana siguiente bajo el día en que despertaste, así que la
+  actividad de un día se encuentra con el sueño que vino después en `lag=1`.
+  `first_pair` muestra qué día se emparejó con cuál, para que una alineación
+  equivocada se vea. Probar varios desfases son varias pruebas, y como el método
+  trabaja con cambios, una relación real en un desfase también aparece, invertida,
+  en el de al lado; la respuesta dice ambas cosas.
+- **Necesita unos tres meses.** Con menos de 20 pares efectivos responde
+  `cannot_tell`, y con huecos en los días necesita más.
+- **Mide co-movimiento, no causa ni dirección.** Otra cosa puede mover a las dos,
+  y la respuesta lo dice cada vez.
 
 ### Parámetros de `oura_query`
 
@@ -365,8 +395,9 @@ registrado en el CHANGELOG como un cambio incompatible.)*
 
 ## Lo que este servidor NO hace
 
-**No analiza más allá de `oura_compare`.** Ni correlaciones, ni tendencias, ni
-detección de anomalías, que es justamente donde otros servidores ponen su valor.
+**No analiza más allá de `oura_compare` y `oura_relate`.** Ni tendencias, ni
+detección de anomalías, ni consejos, que es justamente donde otros servidores
+ponen su valor.
 
 La razón: un promedio calculado aquí dentro le llega al modelo como un número sin
 su método. A lo largo de nueve años de datos reales, **tres de cada cuatro
@@ -375,11 +406,11 @@ la propia métrica**. Un servidor que te suelta «tu HRV subió 12%» sin decir
 cuánto oscila esa métrica por sí sola no te está informando: te está fabricando
 una señal.
 
-`oura_compare` existe porque responde a esa objeción en vez de ignorarla: la
-banda viene con el número. Lo demás todavía no tiene aquí un método que
-sobreviva a las mismas simulaciones, así que no está. La correlación es la
-siguiente candidata, y tiene más formas de engañar: patrones semanales
-compartidos, tendencias compartidas y probar varios desfases hasta que uno cruce.
+`oura_compare` y `oura_relate` existen porque responden a esa objeción en vez
+de ignorarla: la banda viene con el número. Las tendencias todavía no tienen
+aquí un método que sobreviva a las mismas simulaciones —una pendiente sobre días
+autocorrelacionados es la señal más fácil de fabricar de todas—, así que no
+están.
 
 Todo lo demás lo obtienes en crudo. El análisis pertenece a donde se pueda citar el método;
 por ejemplo a [cotejo](https://github.com/proscar87/cotejo), que hace exactamente

@@ -59,6 +59,10 @@
       "description": "Whether two periods differ by more than the metric's own noise, measured from your history. Returns the band with the verdict; «within noise» is not «no change»."
     },
     {
+      "name": "oura_relate",
+      "description": "Whether two metrics' day-to-day changes move together beyond chance, with weekly rhythm and autocorrelation accounted for. Co-movement, not cause."
+    },
+    {
       "name": "oura_check",
       "description": "Self-check: which credential is in use, which scopes were granted, and whether Oura responds. Returns neither the token nor any health value."
     }
