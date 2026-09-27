@@ -234,6 +234,12 @@ más comunes al configurar un servidor MCP.
 
 ### Remoto: claude.ai y ChatGPT
 
+> **Experimental.** Probado de punta a punta en el runtime real de Cloudflare
+> con los datos de muestra de Oura, y su login de Oura contra un Oura simulado —
+> pero todavía no en un despliegue real, con una cuenta real de Oura, ni con
+> claude.ai o ChatGPT completando la conexión. Si lo pruebas, un issue contando
+> cómo te fue ayuda.
+
 claude.ai llega a un conector desde la nube de Anthropic y ChatGPT desde la de
 OpenAI, no desde tu computadora — así que un servidor en tu máquina es invisible
 para ambos. [`ts/worker`](ts/worker/README.md) es el mismo servidor como un

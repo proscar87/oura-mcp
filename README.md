@@ -231,6 +231,11 @@ mistakes when configuring an MCP server.
 
 ### Remote: claude.ai and ChatGPT
 
+> **Experimental.** Tested end to end on Cloudflare's real runtime with Oura's
+> sample data, and its Oura login against a fake of Oura — but not yet against
+> a real deployment, a real Oura account, or claude.ai and ChatGPT completing
+> the connection. If you try it, an issue saying how it went helps.
+
 claude.ai reaches a connector from Anthropic's cloud and ChatGPT from OpenAI's,
 not from your computer — so a server on your machine is invisible to both.
 [`ts/worker`](ts/worker/README.md) is the same server as a Cloudflare Worker
