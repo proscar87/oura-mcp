@@ -210,6 +210,11 @@ Oura 唯一仍然要求的，是每个应用都必须注册，所以你需要去
 
 ### 远程接入 claude.ai 和 ChatGPT
 
+> **实验性功能。** 已在 Cloudflare 的真实运行时上用 Oura 的示例数据做过端到端测试，
+> Oura 登录则是对着一个模拟的 Oura 测试的——但还没有在真实部署、真实 Oura 账户上
+> 验证过，也没有验证 claude.ai 或 ChatGPT 能完成连接。如果你试用了，开个 issue
+> 说说结果会很有帮助。
+
 claude.ai 从 Anthropic 的云端连接连接器，ChatGPT 从 OpenAI 的云端连接，
 都不是从你的电脑 —— 所以你机器上的服务器对它们俩来说都是看不见的。
 [`ts/worker`](ts/worker/README.md) 是同一个服务器的 Cloudflare Worker 版本，

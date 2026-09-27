@@ -1,5 +1,49 @@
 # Changelog
 
+## 0.4.0 — 27 September 2026
+
+**Two analysis tools, from the repository that said it would never ship one.**
+The objection still stands — an average reaches the model as a number without
+its method, and most day-to-day changes in these metrics are their own noise —
+so the rule was rewritten instead of dropped: an analysis tool ships only if
+the method travels with the number and a simulation in the test suite holds it
+to its error rate.
+
+- **`oura_compare`** — do two periods of one metric differ by more than that
+  metric's own noise? The band is measured from the person's preceding 120
+  days, corrected for autocorrelation, with a t critical value. A textbook
+  comparison calls noise a change 34–38% of the time on these metrics; this
+  one about 5% (measured up to 5.7%), days without the ring included.
+- **`oura_relate`** — do two metrics' day-to-day changes move together beyond
+  chance, at one lag in days? Each weekday's level is removed, only changes
+  between consecutive days are compared, and the pairs are corrected for
+  autocorrelation. Without those, unrelated metrics read as related 12–93% of
+  the time; with them, about 5% (measured up to 5.2%). Co-movement, never
+  cause, and every answer says so.
+
+Both answer `outside_noise`, `within_noise` or `cannot_tell` — never a guess
+when there are too few days — and `within_noise` is explicitly not «no
+change»: a real effect smaller than the band is missed more often than seen.
+Python and TypeScript agree to the last printed digit.
+
+**A remote mode, experimental.** `ts/worker` runs the same server as a
+Cloudflare Worker that each person deploys on their own account, for their own
+Oura account only, so claude.ai and ChatGPT can connect by URL. It has its own
+consent screen against the confused-deputy attack, admits only the configured
+owner and fails closed without one, and refreshes Oura's single-use token in
+one place. Tested end to end in Cloudflare's real runtime with sample data,
+and its Oura login against a fake — **not yet against a real deployment or a
+real Oura account**, which is why it is marked experimental.
+
+**The core stopped assuming one process is one person**: the cache is keyed by
+whose request it is, the token can be handed in per request, and
+`OURA_TIMEZONE` sets which day is «today» — a Worker's clock is UTC, and
+without it the person's today read as a closed day the cache would hold
+forever. Available on both implementations.
+
+**llms.txt had drifted twice**: three tools listed after the fourth shipped,
+and parameter names retired in 0.3.0. A coherence test now checks it.
+
 ## 0.3.6 — 22 September 2026
 
 **A scope you granted was reported as missing.** Oura's token endpoint now

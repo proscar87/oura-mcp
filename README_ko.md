@@ -233,6 +233,11 @@ Oura가 여전히 요구하는 단 한 가지는 모든 애플리케이션이 �
 
 ### 원격: claude.ai와 ChatGPT
 
+> **실험적 기능입니다.** Cloudflare의 실제 런타임에서 Oura 샘플 데이터로 처음부터
+> 끝까지 테스트했고, Oura 로그인은 가짜 Oura를 상대로 테스트했습니다. 하지만 실제
+> 배포, 실제 Oura 계정, 그리고 claude.ai나 ChatGPT가 연결을 완료하는 것은 아직
+> 검증되지 않았습니다. 사용해 보셨다면 결과를 이슈로 알려 주시면 도움이 됩니다.
+
 claude.ai는 Anthropic의 클라우드에서, ChatGPT는 OpenAI의 클라우드에서 커넥터에
 접속합니다. 당신의 컴퓨터에서가 아닙니다. 그래서 당신의 기기에 있는 서버는 둘
 다에게 보이지 않습니다. [`ts/worker`](ts/worker/README.md)는 같은 서버를

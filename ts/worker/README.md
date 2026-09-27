@@ -1,5 +1,7 @@
 # oura-mcp, remote — for claude.ai, ChatGPT and anything that connects by URL
 
+> **Experimental** as of 0.4.0 — see [what has and has not been verified](#what-has-and-has-not-been-verified).
+
 The same server as the desktop extension, running as a Cloudflare Worker **on
 your own Cloudflare account**, for **your own Oura account only**. There is no
 shared instance: nobody else operates this, so nobody else holds your tokens or
