@@ -6,9 +6,12 @@ name: Drift
 # repository would be blocked by something that isn't in anyone's diff.
 #
 # So it runs on a schedule (weekly) or by hand, never on push or pull_request.
-# What it watches is that the 19 collections in `collections.py` still exist —
+# What it watches: that the 19 collections in `collections.py` still exist —
 # against Oura's SANDBOX, which asks for no credentials and therefore doesn't
-# depend on anyone's token either.
+# depend on anyone's token either — and, from the official spec, that the
+# scopes requested are still the ones offered and that nothing a client
+# depends on moved since `tools/spec_fingerprint.json`. The auth half was added
+# after Oura's `extapi:` scope prefix reached users and this job said nothing.
 
 on:
   schedule:
@@ -17,7 +20,7 @@ on:
 
 jobs:
   collections:
-    name: Do all 19 still exist?
+    name: Collections, scopes and the spec
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
