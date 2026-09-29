@@ -1,0 +1,966 @@
+{
+ "version": "openapi-1.41.json",
+ "paths": {
+  "DELETE /v2/webhook/subscription/{id}": [
+   "id"
+  ],
+  "GET /v2/sandbox/usercollection/daily_activity": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/daily_activity/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/daily_cardiovascular_age": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/daily_cardiovascular_age/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/daily_readiness": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/daily_readiness/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/daily_resilience": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/daily_resilience/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/daily_sleep": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/daily_sleep/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/daily_spo2": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/daily_spo2/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/daily_stress": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/daily_stress/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/enhanced_tag": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/enhanced_tag/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/heartrate": [
+   "end_datetime",
+   "next_token",
+   "start_datetime"
+  ],
+  "GET /v2/sandbox/usercollection/rest_mode_period": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/rest_mode_period/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/ring_battery_level": [
+   "end_datetime",
+   "next_token",
+   "start_datetime"
+  ],
+  "GET /v2/sandbox/usercollection/ring_configuration": [
+   "next_token"
+  ],
+  "GET /v2/sandbox/usercollection/ring_configuration/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/session": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/session/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/sleep": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/sleep/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/sleep_time": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/sleep_time/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/tag": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/tag/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/vO2_max": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/vO2_max/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/sandbox/usercollection/workout": [
+   "end_date",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/sandbox/usercollection/workout/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/daily_activity": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/daily_activity/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/daily_cardiovascular_age": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/daily_cardiovascular_age/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/daily_readiness": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/daily_readiness/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/daily_resilience": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/daily_resilience/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/daily_sleep": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/daily_sleep/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/daily_spo2": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/daily_spo2/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/daily_stress": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/daily_stress/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/enhanced_tag": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/enhanced_tag/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/heartrate": [
+   "end_datetime",
+   "fields",
+   "latest",
+   "next_token",
+   "start_datetime"
+  ],
+  "GET /v2/usercollection/personal_info": [],
+  "GET /v2/usercollection/rest_mode_period": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/rest_mode_period/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/ring_battery_level": [
+   "end_datetime",
+   "fields",
+   "latest",
+   "next_token",
+   "start_datetime"
+  ],
+  "GET /v2/usercollection/ring_configuration": [
+   "fields",
+   "next_token"
+  ],
+  "GET /v2/usercollection/ring_configuration/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/session": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/session/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/sleep": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/sleep/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/sleep_time": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/sleep_time/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/tag": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/tag/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/vO2_max": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/vO2_max/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/usercollection/workout": [
+   "end_date",
+   "fields",
+   "next_token",
+   "start_date"
+  ],
+  "GET /v2/usercollection/workout/{document_id}": [
+   "document_id"
+  ],
+  "GET /v2/webhook/subscription": [],
+  "GET /v2/webhook/subscription/{id}": [
+   "id"
+  ],
+  "POST /v2/webhook/subscription": [],
+  "PUT /v2/webhook/subscription/renew/{id}": [
+   "id"
+  ],
+  "PUT /v2/webhook/subscription/{id}": [
+   "id"
+  ]
+ },
+ "schemas": {
+  "Array_Union_float__NoneType__Bits64_": {},
+  "CreateWebhookSubscriptionRequest": {
+   "properties": [
+    "callback_url",
+    "data_type",
+    "event_type",
+    "verification_token"
+   ]
+  },
+  "DailyResilienceModel": {
+   "properties": [
+    "contributors",
+    "day",
+    "id",
+    "level"
+   ]
+  },
+  "EnhancedTagModel": {
+   "properties": [
+    "comment",
+    "custom_name",
+    "end_day",
+    "end_time",
+    "id",
+    "start_day",
+    "start_time",
+    "tag_type_code"
+   ]
+  },
+  "ExtApiV2DataType": {
+   "enum": [
+    "daily_activity",
+    "daily_cardiovascular_age",
+    "daily_readiness",
+    "daily_resilience",
+    "daily_sleep",
+    "daily_spo2",
+    "daily_stress",
+    "enhanced_tag",
+    "meal",
+    "rest_mode_period",
+    "ring_configuration",
+    "session",
+    "sleep",
+    "sleep_time",
+    "tag",
+    "vo2_max",
+    "workout"
+   ]
+  },
+  "HTTPValidationError": {
+   "properties": [
+    "detail"
+   ]
+  },
+  "ISODate": {},
+  "LocalDateTime": {},
+  "LocalizedDateTime": {},
+  "LongTermResilienceLevel": {
+   "enum": [
+    "adequate",
+    "exceptional",
+    "limited",
+    "solid",
+    "strong"
+   ]
+  },
+  "MultiDocumentResponseDict": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_DailyResilienceModel_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_EnhancedTagModel_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicDailyActivity_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicDailyCardiovascularAge_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicDailyReadiness_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicDailySleep_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicDailySpO2_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicDailyStress_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicModifiedSleepModel_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicRestModePeriod_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicRingConfiguration_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicSession_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicSleepTime_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicVO2Max_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_PublicWorkout_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "MultiDocumentResponse_TagModel_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "PersonalInfoResponse": {
+   "properties": [
+    "age",
+    "biological_sex",
+    "email",
+    "height",
+    "id",
+    "weight"
+   ]
+  },
+  "PublicActivityContributors": {
+   "properties": [
+    "meet_daily_targets",
+    "move_every_hour",
+    "recovery_time",
+    "stay_active",
+    "training_frequency",
+    "training_volume"
+   ]
+  },
+  "PublicDailyActivity": {
+   "properties": [
+    "active_calories",
+    "average_met_minutes",
+    "class_5_min",
+    "contributors",
+    "day",
+    "equivalent_walking_distance",
+    "high_activity_met_minutes",
+    "high_activity_time",
+    "id",
+    "inactivity_alerts",
+    "low_activity_met_minutes",
+    "low_activity_time",
+    "medium_activity_met_minutes",
+    "medium_activity_time",
+    "met",
+    "meters_to_target",
+    "non_wear_time",
+    "resting_time",
+    "score",
+    "sedentary_met_minutes",
+    "sedentary_time",
+    "steps",
+    "target_calories",
+    "target_meters",
+    "timestamp",
+    "total_calories"
+   ]
+  },
+  "PublicDailyCardiovascularAge": {
+   "properties": [
+    "day",
+    "id",
+    "pulse_wave_velocity",
+    "vascular_age"
+   ]
+  },
+  "PublicDailyReadiness": {
+   "properties": [
+    "contributors",
+    "day",
+    "id",
+    "score",
+    "temperature_deviation",
+    "temperature_trend_deviation",
+    "timestamp"
+   ]
+  },
+  "PublicDailySleep": {
+   "properties": [
+    "contributors",
+    "day",
+    "id",
+    "score",
+    "timestamp"
+   ]
+  },
+  "PublicDailySpO2": {
+   "properties": [
+    "breathing_disturbance_index",
+    "day",
+    "id",
+    "spo2_percentage"
+   ]
+  },
+  "PublicDailyStress": {
+   "properties": [
+    "day",
+    "day_summary",
+    "id",
+    "recovery_high",
+    "stress_high"
+   ]
+  },
+  "PublicDailyStressSummary": {
+   "enum": [
+    "normal",
+    "restored",
+    "stressful"
+   ]
+  },
+  "PublicHeartRateRow": {
+   "properties": [
+    "bpm",
+    "source",
+    "timestamp",
+    "timestamp_unix"
+   ]
+  },
+  "PublicHeartRateSource": {
+   "enum": [
+    "awake",
+    "live",
+    "rest",
+    "session",
+    "sleep",
+    "workout"
+   ]
+  },
+  "PublicModifiedSleepModel": {
+   "properties": [
+    "app_sleep_phase_5_min",
+    "average_breath",
+    "average_heart_rate",
+    "average_hrv",
+    "awake_time",
+    "bedtime_end",
+    "bedtime_start",
+    "day",
+    "deep_sleep_duration",
+    "efficiency",
+    "heart_rate",
+    "hrv",
+    "id",
+    "latency",
+    "light_sleep_duration",
+    "low_battery_alert",
+    "lowest_heart_rate",
+    "movement_30_sec",
+    "period",
+    "readiness",
+    "readiness_score_delta",
+    "rem_sleep_duration",
+    "restless_periods",
+    "ring_id",
+    "sleep_algorithm_version",
+    "sleep_analysis_reason",
+    "sleep_phase_30_sec",
+    "sleep_phase_5_min",
+    "sleep_score_delta",
+    "time_in_bed",
+    "total_sleep_duration",
+    "type"
+   ]
+  },
+  "PublicMomentMood": {
+   "enum": [
+    "bad",
+    "good",
+    "great",
+    "same",
+    "worse"
+   ]
+  },
+  "PublicMomentType": {
+   "enum": [
+    "body_status",
+    "breathing",
+    "meditation",
+    "nap",
+    "relaxation",
+    "rest"
+   ]
+  },
+  "PublicReadiness": {
+   "properties": [
+    "contributors",
+    "score",
+    "temperature_deviation",
+    "temperature_trend_deviation"
+   ]
+  },
+  "PublicReadinessContributors": {
+   "properties": [
+    "activity_balance",
+    "body_temperature",
+    "hrv_balance",
+    "previous_day_activity",
+    "previous_night",
+    "recovery_index",
+    "resting_heart_rate",
+    "sleep_balance",
+    "sleep_regularity"
+   ]
+  },
+  "PublicRestModeEpisode": {
+   "properties": [
+    "tags",
+    "timestamp"
+   ]
+  },
+  "PublicRestModePeriod": {
+   "properties": [
+    "end_day",
+    "end_time",
+    "episodes",
+    "id",
+    "start_day",
+    "start_time"
+   ]
+  },
+  "PublicRingBatteryLevelRow": {
+   "properties": [
+    "charging",
+    "in_charger",
+    "level",
+    "timestamp",
+    "timestamp_unix"
+   ]
+  },
+  "PublicRingColor": {
+   "enum": [
+    "brushed_silver",
+    "cloud",
+    "deep_rose",
+    "glossy_black",
+    "glossy_gold",
+    "glossy_white",
+    "gucci",
+    "matt_gold",
+    "midnight",
+    "petal",
+    "rose",
+    "silver",
+    "stealth_black",
+    "tide",
+    "titanium",
+    "titanium_and_gold"
+   ]
+  },
+  "PublicRingConfiguration": {
+   "properties": [
+    "color",
+    "design",
+    "firmware_version",
+    "hardware_type",
+    "id",
+    "set_up_at",
+    "size"
+   ]
+  },
+  "PublicRingDesign": {
+   "enum": [
+    "balance",
+    "balance_diamond",
+    "ceramic",
+    "heritage",
+    "horizon"
+   ]
+  },
+  "PublicRingHardwareType": {
+   "enum": [
+    "gen1",
+    "gen2",
+    "gen2m",
+    "gen3",
+    "gen4",
+    "or5"
+   ]
+  },
+  "PublicSample": {
+   "properties": [
+    "interval",
+    "items",
+    "timestamp"
+   ]
+  },
+  "PublicSession": {
+   "properties": [
+    "day",
+    "end_datetime",
+    "heart_rate",
+    "heart_rate_variability",
+    "id",
+    "mood",
+    "motion_count",
+    "start_datetime",
+    "type"
+   ]
+  },
+  "PublicSleepAlgorithmVersion": {
+   "enum": [
+    "v1",
+    "v2"
+   ]
+  },
+  "PublicSleepAnalysisReason": {
+   "enum": [
+    "background_created_foreground_updated",
+    "background_sleep_analysis",
+    "bedtime_edit",
+    "foreground_sleep_analysis"
+   ]
+  },
+  "PublicSleepContributors": {
+   "properties": [
+    "deep_sleep",
+    "efficiency",
+    "latency",
+    "rem_sleep",
+    "restfulness",
+    "timing",
+    "total_sleep"
+   ]
+  },
+  "PublicSleepTime": {
+   "properties": [
+    "day",
+    "id",
+    "optimal_bedtime",
+    "recommendation",
+    "status"
+   ]
+  },
+  "PublicSleepTimeRecommendation": {
+   "enum": [
+    "earlier_bedtime",
+    "earlier_wake_up_time",
+    "follow_optimal_bedtime",
+    "improve_efficiency",
+    "later_bedtime",
+    "later_wake_up_time"
+   ]
+  },
+  "PublicSleepTimeStatus": {
+   "enum": [
+    "bad_sleep_quality",
+    "not_enough_nights",
+    "not_enough_recent_nights",
+    "only_recommended_found",
+    "optimal_found"
+   ]
+  },
+  "PublicSleepTimeWindow": {
+   "properties": [
+    "day_tz",
+    "end_offset",
+    "start_offset"
+   ]
+  },
+  "PublicSleepType": {
+   "enum": [
+    "deleted",
+    "late_nap",
+    "long_sleep",
+    "rest",
+    "sleep"
+   ]
+  },
+  "PublicSpo2AggregatedValues": {
+   "properties": [
+    "average"
+   ]
+  },
+  "PublicVO2Max": {
+   "properties": [
+    "day",
+    "id",
+    "timestamp",
+    "vo2_max"
+   ]
+  },
+  "PublicWorkout": {
+   "properties": [
+    "activity",
+    "calories",
+    "day",
+    "distance",
+    "end_datetime",
+    "id",
+    "intensity",
+    "label",
+    "source",
+    "start_datetime"
+   ]
+  },
+  "PublicWorkoutIntensity": {
+   "enum": [
+    "easy",
+    "hard",
+    "moderate"
+   ]
+  },
+  "PublicWorkoutSource": {
+   "enum": [
+    "autodetected",
+    "confirmed",
+    "live_oura_heart_rate",
+    "live_third_party_heart_rate",
+    "manual",
+    "workout_heart_rate"
+   ]
+  },
+  "ResilienceContributors": {
+   "properties": [
+    "daytime_recovery",
+    "sleep_recovery",
+    "stress"
+   ]
+  },
+  "TagModel": {
+   "properties": [
+    "day",
+    "id",
+    "tags",
+    "text",
+    "timestamp"
+   ]
+  },
+  "TimeSeriesResponseDict": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "TimeSeriesResponse_PublicHeartRateRow_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "TimeSeriesResponse_PublicRingBatteryLevelRow_": {
+   "properties": [
+    "data",
+    "next_token"
+   ]
+  },
+  "UpdateWebhookSubscriptionRequest": {
+   "properties": [
+    "callback_url",
+    "data_type",
+    "event_type",
+    "verification_token"
+   ]
+  },
+  "UtcDateTime": {},
+  "ValidationError": {
+   "properties": [
+    "ctx",
+    "input",
+    "loc",
+    "msg",
+    "type"
+   ]
+  },
+  "WebhookOperation": {
+   "enum": [
+    "create",
+    "delete",
+    "update"
+   ]
+  },
+  "WebhookSubscriptionModel": {
+   "properties": [
+    "callback_url",
+    "data_type",
+    "event_type",
+    "expiration_time",
+    "id"
+   ]
+  }
+ },
+ "scopes": [
+  "daily",
+  "email",
+  "heart_health",
+  "heartrate",
+  "personal",
+  "session",
+  "spo2",
+  "tag",
+  "workout"
+ ]
+}

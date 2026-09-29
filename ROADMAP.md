@@ -2622,3 +2622,30 @@ but no bias, so no null could see it. A unit test guards it instead.
 signal of all to manufacture, and no method here has survived the same test
 yet.
 
+---
+
+## The drift check covers the auth surface — 28 September 2026
+
+The gap recorded on 22 September, closed. `tools/check_drift.py` now also
+compares the spec's OAuth scopes with the ones requested, in both directions
+(a rename like `spo2Daily` → `spo2` fails the run), checks that every offered
+scope survives the `extapi:` prefix, and — the day Oura starts declaring scopes
+per collection, which it does not yet — checks `SCOPE_OF` against them. That
+last one is what would settle the open `heart_health` and `stress` questions
+without an account.
+
+**And a fingerprint of the whole spec**, committed as
+`tools/spec_fingerprint.json`: every route and its parameters, every schema's
+fields and enum values, and the scopes. Written because Oura DELETES
+superseded specs — 1.37 and 1.40 both answer 404 now, so what 1.41 changed can
+no longer be known. From here on, any change a client could depend on fails
+the weekly job until someone reads it and updates the file.
+
+Spec 1.41 was current on the day it was written. One thing in it to watch: the
+webhook data-type enum already lists `meal`, with no `/v2/usercollection/meal`
+route yet. The fingerprint will flag the route the week it appears.
+
+Still not covered: the token endpoint's actual response format. That needs a
+real grant, which CI will never have — the `extapi:` prefix was only ever in a
+response, never in the spec.
+

@@ -156,6 +156,14 @@ are not negotiable when changing it:
 Its dependencies live in `ts/worker/package.json` and never in `ts/`, whose
 dependencies are what the `.mcpb` bundles.
 
+### When the weekly drift job fails
+It compares against `tools/spec_fingerprint.json`, a copy of what Oura's spec
+promised last time — kept here because Oura deletes old specs. A failure lists
+each route, field, enum value or scope that moved. Read each one against the
+code (both languages), fix what it breaks, and only then run
+`python tools/check_drift.py --update-fingerprint`. Updating it first turns the
+alarm off without anyone having looked.
+
 ### Discovery
 The three files are in, and both listings were filed on 10 August 2026:
 `awesome-mcp-servers` PR #11833 (under Health & Wellness, which had one entry)
