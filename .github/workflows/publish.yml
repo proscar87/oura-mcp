@@ -38,6 +38,19 @@ jobs:
         with:
           python-version: "3.13"
       - run: python -m pip install -e ".[dev]"
+      # Same as ci.yml: without Node and a compiled ts/dist the parity tests
+      # skip themselves, and v0.4.0 published on "324 passed, 24 skipped" —
+      # the 24 being exactly the suite that catches a regression in
+      # ts/src/method.ts, which is what ships in the .mcpb.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: ts/package-lock.json
+      - run: npm ci
+        working-directory: ts
+      - run: npm run build
+        working-directory: ts
       - run: python -m pytest -q
 
   pypi:
