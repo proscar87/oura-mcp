@@ -19,8 +19,8 @@ measured against the real API and corrected here:
 | | The failure | Where the fix lives |
 |---|---|---|
 | 1 | Not following `next_token` returns a fraction. One local day of `heartrate` is 1,231 samples across 2 pages | the pagination loop in the client |
-| 2 | `end_date` is inconsistent **across collections**, and `workout` filters by UTC date while reporting `day` in local time | `MARGEN_DIAS` and the trim step |
-| 3 | `latest=true` where it doesn't apply → Oura returns the **whole** collection | `CON_ULTIMO`, rejected before the network |
+| 2 | `end_date` is inconsistent **across collections**, and `workout` filters by UTC date while reporting `day` in local time | `EXTRA_DAYS` and the trim step |
+| 3 | `latest=true` where it doesn't apply → Oura returns the **whole** collection | `WITH_LATEST`, rejected before the network |
 | 4 | `fields=made_up` → returns the complete record, no projection | the ignored-fields check |
 
 If anyone proposes "simplifying" any of those four, the answer is no. They are
@@ -49,7 +49,7 @@ That runs the tests, publishes to PyPI, then to the registry, and creates the
 GitHub Release with `oura-mcp.mcpb` attached. **There is no secret configured
 and there must not be**: both publications go through OIDC,
 with a single-use credential GitHub mints on the spot. PyPI's trusted publisher
-is already registered as `proscar87` / `oura-mcp` / `publicar.yml` / environment
+is already registered as `proscar87` / `oura-mcp` / `publish.yml` / environment
 `pypi`.
 
 Five things that cost time and shouldn't be repeated:
