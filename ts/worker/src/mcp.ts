@@ -1,6 +1,7 @@
 /**
  * The MCP endpoint. The OAuth provider has already checked the bearer token by
- * the time a request gets here; `ctx.props` says whose it is.
+ * the time a request gets here — one it issued, or the owner's optional fixed
+ * one (`bearer.ts`); `ctx.props` says whose it is.
  *
  * STATELESS: a fresh server and transport per request, no session id. Every
  * tool here is a read with its whole answer in one response, so there is

@@ -1,6 +1,6 @@
 // oura-mcp as a remote MCP server, deployed on YOUR Cloudflare account.
-// Nothing here is a secret. The four that are go in with `wrangler secret put`
-// — see README.md in this directory.
+// Nothing here is a secret. The ones that are — three required, one optional —
+// go in with `wrangler secret put`: see README.md in this directory.
 {
   "name": "oura-mcp",
   "main": "src/index.ts",

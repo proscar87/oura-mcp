@@ -14,11 +14,15 @@
  * The provider issues and checks the first layer's tokens. `authorize.ts` runs
  * the consent screen and Oura's login. `OuraTokens` keeps the second layer's
  * tokens and is the only thing that refreshes them.
+ *
+ * For apps that cannot do OAuth there is an optional fixed bearer token in
+ * place of the first layer, off unless the owner sets it: `bearer.ts`.
  */
 
 import { OAuthProvider } from "@cloudflare/workers-oauth-provider";
 
 import { approve, callback, showConsent } from "./authorize.js";
+import { resolveStaticBearer } from "./bearer.js";
 import { handleMcp } from "./mcp.js";
 import { messagePage } from "./pages.js";
 import type { Env } from "./env.js";
@@ -52,4 +56,8 @@ export default new OAuthProvider<Env>({
   // 2026-07-28 spec prefers; DCR stays for clients that have not moved.
   clientIdMetadataDocumentEnabled: true,
   clientRegistrationEndpoint: "/register",
+  // The optional fixed token, for apps with no OAuth. Asked only about a
+  // bearer token this provider did not issue, and it answers null — the same
+  // 401 as before — unless the owner set MCP_BEARER_TOKEN. See `bearer.ts`.
+  resolveExternalToken: resolveStaticBearer,
 });

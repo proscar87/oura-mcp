@@ -10,6 +10,11 @@ export interface Env {
   OURA_CLIENT_SECRET: string;
   /** The Oura account allowed in. Anyone else who signs in is turned away. */
   OURA_OWNER_EMAIL: string;
+  /**
+   * Optional. A fixed bearer token for apps that cannot do OAuth. Unset, blank
+   * or too short, that door does not exist. See `bearer.ts`.
+   */
+  MCP_BEARER_TOKEN?: string;
 
   // Plain vars.
   OURA_TIMEZONE: string;

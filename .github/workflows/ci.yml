@@ -84,10 +84,14 @@ jobs:
       - name: The whole flow, in workerd
         working-directory: ts/worker
         run: |
+          # Not a secret: a made-up value for this run, on this runner's
+          # localhost, so the optional fixed-token door is exercised too.
+          BEARER=e2e-only-not-a-real-token-0123456789abcdef
           npx wrangler dev --port 8787 --var OURA_SANDBOX:1 \
-            --var OURA_TIMEZONE:America/Mexico_City > wrangler.log 2>&1 &
+            --var OURA_TIMEZONE:America/Mexico_City \
+            --var MCP_BEARER_TOKEN:$BEARER > wrangler.log 2>&1 &
           for i in $(seq 1 60); do curl -sf -o /dev/null localhost:8787/ && break; sleep 1; done
-          ./tests/e2e.sh || { cat wrangler.log; exit 1; }
+          OURA_E2E_BEARER=$BEARER ./tests/e2e.sh || { cat wrangler.log; exit 1; }
 
   mcpb:
     name: Bundle

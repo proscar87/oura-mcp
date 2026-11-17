@@ -5,6 +5,13 @@
 #   npx wrangler dev --port 8787 --var OURA_SANDBOX:1 --var OURA_TIMEZONE:America/Mexico_City
 #   ./tests/e2e.sh
 #
+# The optional fixed bearer token is checked too when the Worker was started
+# with one and this script is told what it is — a made-up value, never a real
+# one:
+#
+#   npx wrangler dev … --var MCP_BEARER_TOKEN:e2e-only-not-a-real-token-0123456789abcdef
+#   OURA_E2E_BEARER=e2e-only-not-a-real-token-0123456789abcdef ./tests/e2e.sh
+#
 # What sandbox cannot reach — Oura's login, the owner check, the refresh — is
 # in authorize.test.ts and tokens.test.ts, against fakes. Say so rather than
 # let a green run here imply more than it tested.
@@ -65,4 +72,21 @@ has "$C" '"synthetic"' "and says the numbers it compared are sample data"
 X=$(tool oura_relate '{"x":"daily_activity.steps","y":"daily_readiness.score","start":"2026-01-01","end":"2026-04-30","lag":1}')
 has "$X" '"verdict"' "oura_relate answers with a verdict"
 has "$X" '"synthetic"' "and says the numbers it related are sample data"
+
+# A token this Worker never issued is refused whether or not the fixed-token
+# mode is on — off, because nothing is configured; on, because it is not it.
+eq "$(code -X POST "$B/mcp" -H 'authorization: Bearer not-the-token-not-the-token-not-the-token')" 401 "a bearer token nobody issued is refused"
+
+if [[ -n "${OURA_E2E_BEARER:-}" ]]; then
+  SB=(-H "authorization: Bearer $OURA_E2E_BEARER" -H 'content-type: application/json' -H 'accept: application/json, text/event-stream')
+  INIT='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"e2e","version":"1"}}}'
+  has "$(curl -s "${SB[@]}" -X POST "$B/mcp" -d "$INIT")" '"name":"oura"' "the fixed token: initialize"
+  has "$(curl -s "${SB[@]}" -X POST "$B/mcp" -d '{"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"oura_query","arguments":{"collection":"daily_sleep","start":"2026-01-01","end":"2026-01-03"}}}')" 'synthetic' "the fixed token: a tool answers, and says it is sample data"
+  eq "$(code -X POST "$B/mcp" -H "authorization: Bearer ${OURA_E2E_BEARER%?}" -d "$INIT")" 401 "the fixed token less its last character is refused"
+  eq "$(code -X POST "$B/mcp" -H "authorization: Bearer ${OURA_E2E_BEARER}x" -d "$INIT")" 401 "the fixed token with one more character is refused"
+  eq "$(code -X POST "$B/mcp?access_token=$OURA_E2E_BEARER" -d "$INIT")" 401 "the fixed token in the URL is refused"
+  has "$(rpc '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')" 'oura_query' "and the OAuth token from above still works beside it"
+else
+  echo "skip the fixed bearer token (OURA_E2E_BEARER not set)"
+fi
 echo "all passed"
