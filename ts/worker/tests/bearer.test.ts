@@ -9,7 +9,7 @@
  * Every token here is made up for the test. None is, or resembles, a real one.
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import worker from "../src/index.js";
 import { MIN_BEARER_LENGTH, configuredBearer, matchesBearer,
@@ -46,16 +46,18 @@ function env(over: Partial<Env> = {}): Env {
 
 const ctx = () => ({ waitUntil() {}, passThroughOnException() {}, props: undefined }) as never;
 
-function mcp(e: Env, authorization?: string): Promise<Response> {
+function mcp(e: Env, authorization?: string, body: unknown = INIT): Promise<Response> {
   const headers: Record<string, string> = {
     "content-type": "application/json",
     accept: "application/json, text/event-stream",
   };
   if (authorization !== undefined) headers.authorization = authorization;
   return (worker as unknown as { fetch: (r: Request, e: Env, c: never) => Promise<Response> })
-    .fetch(new Request(`${ORIGIN}/mcp`, { method: "POST", headers, body: JSON.stringify(INIT) }),
+    .fetch(new Request(`${ORIGIN}/mcp`, { method: "POST", headers, body: JSON.stringify(body) }),
            e, ctx());
 }
+
+afterEach(() => { vi.unstubAllGlobals(); });
 
 describe("the fixed bearer token, through the Worker", () => {
   it("lets the right token in, and the MCP endpoint answers", async () => {
@@ -127,6 +129,60 @@ describe("the fixed bearer token, through the Worker", () => {
                              token_endpoint_auth_method: "none" }),
     }), e, ctx());
     expect(reg.status).toBe(201);
+  });
+});
+
+describe("the fixed bearer token with sandbox off — the deployment a person actually runs", () => {
+  const NO_SESSION = "this connector has no Oura session. Disconnect and reconnect it, and " +
+                     "sign in to Oura when asked.";
+  const call = (name: string, args: unknown) =>
+    ({ jsonrpc: "2.0", id: 9, method: "tools/call", params: { name, arguments: args } });
+  const text = async (r: Response) =>
+    (await r.json() as { result: { content: { text: string }[] } }).result.content[0]!.text;
+
+  /** A Worker nobody has signed in to Oura through, and an Oura that must not be called. */
+  function fresh(asked: string[]): Env {
+    vi.stubGlobal("fetch", async (url: unknown) => {
+      throw new Error(`the network was reached: ${String(url)}`);
+    });
+    return env({
+      MCP_BEARER_TOKEN: SECRET,
+      OURA_SANDBOX: "",
+      OURA_TOKENS: {
+        idFromName: (n: string) => { asked.push(`name:${n}`); return "id"; },
+        get: () => ({
+          scopes: async () => { asked.push("scopes"); return undefined; },
+          accessToken: async () => { asked.push("accessToken"); throw new Error(NO_SESSION); },
+        }),
+      } as never,
+    });
+  }
+
+  it("is let in, as the owner", async () => {
+    const asked: string[] = [];
+    const r = await mcp(fresh(asked), `Bearer ${SECRET}`);
+    expect(r.status).toBe(200);
+    expect(JSON.stringify(await r.json())).toContain('"name":"oura"');
+    expect(asked).toContain("name:owner");
+  });
+
+  it("never signs in to Oura: with no session stored, a data tool says so and nothing is fetched", async () => {
+    const asked: string[] = [];
+    const r = await mcp(fresh(asked), `Bearer ${SECRET}`,
+                        call("oura_query", { collection: "daily_sleep", day: "2026-01-02" }));
+    expect(r.status).toBe(200);
+    const t = await text(r);
+    expect(t).toContain("this connector has no Oura session");
+    expect(t).not.toContain("the network was reached");
+    expect(asked).toContain("accessToken");
+  });
+
+  it("and a wrong token never gets as far as the token store", async () => {
+    const asked: string[] = [];
+    const r = await mcp(fresh(asked), `Bearer ${SECRET}x`,
+                        call("oura_query", { collection: "daily_sleep", day: "2026-01-02" }));
+    expect(r.status).toBe(401);
+    expect(asked).toEqual([]);
   });
 });
 

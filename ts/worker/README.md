@@ -104,8 +104,8 @@ Worker behaves exactly as described above and no fixed token is accepted.
 1. **Sign in to Oura once, through OAuth.** The fixed token never signs in to
    Oura; it reads the session your own login left in the Worker. Connect
    claude.ai or ChatGPT as in step 4 — or any MCP client that does OAuth — and
-   finish Oura's login. Until you have, every tool answers that «this connector
-   has no Oura session».
+   finish Oura's login. Until you have, every tool that reads your data answers
+   that «this connector has no Oura session».
 2. **Make a long random token and store it as a secret:**
 
    ```bash

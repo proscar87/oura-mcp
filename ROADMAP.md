@@ -2867,7 +2867,10 @@ Worker's own would close that gap and would need the same three guards
 
 **Tested:** through the Worker's `fetch` with the real provider in front (it now
 runs under the unit suite; the runtime's `WorkerEntrypoint` is stubbed), each
-guard mutation-checked, and in workerd by `tests/e2e.sh`, which CI now starts
+guard mutation-checked (one mutant survives because it is equivalent: with no
+secret configured, the empty-token check and the comparison refuse on their
+own), with sandbox off against a token store that has no session, and in
+workerd by `tests/e2e.sh`, which CI now starts
 with a made-up token.
 
 **Not verified:** Muse or xAI's API accepting this address and token. Nothing
