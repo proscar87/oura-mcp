@@ -248,6 +248,10 @@ Oura's login, that the account is the one you configured — anyone else is
 turned away, and with no owner configured nobody gets in; and a single place
 where Oura's single-use refresh token is renewed, one request at a time.
 
+For apps that cannot do OAuth and only take a URL and one fixed token, the
+Worker can also accept a token of your choosing. It is off unless you set it:
+[how, and what it costs you](ts/worker/README.md#apps-that-only-take-a-fixed-token-optional).
+
 Deployment, step by step, and exactly what has and has not been verified:
 [ts/worker/README.md](ts/worker/README.md).
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+- **Remote Worker: an optional fixed bearer token, for apps that cannot do
+  OAuth** (#22). Some apps connect to a remote MCP server with a URL and one
+  static token and nothing else. Setting the secret `MCP_BEARER_TOKEN` (32
+  characters or more) lets that token in at `/mcp`; without it — or with a
+  shorter one — nothing changes and no fixed token is accepted. Compared in
+  constant time, read from the `Authorization` header only, and it reads the
+  Oura session an OAuth login already stored rather than creating one. Not
+  verified against any app: see `ts/worker/README.md`.
+
 ## 0.4.1 — 19 October 2026
 
 **On npm, as `@proscar87/oura-mcp`.** The TypeScript build — the same code

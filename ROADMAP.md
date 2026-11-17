@@ -2841,3 +2841,35 @@ urgency. The code is ahead; nobody is using it, its author included.
    along with the icon, which `files: ["dist"]` would have left out.
 4. Cursor and VS Code install links — after the package exists on npm.
 5. A Deploy button for `ts/worker`, once a real deployment has worked once.
+
+---
+
+## A fixed token for the apps with no OAuth — 16 November 2026
+
+Issue #22 asks for the Worker to work from Grok and Muse as well as claude.ai
+and ChatGPT. The first two were reported to take a URL and one static bearer
+token and nothing else, so the OAuth front door is a wall for them.
+
+**What was built:** `ts/worker/src/bearer.ts`, wired through the OAuth
+provider's own `resolveExternalToken` hook rather than around it. The provider
+asks only about a bearer token it did not issue, and a null answer is the 401 it
+always gave — so with `MCP_BEARER_TOKEN` unset the Worker answers every request as
+it did. Set, the token must be 32 characters or more (shorter: off, not weak),
+both sides are hashed and the digests compared without an early exit, and it is
+read from the header only.
+
+**What it deliberately does not do:** sign in to Oura. `callback()` is still the
+only thing that stores an Oura session, behind the consent page and the owner
+check. An owner who uses *only* a fixed-token app has no way to create that
+session from it, and has to connect an OAuth client once. A login page of the
+Worker's own would close that gap and would need the same three guards
+`authorize.ts` has; not built without a reason to.
+
+**Tested:** through the Worker's `fetch` with the real provider in front (it now
+runs under the unit suite; the runtime's `WorkerEntrypoint` is stubbed), each
+guard mutation-checked, and in workerd by `tests/e2e.sh`, which CI now starts
+with a made-up token.
+
+**Not verified:** Muse or xAI's API accepting this address and token. Nothing
+here was run against either, and the README says so instead of giving menu
+paths.
