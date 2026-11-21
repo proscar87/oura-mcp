@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.4.1 — 19 October 2026
+## 0.4.1 — 21 November 2026
 
 **On npm, as `@proscar87/oura-mcp`.** The TypeScript build — the same code
 the `.mcpb` ships — now installs with `npx -y @proscar87/oura-mcp`.
@@ -17,6 +17,11 @@ the `.mcpb` ships — now installs with `npx -y @proscar87/oura-mcp`.
   slope test was simulated and declined: see ROADMAP, «Trends, measured and
   declined».
 - `publish.yml` publishes to npm by trusted publishing, without a token.
+- `@modelcontextprotocol/sdk` 1.32.2 and `zod` 4.6.7, in the npm build and
+  the worker. This closes CVE-2026-111768 and GHSA-f897-62hf-6gxq (SDK 1.30.0)
+  and CVE-2023-54404 (zod 3.25).
+- The API spec fingerprint follows Oura's spec 1.42, which drops `meal` from
+  the webhook data types. The server never used it.
 
 ## 0.4.0 — 27 September 2026
 
