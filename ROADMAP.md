@@ -16,9 +16,11 @@ distributes it faster.
 
 | | |
 |---|---|
-| GitHub | public, MIT, CI green |
-| PyPI | `mcp-oura` 0.1.0, 0.1.1 and **0.2.0** |
-| MCP registry | `io.github.proscar87/oura-mcp` v0.2.0, `active`, latest |
+| GitHub | public, MIT, CI green; releases carry the `.mcpb` |
+| PyPI | `mcp-oura` 0.1.0 through **0.4.1** |
+| npm | `@proscar87/oura-mcp` **0.4.1** |
+| Container | `ghcr.io/proscar87/oura-mcp` |
+| MCP registry | `io.github.proscar87/oura-mcp` v0.4.1, `active`, latest |
 
 ---
 
